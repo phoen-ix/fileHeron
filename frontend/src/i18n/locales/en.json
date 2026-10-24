@@ -368,6 +368,7 @@
     "footer_meta": "self-hosted · GDPR-aware · MIT licensed"
   },
   "register": {
+    "eyebrow": "invite",
     "title": "Set up your account",
     "subtitle": "You've been invited to file:Heron. Choose a password to finish.",
     "name_placeholder": "How should we greet you?",
@@ -375,6 +376,7 @@
     "password_help": "At least 12 characters."
   },
   "forgot": {
+    "sent_eyebrow": "inbox",
     "title": "Forgot password",
     "subtitle": "Enter your email. If we have an account on file, we'll send a link to reset.",
     "submit": "Send reset link",
@@ -382,6 +384,7 @@
     "sent_subtitle": "If that email is on file, a reset link is on its way."
   },
   "reset": {
+    "done_eyebrow": "done",
     "title": "Reset password",
     "subtitle": "Choose a new password.",
     "submit": "Reset password",
@@ -390,6 +393,7 @@
     "to_login": "Sign in"
   },
   "verify": {
+    "eyebrow": "verify",
     "verifying": "Verifying your email…",
     "ok_title": "Email verified.",
     "error_title": "Verification failed.",
@@ -1973,6 +1977,7 @@
     "session_unknown_ua": "unknown browser"
   },
   "twofa": {
+    "eyebrow": "account / 2fa",
     "title": "Two-factor authentication",
     "intro": "Use an authenticator app - 1Password, Authy, Bitwarden, Google Authenticator - to scan the QR below.",
     "forced_banner": "Your administrator requires two-factor authentication for your account. Scan the code below to finish setup and continue.",

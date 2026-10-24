@@ -168,7 +168,7 @@
 
 <template>
   <div class="fh-prose twofa">
-    <span class="fh-eyebrow fh-rise" data-stagger="1">/ account / 2fa</span>
+    <span class="fh-eyebrow fh-rise" data-stagger="1">/ {{ $t('twofa.eyebrow') }}</span>
     <h1 class="fh-display-md fh-rise" data-stagger="2">{{ $t('twofa.title') }}</h1>
 
     <!-- Inactive intro -->

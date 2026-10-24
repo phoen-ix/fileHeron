@@ -368,6 +368,7 @@
     "footer_meta": "selbst gehostet · DSGVO-bewusst · MIT-lizenziert"
   },
   "register": {
+    "eyebrow": "Einladung",
     "title": "Konto einrichten",
     "subtitle": "Du wurdest zu file:Heron eingeladen. Wähle ein Passwort, um abzuschließen.",
     "name_placeholder": "Wie sollen wir dich ansprechen?",
@@ -375,6 +376,7 @@
     "password_help": "Mindestens 12 Zeichen."
   },
   "forgot": {
+    "sent_eyebrow": "Posteingang",
     "title": "Passwort vergessen",
     "subtitle": "Gib deine E-Mail ein. Falls ein Konto existiert, schicken wir einen Reset-Link.",
     "submit": "Reset-Link senden",
@@ -382,6 +384,7 @@
     "sent_subtitle": "Falls die E-Mail bei uns liegt, ist ein Reset-Link unterwegs."
   },
   "reset": {
+    "done_eyebrow": "erledigt",
     "title": "Passwort zurücksetzen",
     "subtitle": "Wähle ein neues Passwort.",
     "submit": "Passwort zurücksetzen",
@@ -390,6 +393,7 @@
     "to_login": "Anmelden"
   },
   "verify": {
+    "eyebrow": "Bestätigung",
     "verifying": "E-Mail wird bestätigt…",
     "ok_title": "E-Mail bestätigt.",
     "error_title": "Bestätigung fehlgeschlagen.",
@@ -1973,6 +1977,7 @@
     "session_unknown_ua": "unbekannter Browser"
   },
   "twofa": {
+    "eyebrow": "Konto / 2FA",
     "title": "Zwei-Faktor-Authentifizierung",
     "intro": "Verwende eine Authenticator-App - 1Password, Authy, Bitwarden, Google Authenticator - und scanne den QR-Code unten.",
     "forced_banner": "Deine Administration verlangt Zwei-Faktor-Authentifizierung für dein Konto. Scanne den Code unten, um die Einrichtung abzuschließen und fortzufahren.",

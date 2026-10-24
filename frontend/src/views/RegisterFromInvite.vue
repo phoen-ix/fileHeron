@@ -41,7 +41,7 @@
 
 <template>
   <AuthCanvas>
-    <span class="fh-eyebrow fh-rise" data-stagger="1">invite</span>
+    <span class="fh-eyebrow fh-rise" data-stagger="1">{{ $t('register.eyebrow') }}</span>
     <h1 class="fh-display fh-rise" data-stagger="2">{{ $t('register.title') }}</h1>
     <p class="fh-rise" data-stagger="2">{{ $t('register.subtitle') }}</p>
 

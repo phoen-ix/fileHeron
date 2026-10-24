@@ -27,7 +27,7 @@
 
 <template>
   <AuthCanvas>
-    <span class="fh-eyebrow fh-rise" data-stagger="1">/ verify</span>
+    <span class="fh-eyebrow fh-rise" data-stagger="1">/ {{ $t('verify.eyebrow') }}</span>
 
     <template v-if="state === 'verifying'">
       <h1 class="fh-display fh-rise" data-stagger="2">{{ $t('verify.verifying') }}</h1>

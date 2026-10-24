@@ -62,7 +62,7 @@
     </template>
 
     <template v-else>
-      <span class="fh-eyebrow fh-rise" data-stagger="1">/ inbox</span>
+      <span class="fh-eyebrow fh-rise" data-stagger="1">/ {{ $t('forgot.sent_eyebrow') }}</span>
       <h1 class="fh-display fh-rise" data-stagger="2">{{ $t('forgot.sent_title') }}</h1>
       <p class="fh-rise" data-stagger="2">{{ $t('forgot.sent_subtitle') }}</p>
       <RouterLink to="/login" class="fh-btn-text fh-rise" data-stagger="3">

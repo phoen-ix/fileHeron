@@ -18,9 +18,12 @@ import { formatDateInSiteTime } from '@/utils/datetime'
  * Two modes share the form: send an invite email (default), or - when
  * `createDirectly` is on - create the account immediately with an
  * admin-set password (email pre-verified, no invite). `onUserCreated`
- * lets the view refresh its user list after a direct create.
+ * lets the view refresh its user list after a direct create, `onInviteSent`
+ * its pending-invite list after an invite.
  */
-export function useInviteForm(opts: { onUserCreated?: () => void } = {}) {
+export function useInviteForm(
+  opts: { onUserCreated?: () => void; onInviteSent?: () => void } = {},
+) {
   const { t, locale } = useI18n()
   const { describe } = useApiError()
   const ui = useUiStore()
@@ -109,6 +112,7 @@ export function useInviteForm(opts: { onUserCreated?: () => void } = {}) {
         'success',
       )
       closeInviteForm()
+      opts.onInviteSent?.()
     } catch (err) {
       inviteError.value = describe(err)
     } finally {

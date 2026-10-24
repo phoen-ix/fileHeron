@@ -99,7 +99,7 @@
     closeInviteForm,
     toggleGroup,
     onInvite,
-  } = useInviteForm({ onUserCreated: load })
+  } = useInviteForm({ onUserCreated: load, onInviteSent: loadInvites })
 
   // --- Pending invites section ---------------------------------------------
 

@@ -255,6 +255,18 @@ function cleanBottom([selector, limit, trim]: [string, number, boolean]): number
   return Math.min(y + 16, ...boxes.filter((b) => b.top >= y).map((b) => b.top))
 }
 
+/** The cells under `selector` whose text or controls reach past their own
+ * box, into the next column. Runs in the page. */
+function overflowingCells(selector: string): string[] {
+  return [...document.querySelectorAll(`${selector} :is(th, td)`)].flatMap((cell) => {
+    const range = document.createRange()
+    range.selectNodeContents(cell)
+    const r = range.getBoundingClientRect()
+    const c = cell.getBoundingClientRect()
+    return r.width && (r.left < c.left - 0.5 || r.right > c.right + 0.5) ? [cell.textContent!.trim()] : []
+  })
+}
+
 /** `clipAbove`: the whole page from the top down to just above that element -
  * for a page too tall to show whole. `fullPage` stops at 2400 CSS px.
  * `within`: only that element (and 16 px around it), at most `ADMIN_HEIGHT`
@@ -740,6 +752,12 @@ for (const [route, name, heading] of ADMIN_PAGES) {
     if (name === 'admin-api-tokens') await expect(page.getByText(TOKEN_NAME)).toBeVisible()
     // It opens on the UI's language, whichever the server lists first.
     if (name === 'admin-email-templates') await expect(page.getByRole('tab', { name: 'English' })).toHaveClass(/active/)
+    if (name === 'admin-scheduled-tasks') {
+      // At 1280 px a header ran into the next one and share_expiring_24h_warning into its select.
+      await expect(page.locator('.cron-table code').first()).toBeVisible()
+      await page.evaluate(() => document.fonts.ready)
+      expect(await page.evaluate(overflowingCells, '.cron-table')).toEqual([])
+    }
     await shoot(page, name, ADMIN_CROP)
   })
 }

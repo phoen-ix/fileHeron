@@ -159,7 +159,13 @@
                 <td class="task-cell">
                   <label class="enable">
                     <input v-model="it.enabled" type="checkbox" />
-                    <code>{{ it.name }}</code>
+                    <!-- A line may break after each underscore: the long names ran into
+                         the schedule column. <wbr> keeps the copied name intact. -->
+                    <code
+                      ><template v-for="(part, i) in it.name.split('_')" :key="i"
+                        >{{ i ? '_' : '' }}<wbr v-if="i" />{{ part }}</template
+                      ></code
+                    >
                   </label>
                   <span class="desc">{{ it.description }}</span>
                   <label v-if="errorAlertsEnabled" class="alert-toggle">
@@ -294,7 +300,7 @@
     font-weight: 500;
     padding: var(--fh-space-2) var(--fh-space-4) var(--fh-space-2) 0;
     border-bottom: var(--fh-border);
-    white-space: nowrap;
+    vertical-align: bottom;
   }
   .cron-table td {
     padding: var(--fh-space-4) var(--fh-space-4) var(--fh-space-4) 0;

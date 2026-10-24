@@ -75,6 +75,16 @@ describe('AdminScheduledTasks', () => {
     expect(w.find('input[type="time"]').exists()).toBe(true)
   })
 
+  // share_expiring_24h_warning ran into the schedule select at 1280 px: a
+  // name may break after each underscore, and still reads (and copies) whole.
+  it('a task name may break after each underscore', async () => {
+    const w = makeWrapper()
+    await flushPromises()
+    const code = w.find('.task-cell code')
+    expect(code.text()).toBe('expire_files')
+    expect(code.html()).toMatch(/expire_<wbr[^>]*>files/)
+  })
+
   it('Save persists the row schedule', async () => {
     const w = makeWrapper()
     await flushPromises()

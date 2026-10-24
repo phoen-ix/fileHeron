@@ -152,3 +152,40 @@ def test_datetime_columns_store_whole_seconds(mariadb):
         "these columns now keep sub-second precision, so the second-granularity "
         f"comparisons and the ORDER BY tiebreakers may need revisiting: {fractional}"
     )
+
+
+# --- write conflicts --------------------------------------------------------
+
+
+@_SKIP
+@pytest.mark.parametrize(
+    "write",
+    [
+        "UPDATE users SET locale = 'de' WHERE email = 'rev@conflict.test'",
+        "SELECT id FROM users WHERE email = 'rev@conflict.test' FOR UPDATE",
+    ],
+)
+def test_a_row_changed_after_the_first_read_can_still_be_written(mariadb, write):
+    """MariaDB 12.3 defaults `innodb_snapshot_isolation` to ON, under which this
+    write fails with 1020 "Record has changed since last read": a share revoked
+    while the worker marked its last file clean answered 500 (seen in the docs
+    tour). The app's connections (`app.database.engine`) turn it off; this is
+    the request that read first, a worker committing in between, then the
+    request's write or locking read."""
+    from app.database import engine
+
+    with mariadb.begin() as conn:
+        conn.execute(sa.text("DELETE FROM users WHERE email LIKE '%@conflict.test'"))
+        _insert_user(conn, "rev@conflict.test")
+    try:
+        with engine.connect() as request, engine.connect() as worker:
+            request.execute(sa.text("SELECT COUNT(*) FROM users"))
+            worker.execute(
+                sa.text("UPDATE users SET display_name = 'W' WHERE email = 'rev@conflict.test'")
+            )
+            worker.commit()
+            request.execute(sa.text(write))
+            request.commit()
+    finally:
+        with mariadb.begin() as conn:
+            conn.execute(sa.text("DELETE FROM users WHERE email LIKE '%@conflict.test'"))

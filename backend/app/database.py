@@ -24,6 +24,27 @@ engine = create_engine(
     pool_timeout=settings.DB_POOL_TIMEOUT_SEC,
 )
 
+@event.listens_for(engine, "connect")
+def _fh_no_snapshot_write_conflicts(dbapi_conn, _record) -> None:
+    """Since MariaDB 11.6.2 `innodb_snapshot_isolation` defaults to ON: under
+    REPEATABLE READ, writing (or locking) a row another transaction changed
+    after this one's first read fails with 1020 "Record has changed since last
+    read". A request reads its user first, so revoking a share while the worker
+    marked its last file clean answered 500. The code was written for the
+    classic semantics - a write or a FOR UPDATE acts on the newest committed
+    row, and the read-modify-writes that need it lock first - so each
+    connection turns the check off. A server without the variable (1193,
+    before 10.6.18) never had the check."""
+    cur = dbapi_conn.cursor()
+    try:
+        cur.execute("SET SESSION innodb_snapshot_isolation = OFF")
+    except Exception as exc:
+        if getattr(exc, "args", (None,))[0] != 1193:
+            raise
+    finally:
+        cur.close()
+
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 

@@ -469,7 +469,21 @@
     if (html === lastValue) return
     lastValue = html
     if (emitTimer) clearTimeout(emitTimer)
-    emitTimer = setTimeout(() => emit('update:modelValue', html), 150)
+    emitTimer = setTimeout(() => {
+      emitTimer = null
+      emit('update:modelValue', html)
+    }, 150)
+  }
+
+  // Leaving the editor hands the pending edit over at once. The Save button
+  // takes focus before its click fires, and a save inside the 150 ms window
+  // sent the text without the last keystrokes - its response then replaced
+  // the editor's content with what was saved, so they were lost for good.
+  function flushEmit() {
+    if (!emitTimer) return
+    clearTimeout(emitTimer)
+    emitTimer = null
+    emit('update:modelValue', lastValue)
   }
 
   onMounted(() => {
@@ -479,6 +493,12 @@
       state,
       editable: () => !props.disabled,
       attributes: { class: 'fh-prose', role: 'textbox', 'aria-label': props.ariaLabel || '' },
+      handleDOMEvents: {
+        blur: () => {
+          flushEmit()
+          return false
+        },
+      },
       dispatchTransaction(tr) {
         if (!view) return
         view.updateState(view.state.apply(tr))

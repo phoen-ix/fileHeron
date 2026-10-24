@@ -29,4 +29,24 @@ describe('RichTextEditor', () => {
     expect(emitted.some((html) => html.includes('template A'))).toBe(false)
     w.unmount()
   })
+
+  it('hands a pending edit over at once when the editor loses focus', async () => {
+    // The Save button takes focus before its click runs: a save inside the
+    // 150 ms window sent the text without the last keystrokes.
+    vi.useFakeTimers()
+    const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
+    const w = mount(RichTextEditor, {
+      props: { modelValue: '<p>legal</p>' },
+      global: { plugins: [i18n] },
+      attachTo: document.body,
+    })
+    ;(w.vm as unknown as { insertText: (s: string) => void }).insertText(' notice')
+    expect(w.emitted('update:modelValue')).toBeUndefined()
+    w.find('[role="textbox"]').element.dispatchEvent(new FocusEvent('blur'))
+    const emitted = (w.emitted('update:modelValue') ?? []).map((e) => String(e[0]))
+    expect(emitted.at(-1)).toContain('notice')
+    vi.advanceTimersByTime(300)
+    expect(w.emitted('update:modelValue')).toHaveLength(1)
+    w.unmount()
+  })
 })

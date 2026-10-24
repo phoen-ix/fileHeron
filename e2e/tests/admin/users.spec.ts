@@ -34,17 +34,31 @@ test.describe('invites', () => {
     admin: page,
   }) => {
     const email = `invitee-${uid()}@e2e.local`
+    const group = await api<{ id: number; name: string }>('/api/groups', {
+      method: 'POST',
+      body: JSON.stringify({ name: `Invite group ${uid()}`, description: '' }),
+    })
     await openInviteForm(page)
     const send = page.getByRole('button', { name: 'Send invite' })
     await expect(send).toBeDisabled()
     await page.getByRole('textbox', { name: /^Email/ }).fill(email)
     await page.getByRole('textbox', { name: /^Display name/ }).fill('Invited Person')
     await page.getByRole('combobox', { name: /^Role/ }).selectOption('employee')
+    await page.getByRole('checkbox', { name: group.name }).check()
     await send.click()
     await expect(toast(page, `Invite sent to`)).toBeVisible()
     const row = inviteRow(page, email)
     await expect(row).toContainText('employee')
     await expect(row).toContainText('pending')
+    // The group is applied when the invite is accepted; Details lists it.
+    await row.getByRole('button', { name: 'Details' }).click()
+    await expect(page.getByRole('dialog', { name: 'Invite details' })).toContainText(
+      String(group.id),
+    )
+    await page
+      .getByRole('dialog', { name: 'Invite details' })
+      .getByRole('button', { name: 'Close' })
+      .click()
     // The invite mail went out (dev printout) with a working register link.
     expect(tokenFromStdout('register')).toBeTruthy()
   })
@@ -197,12 +211,21 @@ test.describe('a user page', () => {
   test('a locked-out account shows the lock and the admin lifts it', async ({ admin: page }) => {
     const u = await newUser('client', 'locked')
     for (let i = 0; i < 6; i++) {
+      // The attempt that locks the account sends the owner a warning. It must
+      // not hang: its mail-log row once waited 50 s on this request's own
+      // lock of the user row (MariaDB lock wait timeout) and was then lost.
+      const started = Date.now()
       await fetch(`${BASE}/api/auth/login`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email: u.email, password: 'wrong-password-123' }),
       })
+      expect(Date.now() - started, `failed sign-in #${i + 1}`).toBeLessThan(10_000)
     }
+    const mails = await api<{ items: Array<{ category: string }> }>(
+      `/api/admin/mail-log?recipient_user_id=${u.id}`,
+    )
+    expect(mails.items.map((m) => m.category)).toContain('lockout_warning')
     await page.goto(`/admin/users/${u.id}`)
     await expect(page.getByTestId('locked-pill')).toBeVisible()
     await page.getByTestId('unlock-btn').click()

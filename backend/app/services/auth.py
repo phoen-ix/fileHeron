@@ -385,9 +385,17 @@ async def _maybe_send_lockout_email(
     import (services.email → models.user → services.auth).
 
     Sent to the STORED address, never to what the caller typed: the typed value
-    is attacker-controlled, and it used to be the recipient here."""
+    is attacker-controlled, and it used to be the recipient here.
+
+    Commits first. `record_failure` holds the user row FOR UPDATE, and the mail
+    log writes its row from its own session with a foreign key to that user:
+    on MariaDB the insert waited out innodb_lock_wait_timeout (50 s) on the
+    caller's own lock, froze the event loop meanwhile and then lost the row.
+    Every caller commits these writes right after anyway."""
     from . import site as site_svc
     from .email import send_lockout_warning_email
+
+    db.commit()
 
     locked_until = user.locked_until.isoformat() if user.locked_until else "soon"
     ip = _request_ip(request)

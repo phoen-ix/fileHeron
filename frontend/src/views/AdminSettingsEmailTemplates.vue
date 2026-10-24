@@ -23,7 +23,7 @@
   // Lazy chunk: the ProseMirror RichTextEditor only loads when this page is opened.
   const RichTextEditor = defineAsyncComponent(() => import('@/components/RichTextEditor.vue'))
 
-  const { t, te } = useI18n()
+  const { t, te, locale } = useI18n()
   const { describe } = useApiError()
   const ui = useUiStore()
 
@@ -224,7 +224,9 @@
     try {
       const { data } = await getEmailTemplates()
       summary.value = data
-      activeLocale.value = data.locales[0]?.code ?? null
+      // The UI's own language first, not whichever the server lists first.
+      activeLocale.value =
+        data.locales.find((l) => l.code === locale.value)?.code ?? data.locales[0]?.code ?? null
       activeSlug.value = data.items[0]?.slug ?? null
       await loadDetail()
     } catch (err) {

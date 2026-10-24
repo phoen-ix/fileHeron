@@ -86,9 +86,9 @@ const RichTextEditorStub = defineComponent({
 
 import AdminSettingsEmailTemplates from '@/views/AdminSettingsEmailTemplates.vue'
 
-function makeWrapper() {
+function makeWrapper(locale = 'en') {
   setActivePinia(createPinia())
-  const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
+  const i18n = createI18n({ legacy: false, locale, fallbackLocale: 'en', messages: { en } })
   return mount(AdminSettingsEmailTemplates, {
     global: { plugins: [i18n], stubs: { RichTextEditor: RichTextEditorStub, AdminPageHeader: { template: '<header><slot name="title" /><slot /><slot name="actions" /></header>' } } },
   })
@@ -119,6 +119,15 @@ describe('AdminSettingsEmailTemplates', () => {
     expect(w.text()).toContain('Deutsch')
     // First template loaded; built-in → Default badge.
     expect(w.text()).toContain('Default')
+  })
+
+  // The server lists Deutsch first; an English UI opened on it.
+  it.each(['en', 'de'])('opens on the UI language (%s), not the first one listed', async (ui) => {
+    getEmailTemplates.mockResolvedValueOnce({ data: { ...SUMMARY, locales: [...SUMMARY.locales].reverse() } })
+    const w = makeWrapper(ui)
+    await flushPromises()
+    expect(getEmailTemplate).toHaveBeenCalledWith('share_created', ui)
+    expect(w.find('[role="tab"].active').text()).toBe(ui === 'en' ? 'English' : 'Deutsch')
   })
 
   it('selecting a template fetches its detail', async () => {

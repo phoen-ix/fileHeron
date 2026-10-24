@@ -738,11 +738,8 @@ for (const [route, name, heading] of ADMIN_PAGES) {
     await expect(page.locator('h1.admin-page-title')).toBeVisible()
     if (name === 'admin-sso') await expect(page.getByText(SSO_NAME)).toBeVisible()
     if (name === 'admin-api-tokens') await expect(page.getByText(TOKEN_NAME)).toBeVisible()
-    if (name === 'admin-email-templates') {
-      // It opens on the first locale; the English set shows English.
-      await page.getByRole('tab', { name: 'English' }).click()
-      await expect(page.getByRole('tab', { name: 'English' })).toHaveClass(/active/)
-    }
+    // It opens on the UI's language, whichever the server lists first.
+    if (name === 'admin-email-templates') await expect(page.getByRole('tab', { name: 'English' })).toHaveClass(/active/)
     await shoot(page, name, ADMIN_CROP)
   })
 }

@@ -33,11 +33,23 @@ export async function signIn(ctx: BrowserContext, email: string, password: strin
 }
 
 let cached: { token: string; at: number } | null = null
+let twofaCleared = false
 
-/** An admin access token for setup calls, re-minted well inside its 15 min. */
+/** An admin access token for setup calls, re-minted well inside its 15 min.
+ * The first one also clears the 2FA role/group requirement: these specs create
+ * employees and clients that must not be sent to enrol, and forced-2fa.spec.ts
+ * leaves employees required to (the docs tour clears it the same way). */
 export async function adminToken(): Promise<string> {
   if (!cached || Date.now() - cached.at > 10 * 60_000) {
     cached = { token: await apiLogin(ADMIN.email, ADMIN.password), at: Date.now() }
+  }
+  if (!twofaCleared) {
+    const r = await apiFetch(cached.token, '/api/admin/settings/twofa', {
+      method: 'PUT',
+      body: JSON.stringify({ required_roles: [], required_group_ids: [] }),
+    })
+    if (!r.ok) throw new Error(`[e2e] clearing the 2FA requirement: ${r.status}`)
+    twofaCleared = true
   }
   return cached.token
 }
@@ -48,7 +60,12 @@ export async function api<T = unknown>(
   init: RequestInit = {},
   token?: string,
 ): Promise<T> {
-  const r = await apiFetch(token ?? (await adminToken()), path, init)
+  let r = await apiFetch(token ?? (await adminToken()), path, init)
+  if (r.status === 401 && !token) {
+    // A journey signed everyone out (a config import): sign in again.
+    cached = null
+    r = await apiFetch(await adminToken(), path, init)
+  }
   const text = await r.text()
   if (!r.ok) throw new Error(`[e2e] ${init.method ?? 'GET'} ${path}: ${r.status} ${text}`)
   return (text ? JSON.parse(text) : undefined) as T
@@ -63,7 +80,7 @@ export interface Person {
 }
 
 /** A fresh account created directly by the admin (no invite round-trip). */
-export async function newUser(role: Role, label = role): Promise<Person> {
+export async function newUser(role: Role, label: string = role): Promise<Person> {
   const s = uid()
   const email = `${label}-${s}@e2e.local`
   const password = freshPassword()
@@ -204,8 +221,10 @@ export function ingestMail(subject: string, from = 'user@e2e.local'): number {
         'subject, sender = sys.argv[1], sys.argv[2]',
         'raw = (f"From: E2E User <{sender}>\\r\\nTo: files@e2e.local\\r\\nSubject: {subject}\\r\\n"',
         '       "Message-ID: <" + subject.replace(" ", "-") + "@outside.example>\\r\\nMIME-Version: 1.0\\r\\n"',
-        '       "Content-Type: multipart/mixed; boundary=b1\\r\\n\\r\\n--b1\\r\\nContent-Type: text/plain\\r\\n\\r\\n"',
-        '       "Hello from outside.\\r\\n--b1\\r\\nContent-Type: text/plain; name=note.txt\\r\\n"',
+        '       "Content-Type: multipart/mixed; boundary=b1\\r\\n\\r\\n--b1\\r\\n"',
+        '       "Content-Type: multipart/alternative; boundary=b2\\r\\n\\r\\n--b2\\r\\nContent-Type: text/plain\\r\\n\\r\\n"',
+        '       "Hello from outside.\\r\\n--b2\\r\\nContent-Type: text/html\\r\\n\\r\\n"',
+        '       "<p>Hello from <b>outside</b>.</p>\\r\\n--b2--\\r\\n--b1\\r\\nContent-Type: text/plain; name=note.txt\\r\\n"',
         '       "Content-Disposition: attachment; filename=note.txt\\r\\n\\r\\nattached text\\r\\n--b1--\\r\\n").encode()',
         'db = SessionLocal()',
         'm = inbound_mail.ingest(db, inbound_parse.parse(raw), uid=random.randint(1, 2**31), uidvalidity=4242)',

@@ -392,6 +392,7 @@
   "verify": {
     "verifying": "Verifying your email…",
     "ok_title": "Email verified.",
+    "error_title": "Verification failed.",
     "ok_subtitle": "You can now sign in.",
     "to_login": "Continue to sign in"
   },
@@ -399,6 +400,7 @@
     "eyebrow": "email change",
     "confirming": "Confirming your email change…",
     "ok_title": "Email changed.",
+    "error_title": "Change not confirmed.",
     "ok_subtitle": "Your sign-in email has been updated. You'll need to sign in again.",
     "set_password_note": "Your single sign-on link was reset as part of this change. A separate email with a set-password link was sent to your new address so you can sign in.",
     "pending_title": "One step done.",
@@ -409,6 +411,7 @@
     "eyebrow": "email change",
     "cancelling": "Cancelling the email change…",
     "ok_title": "Change cancelled.",
+    "error_title": "Change not cancelled.",
     "ok_subtitle": "The pending email change has been cancelled. Nothing was changed on the account.",
     "to_login": "Continue to sign in"
   },

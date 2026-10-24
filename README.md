@@ -476,7 +476,7 @@ scanner; API tokens: Tokens | Policy; Secrets: Secrets | Policy; Blocked sources
 allowlist | Auto-block rules (Scan guard); Errors & alerts: Log | Alerts); every tab keeps its
 historical URL.
 
-<img src="docs/screenshots/admin-overview.png" alt="The admin overview: the task-grouped sidebar, the setting search, attention tiles, service status and every admin page" width="800">
+<img src="docs/screenshots/admin-overview.png" alt="The admin overview: the task-grouped sidebar, the setting search, attention tiles, service status and the recently changed settings" width="800">
 
 ## User management
 

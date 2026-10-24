@@ -500,7 +500,6 @@
     border-bottom-color: var(--fh-accent);
   }
   .fh-field {
-    display: block;
     margin-bottom: var(--fh-space-4);
   }
   .placeholders {

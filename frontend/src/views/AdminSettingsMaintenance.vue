@@ -129,8 +129,6 @@
     margin: 0 0 1.25rem;
   }
   .fh-field {
-    display: block;
-    max-width: none;
     margin-bottom: 1rem;
   }
   .activity {

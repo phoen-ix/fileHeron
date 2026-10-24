@@ -364,10 +364,6 @@
     color: var(--fh-ink-soft);
     font-size: var(--fh-text-body-sm);
   }
-  .fh-field {
-    display: block;
-    margin-bottom: var(--fh-space-3);
-  }
   .actions {
     display: flex;
     gap: var(--fh-space-3);

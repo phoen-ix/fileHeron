@@ -1,6 +1,6 @@
 # Dev image - the production dependency closure plus the dev tools, with the
 # source mounted by docker-compose.dev.yml for --reload.
-FROM python:3.15.1-trixie
+FROM python:3.16.0a1-trixie
 
 WORKDIR /app
 

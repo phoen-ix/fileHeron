@@ -1,9 +1,9 @@
 import { confirm, expect, heading, test, toast, uid } from './_admin'
 
 /* People › SSO: add a provider, see it listed, edit it, test its discovery
- * (no identity provider is reachable from the e2e stack, so the test reports
- * the failure in the form), delete it. Signing in through a real IdP needs an
- * external account - COVERAGE.b.md. */
+ * (its issuer is unreachable, so the test reports the failure in the form),
+ * delete it. Signing in through an IdP is part a's tests/user/sso.spec.ts -
+ * COVERAGE.b.md. */
 
 test('add, list, edit, test and delete an SSO provider', async ({ admin: page }) => {
   const name = `Corp SSO ${uid()}`

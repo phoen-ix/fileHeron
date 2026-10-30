@@ -3,14 +3,14 @@
 Part a (`COVERAGE.md`) owns everything outside `/admin` and the index; this file
 maps every admin route and every admin feature to a test in `e2e/tests/admin/`.
 
-- **Extraction** (2026-10-24): `grep -oE "name: 'admin-[a-z0-9-]+'" frontend/src/router/index.ts | sort -u`
+- **Extraction** (2026-10-30, unchanged since 2026-10-24): `grep -oE "name: 'admin-[a-z0-9-]+'" frontend/src/router/index.ts | sort -u`
   → 49 route names (48 pages - tab leaves included - plus the `admin-settings`
   redirect), and the unnamed redirect `settings/home-page`; the
   features per page are the controls of `frontend/src/views/Admin*.vue` and
   `frontend/src/components/admin/*.vue` (`grep -nE '@click|@submit|<input|<select|<textarea'`).
 - **Items:** 177 rows - 51 routes (each checked as admin, client, employee and guest:
   204 route × role checks), 8 role-level checks, 118 features / actions / dialogs /
-  error states. ✅ 168 · ❌ 9 (a: 3, b: 3, c: 3; no d, no e).
+  error states. ✅ 169 · ❌ 8 (b: 3, c: 5; no a, no d, no e).
 - **Run:** `npx playwright test tests/admin` against a stack from `scripts/e2e.sh`
   (part a); `tests/admin/_admin.ts` holds the shared helpers.
 
@@ -154,8 +154,8 @@ Every route below is visited by the parameterised sweep (`sweep.spec.ts`):
 |---|---|
 | SSO: add provider, list, edit, enable (button on the sign-in page), delete | ✅ `sso.spec.ts › add, list, edit, test and delete an SSO provider` |
 | SSO: "Test connection" failure reported | ✅ same test |
-| SSO: "Test connection" success | ❌ (a) needs a reachable OIDC provider; no IdP simulator in the e2e stack (discovery parsing: `backend/tests/test_oidc_*.py`) |
-| SSO: sign-in through the provider | ❌ (a) external identity provider account; the callback is covered by `backend/tests/test_oidc_connect_flow.py` |
+| SSO: "Test connection" success | ❌ (c) `backend/tests/test_oidc_probe_issuer_mismatch.py::test_probe_tolerates_exactly_one_trailing_slash` (the probe answers `ok: true`); the e2e stack's stand-in IdP is part a's (`e2e/oidc/`) |
+| SSO: sign-in through the provider | ✅ part a: `user/sso.spec.ts › the first SSO sign-in links the account with that verified email` (COVERAGE.a.md B10, against the stand-in IdP) |
 | SSO: client secret required on create; Cancel | ✅ `sso.spec.ts › a new provider needs a client secret; cancel goes back to the list` |
 | SSO: preset issuer template fields | ✅ `sso.spec.ts › a preset with an issuer template fills the issuer from its fields` |
 | 2FA enforcement: required role → user must enrol; passkey sign-in switch → offered on sign-in | ✅ `policies.spec.ts › 2FA enforcement: a required role is enforced; passkey sign-in switches` |
@@ -193,7 +193,7 @@ Every route below is visited by the parameterised sweep (`sweep.spec.ts`):
 | Inbox: unread badge, search, open (keyboard), plain/HTML, attachment download, archive, delete | ✅ `mail.spec.ts › admin inbox › list, search, open, read the attachment, archive, delete` |
 | Inbox: type + status filters | ✅ `mail.spec.ts › admin inbox › the type and status filters narrow the list` |
 | Inbox: Fetch now | ✅ `mail.spec.ts › admin inbox › fetch now reports that inbound mail is off` |
-| Inbox: fetching real mail over IMAP | ❌ (a) needs a mailbox; no IMAP server in the e2e stack (`backend/tests/test_inbound_mail.py`, `test_imap_poll_*.py`) |
+| Inbox: fetching real mail over IMAP | ❌ (c) no IMAP server in the e2e stack; the poll is `backend/tests/test_imap_poll_resilience.py`, `test_imap_poll_outage.py`, the ingest `test_inbound_mail.py` |
 | IMAP settings: save, test connection (failure), fetch now (failure) | ✅ `mail.spec.ts › inbound mail (IMAP) › settings are saved; test and fetch report the unreachable server` |
 | Mail log: search, recipient, category, status filters; recipient + subject links; redacted mail cannot be resent | ✅ `logs.spec.ts › mail log › search, recipient, category and status filters; a mail opens` |
 | Mail log: user-scope chip, CSV export | ✅ `logs.spec.ts › mail log › the user-scope chip clears the recipient filter; search finds by subject` |

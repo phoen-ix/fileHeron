@@ -163,6 +163,11 @@ check_untyped_defs = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# pytest-asyncio 1.4 warns at configure time when this is unset, and
+# `filterwarnings = error` below turns that into an INTERNALERROR before the
+# first test - every pytest job in CI died that way on 2026-10-30. "function" is
+# the upcoming default; no async fixture here is wider than function scope.
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 pythonpath = ["."]
 # Every warning fails the run. A model FK cycle made sorted_tables and

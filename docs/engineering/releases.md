@@ -92,10 +92,12 @@ audit on three anyio CVEs; tags are immutable, so the same commits shipped as
 v2.17.1 plus the anyio bump). **v2.17.1 shipped a sidebar showing nothing but
 "Overview"** (a `v-if` on the Overview link captured the categories' `v-else`;
 no test mounted AdminLayout); v2.17.2 is that one-line fix plus
-`tests/components/AdminLayout.test.ts`. **The reference host runs v2.25.2**
-(the nightly automatic patch update, 2026-10-11 01:31 UTC from v2.25.1, no
-migration; it skipped the infra sync because the checkout was ahead of the tag,
-as designed; encryption at rest is off there). v2.26.0 and later are MINOR
+`tests/components/AdminLayout.test.ts`. **The reference host runs v2.29.0**
+(a manual Update from v2.28.0, 2026-10-30 22:55 UTC: the new executor verified
+every image's signature and recreated db, redis and clamav onto the digest pins;
+tusd kept its old container, without the capability drop, because the checkout
+was already at the tag, so the definition check compared the file with itself;
+encryption at rest is off there). v2.26.0 and later are MINOR
 releases, which the default patch scope never installs - they wait for a click on
 Update. The working tree's `scripts/` are live there
 as always. Its infra has been on `mariadb:12.3.3` /

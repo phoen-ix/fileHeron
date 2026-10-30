@@ -6,12 +6,14 @@
 # Used by the e2e CI job and locally:
 #   COMPOSE_PROJECT_NAME=fileheron_e2e \
 #   docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build
+# or, start to teardown in one go: scripts/e2e.sh (it sets E2E_IMAGE_TAG to the
+# project name, so parallel checkouts never swap images).
 services:
   backend:
     build:
       context: .
       dockerfile: docker/backend/Dockerfile
-    image: fileheron-backend:e2e
+    image: fileheron-backend:${E2E_IMAGE_TAG:-e2e}
     environment:
       ENVIRONMENT: development
       COOKIE_SECURE: "false"
@@ -29,6 +31,8 @@ services:
       TEST_ACCOUNT_EMAIL: user@e2e.local
       TEST_ACCOUNT_PASSWORD: UserPass123!
       TEST_ACCOUNT_DISPLAY_NAME: E2E User
+      # The stand-in IdP below speaks plain http inside the compose network.
+      OIDC_ALLOW_INSECURE_HTTP: "true"
 
   worker:
     build:
@@ -37,10 +41,14 @@ services:
     # Its own tag, as in the release (fileheron-worker from the same Dockerfile).
     # Sharing fileheron-backend:e2e made compose >= 2.40 build both targets in
     # parallel and fail the second export with "image already exists".
-    image: fileheron-worker:e2e
+    image: fileheron-worker:${E2E_IMAGE_TAG:-e2e}
     environment:
       ENVIRONMENT: development
       AV_SKIP: "true"
+      # The base file hands the worker APP_URL only through .env, which this
+      # stack has none of: its notification and mail links pointed at the
+      # 8080 default whatever the stack's port.
+      APP_URL: ${APP_URL:-http://localhost:8080}
 
   frontend:
     build:
@@ -51,4 +59,28 @@ services:
         # the specs that need the resumable path use forceResumableUploads()
         # (e2e/helpers.ts).
         VITE_DIRECT_UPLOAD_THRESHOLD: "1"
-    image: fileheron-frontend:e2e
+    image: fileheron-frontend:${E2E_IMAGE_TAG:-e2e}
+
+  # A stand-in OpenID Connect provider (e2e/oidc/idp.py) for the SSO journeys:
+  # the backend talks to it as http://oidc:9000, the browser opens its sign-in
+  # form on 127.0.0.1:E2E_IDP_PORT. Same image as the backend (Python, PyJWT,
+  # cryptography), its own tag like the worker's.
+  oidc:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    image: fileheron-e2e-idp:${E2E_IMAGE_TAG:-e2e}
+    container_name: ${COMPOSE_PROJECT_NAME:-fileheron_e2e}-oidc
+    entrypoint: ["python", "/idp/idp.py"]
+    environment:
+      IDP_ISSUER: http://oidc:9000
+      IDP_PUBLIC_URL: http://localhost:${E2E_IDP_PORT:-8084}
+    volumes:
+      - ./e2e/oidc:/idp:ro
+    ports:
+      - "127.0.0.1:${E2E_IDP_PORT:-8084}:9000"
+    networks: [internal]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/jwks')"]
+      interval: 2s
+      retries: 30

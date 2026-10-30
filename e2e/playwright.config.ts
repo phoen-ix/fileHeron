@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test'
 
 /* The stack is brought up (docker compose) by the CI job / the developer before
  * `playwright test`; global-setup just waits for it to answer. baseURL is the
- * nginx-served SPA. Keep the suite to the ~8 critical journeys - it's slow. */
+ * nginx-served SPA. scripts/e2e.sh does all of it; COVERAGE.md maps the specs. */
 export default defineConfig({
   testDir: './tests',
   globalSetup: './global-setup.ts',
@@ -14,7 +14,7 @@ export default defineConfig({
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:8080',
-    trace: 'on-first-retry',
+    trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],

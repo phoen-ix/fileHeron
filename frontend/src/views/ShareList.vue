@@ -260,15 +260,11 @@
                     @click.stop
                   />
                 </th>
-                <th
-                  role="button"
-                  tabindex="0"
-                  :aria-sort="sort.ariaSort('subject')"
-                  @click="sort.toggle('subject')"
-                  @keydown.enter="sort.toggle('subject')"
-                >
-                  {{ t('share_list.col.subject') }}
-                  <span class="sort-ind">{{ sort.indicator('subject') }}</span>
+                <th :aria-sort="sort.ariaSort('subject')">
+                  <button type="button" class="sort-btn" @click="sort.toggle('subject')">
+                    {{ t('share_list.col.subject') }}
+                    <span class="sort-ind" aria-hidden="true">{{ sort.indicator('subject') }}</span>
+                  </button>
                 </th>
                 <!-- Not sortable: the server has no sender order. This header
                      toggled created_at while labelled "Sender", showing an arrow
@@ -280,27 +276,21 @@
                   {{ t('share_list.col.recipients') }}
                 </th>
                 <th>{{ t('share_list.col.kind') }}</th>
-                <th
-                  role="button"
-                  tabindex="0"
-                  :aria-sort="sort.ariaSort('state')"
-                  @click="sort.toggle('state')"
-                  @keydown.enter="sort.toggle('state')"
-                >
-                  {{ t('share_list.col.state') }}
-                  <span class="sort-ind">{{ sort.indicator('state') }}</span>
+                <th :aria-sort="sort.ariaSort('state')">
+                  <button type="button" class="sort-btn" @click="sort.toggle('state')">
+                    {{ t('share_list.col.state') }}
+                    <span class="sort-ind" aria-hidden="true">{{ sort.indicator('state') }}</span>
+                  </button>
                 </th>
                 <th>{{ t('share_list.col.files') }}</th>
                 <th>{{ t('share_list.col.size') }}</th>
-                <th
-                  role="button"
-                  tabindex="0"
-                  :aria-sort="sort.ariaSort('expires_at')"
-                  @click="sort.toggle('expires_at')"
-                  @keydown.enter="sort.toggle('expires_at')"
-                >
-                  {{ t('share_list.col.expires') }}
-                  <span class="sort-ind">{{ sort.indicator('expires_at') }}</span>
+                <th :aria-sort="sort.ariaSort('expires_at')">
+                  <button type="button" class="sort-btn" @click="sort.toggle('expires_at')">
+                    {{ t('share_list.col.expires') }}
+                    <span class="sort-ind" aria-hidden="true">{{
+                      sort.indicator('expires_at')
+                    }}</span>
+                  </button>
                 </th>
               </tr>
             </thead>
@@ -563,11 +553,21 @@
     user-select: none;
   }
 
-  .share-table th[role='button'] {
+  /* The header stays a column header (it carries aria-sort); the button
+     inside sorts. role="button" on the <th> hid the column semantics, and
+     aria-sort is ignored on a button. */
+  .sort-btn {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: inherit;
     cursor: pointer;
   }
 
-  .share-table th[role='button']:hover {
+  .sort-btn:hover {
     color: var(--fh-ink);
   }
 

@@ -18,7 +18,7 @@ beforeEach(() => {
   setActivePinia(createPinia())
 })
 
-const uppyCalls = { addFile: 0, upload: 0 }
+const uppyCalls = { addFile: 0, upload: 0, meta: [] as unknown[] }
 vi.mock('@uppy/tus', () => ({ default: class {} }))
 vi.mock('@uppy/core', () => ({
   default: class FakeUppy {
@@ -28,8 +28,9 @@ vi.mock('@uppy/core', () => ({
     on() {
       return this
     }
-    addFile() {
+    addFile(f: { meta: unknown }) {
       uppyCalls.addFile++
+      uppyCalls.meta.push(f.meta)
       return 'fake-id'
     }
     removeFile() {}
@@ -78,6 +79,7 @@ function makeHost(shareId: Ref<string | null>) {
 beforeEach(() => {
   uppyCalls.addFile = 0
   uppyCalls.upload = 0
+  uppyCalls.meta = []
   directUpload.mockReset().mockResolvedValue({ data: { file_id: 'fid-direct' } })
   initUpload
     .mockReset()
@@ -113,6 +115,24 @@ describe('useUpload direct-vs-TUS threshold', () => {
     expect(uppyCalls.addFile).toBe(1)
     expect(uppyCalls.upload).toBe(1)
     expect(u.items.value[0].fileId).toBe('fid-tus')
+    wrapper.unmount()
+  })
+
+  it('a Retry carries on with the same file - no second init', async () => {
+    // tus resumes the failed upload by its fingerprint, so its bytes complete
+    // the FIRST file; a second init left a row that never got any.
+    const wrapper = mount(makeHost(ref('share-1')))
+    const u = wrapper.vm.u
+    u.add([fileOfSize('big.bin', 100 * MB + 1)])
+    await u.start()
+    const item = u.items.value[0]
+    item.state = 'error' // what Uppy's upload-error handler leaves behind
+    await u.retry(item.uid)
+
+    expect(initUpload).toHaveBeenCalledTimes(1)
+    expect(uppyCalls.addFile).toBe(2)
+    expect(uppyCalls.meta[1]).toEqual(uppyCalls.meta[0])
+    expect(item.fileId).toBe('fid-tus')
     wrapper.unmount()
   })
 

@@ -55,6 +55,9 @@ export interface UploadItem {
   /** The folder the file came from (a dropped or picked folder), e.g.
    *  'Photos/2026'; null for a file picked or dropped on its own. */
   relativeDir: string | null
+  /** The resumable upload this item was given by /api/uploads/init, kept so a
+   *  Retry carries on with the same file instead of registering another. */
+  resumable?: { metadataHeader: string; endpoint: string | null }
 }
 
 // One timestamped line in the per-file activity log surfaced on the
@@ -235,15 +238,25 @@ export function useUpload(shareId: Ref<string | null>) {
         return
       }
 
-      // Resumable path.
-      const { data } = await initUpload({
-        share_id: shareId.value,
-        filename: item.file.name,
-        size_bytes: item.file.size,
-        mime_type: item.file.type || 'application/octet-stream',
-        ...(item.relativeDir ? { relative_dir: item.relativeDir } : {}),
-      })
-      item.fileId = data.file_id
+      // Resumable path. A Retry reuses the file this item was already given:
+      // tus resumes the earlier upload of the same bytes (its fingerprint is
+      // kept until success), so a second init only left a second row that
+      // never received a byte - shown as still uploading, and holding back
+      // the share's announcement - while the bytes completed the first one.
+      if (!item.fileId || !item.resumable) {
+        const { data } = await initUpload({
+          share_id: shareId.value,
+          filename: item.file.name,
+          size_bytes: item.file.size,
+          mime_type: item.file.type || 'application/octet-stream',
+          ...(item.relativeDir ? { relative_dir: item.relativeDir } : {}),
+        })
+        item.fileId = data.file_id
+        item.resumable = {
+          metadataHeader: data.upload_metadata_header,
+          endpoint: data.tus_endpoint ?? null,
+        }
+      }
 
       const uppyId = uppy.addFile({
         name: item.file.name,
@@ -251,8 +264,8 @@ export function useUpload(shareId: Ref<string | null>) {
         data: item.file,
         meta: {
           uid: item.uid,
-          uploadMetadataHeader: data.upload_metadata_header,
-          fileId: data.file_id,
+          uploadMetadataHeader: item.resumable.metadataHeader,
+          fileId: item.fileId,
         },
       })
 
@@ -260,8 +273,8 @@ export function useUpload(shareId: Ref<string | null>) {
       // '/uploads/' is only the default. @uppy/tus merges a file's own `tus`
       // options over the plugin's, so a deployment that moved tusd is honoured
       // instead of every resumable upload going to the wrong path.
-      if (data.tus_endpoint) {
-        uppy.setFileState(uppyId, { tus: { endpoint: data.tus_endpoint } } as never)
+      if (item.resumable.endpoint) {
+        uppy.setFileState(uppyId, { tus: { endpoint: item.resumable.endpoint } } as never)
       }
 
       item.state = 'uploading'

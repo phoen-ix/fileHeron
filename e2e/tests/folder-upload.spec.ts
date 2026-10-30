@@ -4,13 +4,13 @@ import path from 'node:path'
 
 import { expect, test } from '@playwright/test'
 
-import { ADMIN, USER, apiFetch, apiLogin } from '../helpers'
+import { ADMIN, USER, apiFetch, apiLogin, forceResumableUploads } from '../helpers'
 
 /* Journey: folder uploads (v2.26.0). A picked folder keeps its structure: each
  * file lands with its folder, the share page groups the files under folder
- * headings, and the bulk ZIP carries the tree. The e2e frontend forces the
- * resumable path (VITE_DIRECT_UPLOAD_THRESHOLD=1), so this drives Uppy/tus with
- * a folder - the path a real project tree takes. */
+ * headings, and the bulk ZIP carries the tree. forceResumableUploads sends the
+ * files down the resumable path, so this drives Uppy/tus with a folder - the
+ * path a real project tree takes. */
 
 test('a picked folder keeps its structure on the share page and in the ZIP', async ({ page }) => {
   const admin = await apiLogin(ADMIN.email, ADMIN.password)
@@ -37,6 +37,11 @@ test('a picked folder keeps its structure on the share page and in the ZIP', asy
   fs.writeFileSync(path.join(project, 'docs', 'a.txt'), 'aaa')
   fs.writeFileSync(path.join(project, 'docs', '2026', 'b.txt'), 'bbbb')
 
+  await forceResumableUploads(page)
+  const tusPatches: string[] = []
+  page.on('request', (r) => {
+    if (r.method() === 'PATCH' && r.url().includes('/uploads/')) tusPatches.push(r.url())
+  })
   await page.goto('/login')
   await page.fill('#login-email', ADMIN.email)
   await page.fill('#login-password', ADMIN.password)
@@ -48,6 +53,7 @@ test('a picked folder keeps its structure on the share page and in the ZIP', asy
   await page.locator('.add-files-panel input.folder-input').setInputFiles(project)
   await page.getByTestId('add-files-submit').click()
   await expect(page.getByTestId('add-files-toggle')).toBeVisible({ timeout: 30_000 })
+  expect(tusPatches.length).toBe(3)
 
   // Each file landed with its folder - read from the API, not the UI.
   type Row = { original_filename: string; relative_dir: string | null; state: string }

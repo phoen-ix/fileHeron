@@ -30,8 +30,8 @@ import { folderOf } from '@/utils/folders'
 
 // Mirror backend's MAX_DIRECT_UPLOAD_BYTES default. Cheap-enough for the
 // smallest VPS - files above this take the chunked path with resume. Build-time
-// override (VITE_DIRECT_UPLOAD_THRESHOLD) so a deploy that lowered the backend
-// limit can track it, and so e2e can force the resumable path with a tiny file.
+// override (VITE_DIRECT_UPLOAD_THRESHOLD), only a fallback: the server's live
+// ceiling (site.maxDirectUploadBytes) wins when it is known.
 // Empty/unset -> NaN/0 -> the 100 MB default.
 const DIRECT_UPLOAD_THRESHOLD =
   Number(import.meta.env.VITE_DIRECT_UPLOAD_THRESHOLD) || 100 * 1024 * 1024

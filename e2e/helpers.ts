@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { randomInt } from 'node:crypto'
 
+import type { Page } from '@playwright/test'
 import { generateSync } from 'otplib'
 
 /* Shared helpers + the deterministic seeded accounts (docker-compose.e2e.yml). */
@@ -127,4 +128,18 @@ export async function enroll2FA(email: string, password: string): Promise<string
  * register). Unique per call so re-runs don't collide. */
 export function freshPassword(): string {
   return `E2e!q${Date.now()}${randomInt(1_000_000)}Zx`
+}
+
+/** Send every browser upload on `page` down the resumable (tus) path. The SPA
+ * uploads a file directly when it is under the server's direct-upload ceiling
+ * (`max_direct_upload_bytes` in /api/config-public, 100 MB by default), and
+ * that live value wins over the frontend's build-time threshold, so this
+ * answers the page with a 1-byte ceiling. The server keeps its own, so API
+ * seeding through /api/uploads/direct still works. Call before the page loads. */
+export async function forceResumableUploads(page: Page): Promise<void> {
+  await page.route('**/api/config-public', async (route) => {
+    const response = await route.fetch()
+    const json = await response.json()
+    await route.fulfill({ response, json: { ...json, max_direct_upload_bytes: 1 } })
+  })
 }

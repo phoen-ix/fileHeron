@@ -1,14 +1,17 @@
 import { expect, test } from '@playwright/test'
 
-import { ADMIN, USER, apiFetch, apiLogin } from '../helpers'
+import { ADMIN, USER, apiFetch, apiLogin, forceResumableUploads } from '../helpers'
 
 /* Journey: the resumable browser upload path (@uppy/core + @uppy/tus). The other
  * upload coverage uploads via a raw fetch to /api/uploads/direct, which never
- * runs the Uppy/TUS client. Here the e2e frontend is built with
- * VITE_DIRECT_UPLOAD_THRESHOLD=1 (docker-compose.e2e.yml), so ANY file the
- * browser adds takes the resumable path - a tiny file exercises the real Uppy
- * client end-to-end against tusd. A broken Uppy upgrade surfaces here: the
- * upload errors, the file never registers, and the assertions below fail. */
+ * runs the Uppy/TUS client. Here the page is told the server's direct-upload
+ * ceiling is 1 byte (forceResumableUploads), so ANY file the browser adds takes
+ * the resumable path - a tiny file exercises the real Uppy client end-to-end
+ * against tusd, and the test checks a tus PATCH carried it. (The build-time
+ * VITE_DIRECT_UPLOAD_THRESHOLD=1 this relied on is overridden by the live
+ * ceiling, so the file went the direct way and the test passed regardless.)
+ * A broken Uppy upgrade surfaces here: the upload errors, the file never
+ * registers, and the assertions below fail. */
 
 test('resumable browser upload (Uppy/TUS) adds a file to an active share', async ({
   page,
@@ -36,6 +39,11 @@ test('resumable browser upload (Uppy/TUS) adds a file to an active share', async
   const shareId = (await sh.json()).id as string
 
   // Log in as the owner (admin) in the browser and open the share.
+  await forceResumableUploads(page)
+  const tusPatches: string[] = []
+  page.on('request', (r) => {
+    if (r.method() === 'PATCH' && r.url().includes('/uploads/')) tusPatches.push(r.url())
+  })
   await page.goto('/login')
   await page.fill('#login-email', ADMIN.email)
   await page.fill('#login-password', ADMIN.password)
@@ -58,6 +66,7 @@ test('resumable browser upload (Uppy/TUS) adds a file to an active share', async
   // the share. Assert both - the API check proves the bytes actually landed via
   // tusd, not just a UI state flip.
   await expect(page.getByTestId('add-files-toggle')).toBeVisible({ timeout: 30_000 })
+  expect(tusPatches.length).toBeGreaterThan(0)
 
   const detail = await apiFetch(admin, `/api/shares/${shareId}`)
   const files = (await detail.json()).files as Array<{ id: string; original_filename: string }>

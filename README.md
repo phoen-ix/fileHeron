@@ -747,9 +747,13 @@ write `.env` by hand, confirm each of these before going live:
 - **Backups + drills** - enable the nightly backup timer + weekly restore drill
   (see [Backups](#backups)).
 
-The runtime already applies `no-new-privileges`, runs the app services as UID 1000,
-and pins image TAGS (`FH_TAG`, moved only by the in-app updater - digest pinning is
-not in place); Argon2id + HIBP guard passwords.
+The runtime applies `no-new-privileges` to every container and drops **all Linux
+capabilities** from each, adding back only what the image's root phase needs to
+start - listed with the reason next to each one in `docker-compose.yml` (backend,
+worker and tusd never run as root and get nothing back). The app images are pinned
+by the release tag (`FH_TAG`, moved only by the in-app updater, which verifies
+their signatures) and the database, Redis, ClamAV and tusd images by digest;
+Argon2id + HIBP guard passwords.
 
 ## Storage layout
 

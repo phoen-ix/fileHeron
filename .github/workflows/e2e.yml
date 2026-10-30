@@ -122,6 +122,42 @@ jobs:
           DOCS_SCREENSHOT_DIR: docs-tour-out
         run: npx playwright test -c playwright.docs.config.ts
 
+      # The capability policy in docker-compose.yml (cap_drop ALL plus a measured
+      # cap_add per service) is exercised by nothing but this stack, and `up -d`
+      # returning 0 is not a verdict on it: a redis that silently stays root, a
+      # clamav whose init dies under `set -eu`, an nginx master that cannot bind
+      # :80 would all pass the journeys above (AV_SKIP is on, and the frontend
+      # is healthchecked before they start - but a later crash loop is not). So
+      # every container must be running and healthy at the end, after clamav's
+      # first signature download has had its say.
+      - name: Every container is running and healthy
+        run: |
+          set -euo pipefail
+          compose="docker compose -f docker-compose.yml -f docker-compose.e2e.yml"
+          # A fresh clamav downloads ~150 MB of signatures before clamd can
+          # answer, which can outlast its start_period and read `unhealthy`
+          # until a probe passes - so health gets five minutes to settle; a
+          # container that is not running fails at once.
+          for _ in $(seq 1 60); do
+            json=$($compose ps -a --format json)
+            dead=$(printf '%s' "$json" | jq -rs 'flatten | map(select(.State != "running")) | length')
+            [ "$dead" = "0" ] || break
+            settling=$(printf '%s' "$json" | jq -rs 'flatten | map(select(.Health != "" and .Health != "healthy")) | length')
+            [ "$settling" = "0" ] && break
+            sleep 5
+          done
+          bad=$($compose ps -a --format json \
+                | jq -rs 'flatten | map(select(.State != "running" or (.Health != "" and .Health != "healthy")))
+                          | .[] | "\(.Service) state=\(.State) health=\(.Health)"')
+          if [ -n "$bad" ]; then
+            echo "::error::containers not running and healthy under the capability policy: $bad"
+            for svc in $(printf '%s\n' "$bad" | cut -d' ' -f1); do
+              echo "::group::logs $svc"; $compose logs --no-color --tail 100 "$svc"; echo "::endgroup::"
+            done
+            exit 1
+          fi
+          $compose ps
+
       - name: Stack logs on failure
         if: failure()
         run: docker compose -f docker-compose.yml -f docker-compose.e2e.yml logs --tail=300

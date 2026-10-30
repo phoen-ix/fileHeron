@@ -368,3 +368,61 @@ def test_every_infra_image_is_pinned_by_digest(compose):
     for name in ("db", "redis", "clamav", "tusd"):
         image = services[name]["image"]
         assert re.fullmatch(r"[a-z0-9./-]+:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}", image), f"{name}: {image}"
+
+
+# --- the capability policy (2026-10-30) --------------------------------------
+#
+# Every service drops ALL capabilities and adds back the measured minimum of its
+# image's root phase; the sets below ARE the policy (they duplicate the compose
+# file on purpose, like the step-up list - a new capability is a deliberate,
+# documented change, not a bump that happens). Measured from the pinned images'
+# entrypoints and the live containers' modes; the reasons sit beside each
+# capability in docker-compose.yml.
+
+_CAPABILITY_SETS = {
+    "db": ["CHOWN", "DAC_READ_SEARCH", "SETGID", "SETUID"],
+    "redis": ["CHOWN", "DAC_READ_SEARCH", "FOWNER", "SETGID", "SETUID"],
+    "backend": [],
+    "worker": [],
+    "tusd": [],
+    "clamav": ["CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID"],
+    "frontend": ["CHOWN", "NET_BIND_SERVICE", "SETGID", "SETUID"],
+    "updater-shim": ["DAC_OVERRIDE"],
+}
+_NEVER = {"ALL", "SYS_ADMIN", "SYS_PTRACE", "SYS_MODULE", "SYS_RAWIO", "NET_ADMIN", "DAC_OVERRIDE"}
+
+
+def test_every_service_drops_all_capabilities(compose):
+    """Generic over the services, so a new one cannot ship with Docker's default
+    fourteen capabilities by omission."""
+    services = yaml.safe_load(compose)["services"]
+    for name, svc in services.items():
+        assert svc.get("cap_drop") == ["ALL"], f"{name} keeps Docker's default capability set"
+        assert "privileged" not in svc, name
+        added = set(svc.get("cap_add") or [])
+        # DAC_OVERRIDE: the shim writes the uid-1000 state dir; clamd and
+        # freshclam open their log files in the clamav-owned /var/log/clamav as
+        # root before dropping (measured: without it clamd never starts).
+        allowed_override = {"DAC_OVERRIDE"} if name in ("updater-shim", "clamav") else set()
+        assert not (added & _NEVER) - allowed_override, f"{name} adds back {sorted(added & _NEVER)}"
+
+
+def test_the_capability_sets_are_the_measured_minimum(compose):
+    services = yaml.safe_load(compose)["services"]
+    assert set(services) == set(_CAPABILITY_SETS), "a new service needs a measured cap_add here"
+    for name, expected in _CAPABILITY_SETS.items():
+        actual = sorted(services[name].get("cap_add") or [])
+        assert actual == sorted(expected), f"{name}: {actual} != {sorted(expected)}"
+        if not expected:
+            assert "cap_add" not in services[name], f"{name} never runs as root; nothing to add back"
+
+
+def test_no_override_file_widens_the_capability_policy():
+    """The dev, e2e and docs compose files layer on docker-compose.yml and must
+    inherit the policy, not redefine it (the dev file carries compose's
+    `!override` tag, which PyYAML cannot load, hence a text scan)."""
+    for name in ("docker-compose.dev.yml", "docker-compose.e2e.yml", "docker-compose.docs.yml"):
+        text = (ROOT / name).read_text(encoding="utf-8")
+        for key in ("cap_add", "cap_drop", "privileged"):
+            assert key not in text, f"{name} sets {key}"
+        assert not re.search(r"^\s+user:", text, re.M), f"{name} sets a user"

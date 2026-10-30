@@ -20,10 +20,15 @@ itself in a new root-owned directory, `data/updater-private/`, that the app
 containers never see. The first Rollback after this update has no record yet and
 is allowed with a warning.
 
-**Hardening of the updater containers.** The shim drops every Linux capability
-but one, runs on a read-only filesystem and under a process limit; the executor
-runs with a minimal capability set, `no-new-privileges`, a process limit and a
-memory limit. The executor also no longer writes through any path under
+**Every container now drops all Linux capabilities.** Each service adds back
+only what its image needs to start, with the reason written next to it in
+`docker-compose.yml`: the database, Redis and ClamAV need four or five to chown
+their data and switch to their own user before they serve anything; nginx needs
+four to bind port 80 and start its workers; the backend, worker and tusd never
+run as root and get none. **The updater containers are hardened further:** the
+shim keeps a single capability, runs on a read-only filesystem and under a
+process limit; the executor runs with a minimal capability set,
+`no-new-privileges`, a process limit and a memory limit. The executor also no longer writes through any path under
 `data/updater/` that the app containers could have planted - it opens nothing
 there that is not a regular file, writes only through exclusively created temp
 files, and never falls back to writing in place - and the `.env` rewrite that
@@ -33,11 +38,11 @@ restores.
 **Infra images are pinned by digest.** `docker-compose.yml` names MariaDB,
 Redis, ClamAV and tusd as `tag@sha256:…`, so a rebuild on Docker Hub arrives as
 a Dependabot pull request instead of following silently. **On this update the
-database, Redis and ClamAV are recreated** where the running build of the tag
-is older than the pinned one (Docker Hub rebuilt these tags after most hosts
-pulled them); the updater backs the database up first, as for every database
-change, and the app is stopped while the data layer restarts - a minute or two.
-tusd is unchanged.
+database, Redis, ClamAV and tusd are recreated** - their definitions changed
+(the capability lists), and most hosts also run older builds of three of those
+tags than the pinned ones (Docker Hub rebuilt them after the hosts pulled). The
+updater backs the database up first, as for every database change, and the app
+is stopped while the data layer restarts - a minute or two.
 
 **No migration. Host step:** none where the updater can fast-forward your
 checkout - it recreates the shim with its new definition at the end of the
@@ -64,6 +69,9 @@ its log. **Default move:** image signature verification is ON.
 - The `.env` rewrite that records the installed version was a truncate-then-
   write of the file holding every secret; it is an atomic replace now, and
   follows an operator's symlinked `.env` to its target.
+- Every container ran with Docker's default fourteen capabilities. All of them
+  now start with none and add back a measured minimum, so an exploited nginx or
+  clamd no longer holds raw sockets, device creation or chroot for free.
 
 ## Updater
 

@@ -20,7 +20,6 @@ Each split silently breaks a pin:
 - **Dropped:** Locust load-test baseline (real-load operation supersedes); zxcvbn-ts strength meter (HIBP is the real defense).
 - **Rejected (2026-10-10): upload links for people without an account ("file requests").** Only signed-in users upload - staff, or clients an admin invited; public links stay download-only. The owner's decision, not a technical limit.
 - **Rejected:** OpenAPI codegen for the frontend types (see CLAUDE.md §Testing + CI gates); a per-token access denylist (see `docs/engineering/auth.md` §Revocation); splitting the three files above.
-- **Deferred (2026-10-30): `cap_drop: [ALL]` + a per-service `cap_add` list for every service.** Only the two updater containers drop capabilities (v2.29.0: the `updater-shim` compose service, and the executor's `docker run` in `shim.sh`). mariadb's entrypoint, clamav and nginx's master each need specific capabilities, so the rest of the stack needs a tested per-service list, an e2e-clone run and a reference-host dry run - its own release. The owner's decision on 2026-10-30, not a technical limit.
 
 ### Verified FALSE - don't re-file
 

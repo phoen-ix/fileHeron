@@ -5,12 +5,34 @@
 # treats a digest bump like a tag bump - the service is recreated, health-gated,
 # with the forced backup for the database - and leaves a service alone whose
 # running image already IS the pinned digest (run.py::_running_matches_pinned_digest).
+#
+# Every service drops ALL Linux capabilities and adds back only what its image's
+# ROOT phase provably needs, each with the operation that needs it beside it
+# (measured from the pinned images' entrypoints and the live containers'
+# on-disk modes, 2026-10-30). backend, worker and tusd never run as root and get
+# nothing back; mariadb and redis drop to their own users after a short root
+# phase; nginx's master and clamav's init stay root (clamav is the one infra
+# image whose daemons write a root-owned-stranger directory before dropping,
+# hence its DAC_OVERRIDE). A new capability is a
+# deliberate change with its reason, never a return to Docker's default set -
+# `backend/tests/infra/test_images_and_compose.py` pins every list exactly.
+# The in-app updater treats this as a compose-definition change and recreates
+# the infra services on the update that lands it.
 services:
   db:
     image: mariadb:12.3.3@sha256:d46e102fa8b9b72bfcdeb56f9dd538742092119dc8b11f31fe662605cd234cd9
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-db
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)
+    # The official entrypoint's root phase only; mariadbd itself runs as mysql
+    # with no capability at all (gosu). Init scripts and mariadb-upgrade run
+    # after the drop.
+    cap_drop: [ALL]
+    cap_add:
+      - CHOWN            # `find $DATADIR ! -user mysql -exec chown mysql:` and the cgroup memory.pressure chown
+      - DAC_READ_SEARCH  # that find enters the 0700 mysql-owned schema dirs; healthcheck.sh runs as root and reads the 0600 .my-healthcheck.cnf
+      - SETGID           # gosu mysql
+      - SETUID           # gosu mysql
     # Resource ceilings - defense against runaway query / OOM. Tune
     # via `${DB_MEM_LIMIT:-2g}` etc. in your env if the defaults
     # don't fit your VPS. mem_limit + cpus are honored by docker
@@ -46,6 +68,16 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-redis
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)
+    # The entrypoint drops to redis ONLY when the bounding set holds setuid AND
+    # setgid (`has_cap`) - without them redis-server silently runs as root. It
+    # then execs `setpriv --bounding-set=-all`, so redis itself keeps nothing.
+    cap_drop: [ALL]
+    cap_add:
+      - CHOWN            # fix_data_dir_perms chowns a daemon-created, root-owned /data (fresh install, CI)
+      - DAC_READ_SEARCH  # its `find .` enters appendonlydir (0700 redis); without it a "Permission denied" on every start
+      - FOWNER           # its chmod on the dir it has just chowned to redis
+      - SETGID           # setpriv --regid redis --clear-groups
+      - SETUID           # setpriv --reuid redis
     mem_limit: ${REDIS_MEM_LIMIT:-512m}
     cpus: ${REDIS_CPUS:-1.0}
     # noeviction so we never silently drop rate-limit buckets or ARQ jobs under
@@ -86,6 +118,7 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-backend
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)
+    cap_drop: [ALL]  # USER 1000:1000 from the first instruction; nothing to add back
     mem_limit: ${BACKEND_MEM_LIMIT:-1g}
     cpus: ${BACKEND_CPUS:-2.0}
     ports:
@@ -208,6 +241,20 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-clamav
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)
+    # /init runs as root: `install -o clamav -m 775 /run/clamav`, `chown -R
+    # clamav:clamav /var/lib/clamav`, then clamd (`User clamav`) and freshclam
+    # (--user=clamav) drop themselves - AFTER each has opened its log file in the
+    # clamav-owned /var/log/clamav as root. Measured in the 2026-10-30 dry run:
+    # without FOWNER `install` cannot chmod the dir it has just given away, and
+    # without DAC_OVERRIDE both daemons die on "Failed to open log file" before
+    # the first signature download, so clamd never starts.
+    cap_drop: [ALL]
+    cap_add:
+      - CHOWN         # install -o, chown -R (chown to the same owner still needs it from root)
+      - DAC_OVERRIDE  # clamd.log / freshclam.log opened as root in a clamav-owned dir; also lets chown -R enter a 0700 temp dir
+      - FOWNER        # install's chmod after its chown
+      - SETGID        # clamd `User clamav`, freshclam --user=clamav
+      - SETUID
     mem_limit: ${CLAMAV_MEM_LIMIT:-2g}
     cpus: ${CLAMAV_CPUS:-1.0}
     volumes:
@@ -246,6 +293,7 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-worker
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)
+    cap_drop: [ALL]  # USER 1000:1000 from the first instruction; nothing to add back
     mem_limit: ${WORKER_MEM_LIMIT:-512m}
     cpus: ${WORKER_CPUS:-1.0}
     command: ["arq", "app.workers.worker.WorkerSettings"]
@@ -339,6 +387,7 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-tusd
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)
+    cap_drop: [ALL]  # the image runs as its `tusd` user; nothing to add back
     mem_limit: ${TUSD_MEM_LIMIT:-512m}
     cpus: ${TUSD_CPUS:-1.0}
     command:
@@ -392,6 +441,15 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-frontend
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)
+    # nginx's master stays root: it binds :80, creates /var/cache/nginx/*_temp as
+    # nginx:root and forks the workers as nginx. The image's entrypoint.d scripts
+    # chown nothing.
+    cap_drop: [ALL]
+    cap_add:
+      - CHOWN             # the *_temp cache dirs
+      - NET_BIND_SERVICE  # listen 80
+      - SETGID            # workers as nginx
+      - SETUID
     mem_limit: ${FRONTEND_MEM_LIMIT:-256m}
     cpus: ${FRONTEND_CPUS:-0.5}
     ports:

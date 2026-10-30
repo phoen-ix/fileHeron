@@ -6,6 +6,9 @@
 
 <template>
   <div class="home">
+    <!-- The page's one heading: without it a screen reader user landing here
+         (the default landing page) had no heading to start from. -->
+    <h1 class="fh-sr-only">{{ $t('page_title.home') }}</h1>
     <div class="welcome-card fh-rise" data-stagger="2">
       <div class="welcome-line">
         <span class="fh-kv-label">/ user</span>

@@ -17,10 +17,13 @@
 FROM alpine:3.24.3
 
 # docker CLI for the spawn; jq for reading the state file; bash for the shim
-# itself. Nothing else: this container holds the Docker socket, and the curl
-# it carried "for debugging" was used by nothing (busybox wget is here).
+# itself; cosign to verify the executor image's signature before running it
+# (shim.sh::verify_image - the one check that stands between a registry
+# account and root on every instance). Nothing else: this container holds the
+# Docker socket, and the curl it carried "for debugging" was used by nothing
+# (busybox wget is here).
 # Pinned by major, for the reason in docker/updater-executor/Dockerfile.
-RUN apk add --no-cache "docker-cli=~29" "jq=~1" "bash=~5"
+RUN apk add --no-cache "docker-cli=~29" "jq=~1" "bash=~5" "cosign=~3"
 
 ARG FH_VERSION=0.0.0-dev
 ARG FH_GIT_SHA=unknown

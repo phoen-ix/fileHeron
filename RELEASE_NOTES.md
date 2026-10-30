@@ -1,3 +1,87 @@
+# file:Heron v2.29.0
+
+**The updater now checks who built an image before it runs it.** Every server
+image published from this release on is signed when it is built (Sigstore
+cosign, keyless, under the identity of this repository's release workflow on a
+release tag). Before an Update, the updater-shim verifies that signature on the
+updater image for the requested version and runs it by the verified digest; the
+executor verifies the backend, worker, frontend and updater images the same way
+before swapping anything. An image that is not signed by the release workflow is
+refused and nothing changes. **Forks that publish their own images:** set
+`SHIM_REQUIRE_SIGNATURE=false` in `.env` (you then trust your registry account
+alone), or sign the same way and set `SHIM_SIGNER_IDENTITY_RE` if you renamed
+the repository. See README › Upgrades › What the updater trusts.
+
+**The shim now enforces two rules it used to leave to the web app.** An Update
+never installs a version older than the one running - the shim asks Docker which
+version the backend container is, not the request - and a Rollback returns only
+to the version that was running before the last update, which the shim records
+itself in a new root-owned directory, `data/updater-private/`, that the app
+containers never see. The first Rollback after this update has no record yet and
+is allowed with a warning.
+
+**Hardening of the updater containers.** The shim drops every Linux capability
+but one, runs on a read-only filesystem and under a process limit; the executor
+runs with a minimal capability set, `no-new-privileges`, a process limit and a
+memory limit. The executor also no longer writes through any path under
+`data/updater/` that the app containers could have planted - it opens nothing
+there that is not a regular file, writes only through exclusively created temp
+files, and never falls back to writing in place - and the `.env` rewrite that
+records the installed version is atomic now: `.env` is the one file no backup
+restores.
+
+**Infra images are pinned by digest.** `docker-compose.yml` names MariaDB,
+Redis, ClamAV and tusd as `tag@sha256:…`, so a rebuild on Docker Hub arrives as
+a Dependabot pull request instead of following silently. **On this update the
+database, Redis and ClamAV are recreated** where the running build of the tag
+is older than the pinned one (Docker Hub rebuilt these tags after most hosts
+pulled them); the updater backs the database up first, as for every database
+change, and the app is stopped while the data layer restarts - a minute or two.
+tusd is unchanged.
+
+**No migration. Host step:** none where the updater can fast-forward your
+checkout - it recreates the shim with its new definition at the end of the
+update. Where it cannot (local changes, infra sync off, an override file), run
+`git pull && docker compose up -d --no-deps updater-shim` afterwards; until then
+the shim verifies signatures but does not bind rollbacks, and says so once in
+its log. **Default move:** image signature verification is ON.
+
+---
+
+## Security
+
+- The updater-shim and updater-executor pulled and ran registry images by tag,
+  unsigned - every instance trusted the registry account absolutely. Both now
+  verify a cosign signature from this repository's release workflow and pull by
+  the verified digest. `server-release.yml` signs every image it publishes.
+- The executor, which runs as root with the host checkout mounted, wrote its
+  progress through a predictable temp file name and a symlink-following call,
+  with an in-place fallback, into a directory the app containers can write.
+  Every read there now refuses anything but a regular file and every write goes
+  through a randomly named, exclusively created temp file; the fallback is gone.
+- The "no downgrade" rule and the rollback target were enforced only by the web
+  app, from files it owns. The shim enforces both itself.
+- The `.env` rewrite that records the installed version was a truncate-then-
+  write of the file holding every secret; it is an atomic replace now, and
+  follows an operator's symlinked `.env` to its target.
+
+## Updater
+
+- `data/updater-private/` is new, root-owned, and the shim's alone: it holds
+  the version that was running before the last successful update or rollback.
+  If you move versions by hand and a Rollback is then refused, remove
+  `data/updater-private/rollback_target.json` as root and retry.
+- The shim container: `cap_drop: ALL` + `DAC_OVERRIDE`, read-only root
+  filesystem, `/tmp` in memory, 64 processes, memory limit 256 MB (was 128 MB;
+  the image now carries cosign and is about 200 MB).
+- The executor container: `--cap-drop ALL` with the six capabilities it needs,
+  `--security-opt no-new-privileges`, 256 processes, 512 MB
+  (`UPDATER_EXECUTOR_MEM_LIMIT`).
+- The update job's log and error text are size-capped on the way to the admin
+  page.
+
+---
+
 # file:Heron v2.28.0
 
 **The server now runs on Python 3.15.** The backend, worker and updater

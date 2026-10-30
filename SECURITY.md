@@ -49,6 +49,13 @@ the key lives beside the files - so "the host can decrypt the files" is not a
 finding; a way to read or alter an encrypted file WITHOUT the instance's
 `JWT_SECRET`, or to make the server serve ciphertext as content, is.
 
+The in-app updater runs a registry image as root with the Docker socket. It
+trusts only images signed by this repository's release workflow (cosign,
+keyless) and treats `data/updater/` - writable by the app containers - as
+attacker-controlled. A way to make the shim or the executor run or deploy an
+unsigned image, act on a path planted in that directory, or move the stack to a
+version the administrator did not choose IS in scope.
+
 Out of scope: issues that require a pre-compromised host or a malicious
 administrator; findings against a deployment that has not followed the hardening
 guidance in the README (e.g. running with `ENVIRONMENT=development`, exposed

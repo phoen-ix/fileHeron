@@ -120,6 +120,27 @@ def test_get_job_unknown_raises_404():
     assert exc.value.status_code == 404
 
 
+def test_get_job_bounds_what_it_reads_back_from_the_state_file():
+    """The executor caps the log tail at 200 lines, but the file is written by
+    root AND by this very container, so the bound is re-applied on the way out -
+    per line and for the free-text fields - like `warnings` already was."""
+    release_apply.STATE_FILE.write_text(json.dumps({
+        "id": "j", "status": "pulling",
+        "log_tail": ["x" * 5000] * 500 + [7, None],
+        "error": "e" * 10_000,
+        "rollback_reason": "r" * 10_000,
+        "previous_tag": "p" * 10_000,
+        "finished_at": "f" * 10_000,
+    }))
+    job = release_apply.get_job("j")
+    assert len(job["log_tail"]) == 200
+    assert all(len(line) == 2000 for line in job["log_tail"])
+    assert len(job["error"]) == 500
+    assert len(job["rollback_reason"]) == 500
+    assert len(job["previous_tag"]) == 500
+    assert len(job["finished_at"]) == 500
+
+
 @pytest.mark.asyncio
 async def test_update_endpoint_requires_password(client, db, make_user, login_as):
     make_user(email="adm@test.local", role=UserRole.admin)

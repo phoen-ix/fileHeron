@@ -355,3 +355,16 @@ def test_the_drill_copies_the_db_init_file_compose_actually_mounts():
     assert f"docker/mariadb/{mounted}" in drill, (
         f"compose mounts docker/mariadb/{mounted} and the drill copies something else"
     )
+
+
+def test_every_infra_image_is_pinned_by_digest(compose):
+    """A tag on Docker Hub is re-pointed at rebuilds, and a tag-only pin follows
+    them silently (the reference host ran older builds of three of these four
+    tags on 2026-10-30 without anything saying so). `tag@sha256:` makes each
+    rebuild a Dependabot PR and lets the updater recreate the service when, and
+    only when, the running image is not the pinned one. Generic over the four
+    services, so a future bump that drops the digest fails here."""
+    services = yaml.safe_load(compose)["services"]
+    for name in ("db", "redis", "clamav", "tusd"):
+        image = services[name]["image"]
+        assert re.fullmatch(r"[a-z0-9./-]+:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}", image), f"{name}: {image}"

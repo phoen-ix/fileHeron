@@ -174,11 +174,11 @@ def get_job(job_id: str) -> dict:
         "target_tag": state.get("target_tag", ""),
         "state": _normalize_state(state.get("status", "")),
         "started_at": state.get("started_at") or state.get("claimed_at") or state.get("created_at", ""),
-        "finished_at": state.get("finished_at"),
-        "log_tail": state.get("log_tail", []),
-        "error": state.get("error"),
-        "previous_tag": state.get("previous_tag"),
-        "rollback_reason": state.get("rollback_reason"),
+        "finished_at": _str_or_none(state.get("finished_at")),
+        "log_tail": _log_tail(state.get("log_tail")),
+        "error": _str_or_none(state.get("error")),
+        "previous_tag": _str_or_none(state.get("previous_tag")),
+        "rollback_reason": _str_or_none(state.get("rollback_reason")),
         # Written by executors that back up and sync infra; absent from older
         # ones. `phase` is progress detail beside `state`, whose values stay the
         # ones every shim knows.
@@ -197,6 +197,14 @@ def _warnings(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
     return [w[:500] for w in value if isinstance(w, str)][:20]
+
+
+def _log_tail(value: object) -> list[str]:
+    """The executor keeps the last 200 lines; the file is also writable by this
+    very container, so the bound is re-applied on the way out, per line too."""
+    if not isinstance(value, list):
+        return []
+    return [line[:2000] for line in value if isinstance(line, str)][-200:]
 
 
 def _normalize_state(s: str) -> str:

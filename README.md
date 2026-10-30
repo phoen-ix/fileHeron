@@ -1049,6 +1049,25 @@ backup has succeeded:
    kept down while ClamAV loads its signatures. A failure only adds a warning.
    Then it recreates the updater-shim.
 
+**What the updater trusts.** Every server image published from v2.29.0 on is
+signed when it is built (Sigstore cosign, keyless, under the identity of this
+repository's release workflow on a release tag). The updater-shim verifies that
+signature on the updater image for the requested version before running it, and
+runs it by the verified digest; the executor verifies the backend, worker,
+frontend and updater images the same way before swapping anything. An image
+without that signature is refused and nothing changes. The shim also refuses an
+Update to a version older than the one running (it asks Docker, not the
+request), and lets a Rollback return only to the version that was running before
+the last update - it records that itself in `data/updater-private/`, a
+root-owned directory the app containers never see (the first Rollback after
+v2.29.0 has no record yet and is allowed with a warning). **If you publish your
+own images** (a fork), set `SHIM_REQUIRE_SIGNATURE=false` in `.env` - you are
+then trusting your registry account alone - or sign them the same way and set
+`SHIM_SIGNER_IDENTITY_RE` to your workflow's identity if you renamed the
+repository. The database, Redis, ClamAV and tusd images are pinned by digest in
+`docker-compose.yml`, so a rebuild on Docker Hub arrives as a Dependabot pull
+request and is applied by the next update like any other infra change.
+
 **When the infra step is skipped** the app update still runs, and the job shows
 a warning with the manual command:
 

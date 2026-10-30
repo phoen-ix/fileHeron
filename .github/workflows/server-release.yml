@@ -75,6 +75,7 @@ jobs:
     permissions:
       contents: read
       packages: write   # push images to ghcr.io
+      id-token: write   # cosign keyless signing (the OIDC token names this workflow + ref)
     strategy:
       # Build each image in parallel. Fail-fast off so a single image's
       # failure leaves the others' artifacts intact for diagnosis.
@@ -126,6 +127,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Every published image is SIGNED (cosign, keyless): the signing
+      # certificate names this workflow and the ref it ran on, and that identity
+      # - `.../server-release.yml@refs/tags/vX.Y.Z` - is what the updater-shim
+      # verifies before it runs an executor image as root with the docker
+      # socket, and what the executor verifies before it deploys an app image.
+      # A leaked registry token can push an image; it cannot produce that
+      # certificate. Signatures attach to the DIGEST, so publish-latest's
+      # re-tag below needs no second signature. A workflow_dispatch run signs
+      # under `refs/heads/<branch>`, which the verifiers reject by design.
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
       # Only the immutable version tag is published here. `:latest` is moved in
       # a separate job that needs the WHOLE matrix - see publish-latest below.
       - name: Compute image tags
@@ -136,6 +148,7 @@ jobs:
           echo "tags=${BASE}:${{ steps.meta.outputs.version }}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        id: build
         with:
           context: .
           file: ${{ matrix.dockerfile }}
@@ -163,6 +176,16 @@ jobs:
           # build time without callers asking for it today. Add arm64
           # when a self-hoster requests it.
           platforms: linux/amd64
+
+      - name: Sign the image
+        if: ${{ matrix.boot_smoke != true }}
+        env:
+          TAGS: ${{ steps.tags.outputs.tags }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          [ -n "$DIGEST" ] || { echo "::error::build produced no digest to sign"; exit 1; }
+          cosign sign --yes "${TAGS%:*}@${DIGEST}"
 
       # --- Boot-gate (backend only) -------------------------------------
       # Actually run the freshly-built image: the entrypoint runs
@@ -241,13 +264,21 @@ jobs:
           docker rm -f -v fhsmoke-app fhsmoke-db >/dev/null 2>&1 || true
           docker network rm fhsmoke >/dev/null 2>&1 || true
 
-      # Publish the backend image only AFTER it booted cleanly.
+      # Publish the backend image only AFTER it booted cleanly - then sign it
+      # by the digest the registry assigned (a `load`ed image has none until
+      # it is pushed).
       - name: Push backend image (post-smoke)
         if: ${{ matrix.boot_smoke == true }}
         run: |
           set -euo pipefail
           IFS=',' read -ra TAGS <<< "${{ steps.tags.outputs.tags }}"
-          for t in "${TAGS[@]}"; do echo "pushing $t"; docker push "$t"; done
+          for t in "${TAGS[@]}"; do
+            echo "pushing $t"; docker push "$t"
+            DIGEST="$(docker buildx imagetools inspect "$t" --format '{{json .Manifest.Digest}}' | tr -d '"')"
+            [ -n "$DIGEST" ] || { echo "::error::no digest for $t after push"; exit 1; }
+            echo "signing ${t%:*}@${DIGEST}"
+            cosign sign --yes "${t%:*}@${DIGEST}"
+          done
 
   # Move `:latest` only once EVERY image in the matrix has been published.
   #

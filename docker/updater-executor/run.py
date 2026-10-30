@@ -25,6 +25,7 @@ import os
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -126,53 +127,93 @@ def utcnow_iso() -> str:
     return datetime.now(tz=timezone.utc).replace(tzinfo=None).isoformat()
 
 
+def _read_json(path: Path) -> dict | None:
+    """A JSON object from `path`, read WITHOUT following a symlink and only from
+    a regular file; None when it is absent, something else, or not an object.
+
+    Everything under /state is writable by the backend and worker containers,
+    and this process is root with the host checkout mounted. A symlink planted
+    there must not redirect a root read - nor, through the read-modify-write
+    helpers below, a root WRITE - to a file outside the state directory."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError:
+        return None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        with os.fdopen(fd, encoding="utf-8") as f:
+            fd = -1
+            data = json.load(f)
+    except (OSError, ValueError):
+        return None
+    finally:
+        if fd != -1:
+            os.close(fd)
+    return data if isinstance(data, dict) else None
+
+
 def read_job() -> dict:
-    if not STATE_FILE.exists():
-        raise SystemExit("no /state/current_job.json")
-    return json.loads(STATE_FILE.read_text())
+    job = _read_json(STATE_FILE)
+    if job is None:
+        raise SystemExit("no /state/current_job.json (or it is not a regular file holding a JSON object)")
+    return job
+
+
+def _replace_file(path: Path, text: str, mode: int = 0o644, owner: tuple[int, int] | None = None) -> bool:
+    """Atomically replace `path` with `text`: a randomly named, exclusively
+    created temp file in the SAME directory (/state is a bind mount, and
+    os.replace across filesystems raises), fchmod, then os.replace.
+
+    Mode: the state files are read by the BACKEND (uid 1000) while this runs as
+    root; a mktemp default of 0600 silently breaks its _read_state.
+
+    Atomicity: the backend polls the state file every second or two during an
+    update, so a truncate-then-write was read half-written (audit 2026-07-30,
+    flow-selfupdate-8). A replace shows every reader one complete version.
+
+    Never through the target path: the temp name used to be predictable and
+    written with write_text, which follows a symlink, and a failure fell back to
+    writing STATE_FILE in place - two ways a path planted in the backend-owned
+    directory could redirect a root write into the host checkout. The random
+    O_EXCL temp cannot be pre-planted, os.replace swaps the directory entry
+    itself, and there is deliberately NO fallback: a lost progress write costs a
+    log line, a root write through a path the backend chose costs the host.
+    False, with the reason on stdout, when the replace could not be done."""
+    try:
+        fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
+    except OSError as e:
+        print(f"[{utcnow_iso()}] WARN cannot create a temp file beside {path.name}: {e}", flush=True)
+        return False
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fchmod(f.fileno(), mode)
+            if owner is not None and os.geteuid() == 0:
+                os.fchown(f.fileno(), owner[0], owner[1])
+        os.replace(tmp_name, path)
+        return True
+    except OSError as e:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        print(f"[{utcnow_iso()}] WARN could not replace {path.name}: {e}", flush=True)
+        return False
 
 
 def _write_state_text(text: str) -> None:
-    """Atomically replace the state file, mode 0644.
-
-    Mode: the file is read by the BACKEND (uid 1000 appuser) while the executor
-    runs as root, so without an explicit chmod the mode is whatever the last
-    writer left - and a mktemp+mv default of 0600 silently breaks the backend's
-    _read_state on every poll thereafter.
-
-    Atomicity: this used to be a plain `write_text`, which truncates and then
-    writes. The backend polls this file every second or two DURING the update,
-    so it regularly read a half-written file and got a JSONDecodeError - once
-    per log line, which is when the file is rewritten. Writing a sibling temp
-    file and os.replace()ing it makes every read see one complete version or
-    the other (audit 2026-07-30, flow-selfupdate-8). The temp file must be in
-    the SAME directory: /state is a bind mount, and os.replace across
-    filesystems raises."""
-    tmp = STATE_FILE.with_name(f".{STATE_FILE.name}.tmp")
-    try:
-        tmp.write_text(text)
-        os.chmod(tmp, 0o644)
-        os.replace(tmp, STATE_FILE)
-    except OSError:
-        # Last resort: a non-atomic write beats losing the status entirely.
-        try:
-            tmp.unlink(missing_ok=True)
-        except OSError:
-            pass
-        STATE_FILE.write_text(text)
-        try:
-            os.chmod(STATE_FILE, 0o644)
-        except OSError:
-            pass
+    _replace_file(STATE_FILE, text)
 
 
 def write_job_field(**kwargs) -> None:
     """Read-modify-write the state file with new fields. The shim and
     backend also read this file; the executor is the only writer during
     its run, so no locking is needed."""
-    if not STATE_FILE.exists():
+    data = _read_json(STATE_FILE)
+    if data is None:
         return
-    data = json.loads(STATE_FILE.read_text())
     data.update(kwargs)
     _write_state_text(json.dumps(data, indent=2))
 
@@ -182,10 +223,12 @@ def log_line(line: str) -> None:
     if not line:
         return
     print(f"[{utcnow_iso()}] {line}", flush=True)
-    if not STATE_FILE.exists():
+    data = _read_json(STATE_FILE)
+    if data is None:
         return
-    data = json.loads(STATE_FILE.read_text())
-    log_tail = data.get("log_tail", [])
+    log_tail = data.get("log_tail")
+    if not isinstance(log_tail, list):
+        log_tail = []
     log_tail.append(f"[{utcnow_iso()}] {line}")
     if len(log_tail) > 200:
         log_tail = log_tail[-200:]
@@ -226,11 +269,24 @@ def read_current_tag() -> str:
 
 
 def write_current_tag(new_tag: str) -> None:
-    """Idempotent: replace FH_TAG line if present, append if not."""
+    """Idempotent: replace FH_TAG line if present, append if not.
+
+    Atomic, because .env holds every secret of the instance and is deliberately
+    absent from the backups (JWT_SECRET is the root of every Fernet key): the
+    previous truncate-then-write was one crash away from an instance nobody can
+    recover. The temp file lands beside the TARGET of a symlinked .env - an
+    operator may keep theirs elsewhere - with the target's mode and owner, and
+    os.replace swaps it in, leaving the link itself alone. Unlike /state,
+    /workspace is the operator's, so following their link is fine here."""
     if not ENV_FILE.exists():
-        ENV_FILE.write_text(f"FH_TAG={new_tag}\n")
+        if not _replace_file(ENV_FILE, f"FH_TAG={new_tag}\n", mode=0o600):
+            raise OSError(f"could not create {ENV_FILE}")
         return
-    lines = ENV_FILE.read_text().splitlines()
+    target = ENV_FILE.resolve()
+    st = target.stat()
+    if not stat.S_ISREG(st.st_mode):
+        raise OSError(f"{ENV_FILE} is not a regular file")
+    lines = target.read_text().splitlines()
     found = False
     for i, raw in enumerate(lines):
         if raw.strip().startswith("FH_TAG="):
@@ -239,7 +295,9 @@ def write_current_tag(new_tag: str) -> None:
             break
     if not found:
         lines.append(f"FH_TAG={new_tag}")
-    ENV_FILE.write_text("\n".join(lines) + "\n")
+    text = "\n".join(lines) + "\n"
+    if not _replace_file(target, text, mode=stat.S_IMODE(st.st_mode), owner=(st.st_uid, st.st_gid)):
+        raise OSError(f"could not rewrite {ENV_FILE}")
 
 
 def _compose_env(tag: str) -> dict[str, str]:
@@ -370,31 +428,11 @@ def _write_rollback_file(tag: str, alembic_head: str | None) -> None:
     """Record the tag a rollback should return to. Same atomic-replace shape as
     the state file: the backend reads this to decide whether to offer the
     Rollback control at all."""
-    payload = json.dumps({"tag": tag, "alembic_head": alembic_head})
-    tmp = ROLLBACK_FILE.with_name(f".{ROLLBACK_FILE.name}.tmp")
-    try:
-        tmp.write_text(payload)
-        os.chmod(tmp, 0o644)
-        os.replace(tmp, ROLLBACK_FILE)
-    except OSError:
-        try:
-            tmp.unlink(missing_ok=True)
-        except OSError:
-            pass
-        ROLLBACK_FILE.write_text(payload)
-        try:
-            os.chmod(ROLLBACK_FILE, 0o644)
-        except OSError:
-            pass
+    _replace_file(ROLLBACK_FILE, json.dumps({"tag": tag, "alembic_head": alembic_head}))
 
 
 def _read_rollback_file() -> dict:
-    if not ROLLBACK_FILE.exists():
-        return {}
-    try:
-        return json.loads(ROLLBACK_FILE.read_text())
-    except Exception:
-        return {}
+    return _read_json(ROLLBACK_FILE) or {}
 
 
 def resolve_running_version() -> str | None:
@@ -552,9 +590,9 @@ def set_phase(phase: str) -> None:
 def add_warning(message: str) -> None:
     """Record a problem that does not fail the update; the SPA lists these."""
     log_line(f"WARN {message}")
-    if not STATE_FILE.exists():
+    data = _read_json(STATE_FILE)
+    if data is None:
         return
-    data = json.loads(STATE_FILE.read_text())
     warnings = data.get("warnings")
     if not isinstance(warnings, list):
         warnings = []
@@ -605,6 +643,85 @@ def _pull(ref: str, *, quiet: bool = False) -> int:
         log_line(f"{ref} is present locally; not pulling (EXECUTOR_PULL_MISSING_ONLY)")
         return 0
     return run_capture(["docker", "pull", "-q", ref] if quiet else ["docker", "pull", ref])
+
+
+# --- image signatures ------------------------------------------------------------
+#
+# The app and updater images are the one input of this process that arrives from
+# outside the host, and before 2026-10-30 they were pulled by TAG from a registry
+# namespace nothing checked: whoever could push to it had root with the docker
+# socket on every instance at its next update. server-release.yml now signs each
+# image with cosign (keyless, GitHub's OIDC issuer), and the signing certificate
+# names the workflow that ran: THIS repository's release workflow on a `v*` tag.
+# A leaked registry token cannot produce that identity; only a tag pushed to the
+# repository can. The shim verifies the executor image the same way before
+# running it; this verifies what the executor is about to deploy.
+_OIDC_ISSUER = "https://token.actions.githubusercontent.com"
+_DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}")
+
+
+def _signer_identity_re() -> str:
+    """The certificate identity a signature must carry. Forks publish under their
+    own owner: the default follows GHCR_OWNER, and EXECUTOR_SIGNER_IDENTITY_RE
+    (passed through by the shim) overrides it for a renamed repository."""
+    return os.environ.get("EXECUTOR_SIGNER_IDENTITY_RE") or (
+        rf"^https://github\.com/{re.escape(GHCR_OWNER)}/fileHeron/\.github/workflows/"
+        r"server-release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$"
+    )
+
+
+def _signature_required() -> bool:
+    """EXECUTOR_REQUIRE_SIGNATURE=false is the documented opt-out for a fork
+    that does not sign - it is then trusting its registry account alone."""
+    return os.environ.get("EXECUTOR_REQUIRE_SIGNATURE", "true").strip().lower() not in ("false", "0", "no")
+
+
+def verify_image_signature(ref: str) -> str | None:
+    """The verified manifest digest of `ref`, or None with the reason in the
+    job log. The caller pulls BY THAT DIGEST, so what runs is what was
+    verified even if the tag is re-pointed in between."""
+    try:
+        result = subprocess.run(
+            ["cosign", "verify", "--certificate-oidc-issuer", _OIDC_ISSUER,
+             "--certificate-identity-regexp", _signer_identity_re(), ref],
+            capture_output=True, text=True, timeout=300,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        log_line(f"ERROR signature verification of {ref} could not run: {type(e).__name__}: {e}")
+        return None
+    if result.returncode != 0:
+        lines = [ln for ln in result.stderr.splitlines() if ln.strip()]
+        why = lines[-1] if lines else f"exit {result.returncode}"
+        log_line(f"ERROR {ref} carries no valid signature from the release workflow: {why[:300]}")
+        return None
+    try:
+        digest = json.loads(result.stdout)[0]["critical"]["image"]["docker-manifest-digest"]
+    except (ValueError, LookupError, TypeError):
+        log_line(f"ERROR could not read the verified digest of {ref}")
+        return None
+    if not isinstance(digest, str) or not _DIGEST_RE.fullmatch(digest):
+        log_line(f"ERROR the verified digest of {ref} is not a sha256 digest")
+        return None
+    log_line(f"verified the signature of {ref}: {digest}")
+    return digest
+
+
+def pull_verified(ref: str) -> int:
+    """Verify `ref`, pull it by the verified digest and point the tag at that
+    image locally, so the `compose up` below (pull policy `missing`) runs
+    exactly the verified bytes. Non-zero = nothing may be deployed."""
+    if not _signature_required():
+        log_line(f"WARN image signature verification is switched off (EXECUTOR_REQUIRE_SIGNATURE); "
+                 f"pulling {ref} by tag")
+        return _pull(ref)
+    digest = verify_image_signature(ref)
+    if digest is None:
+        return 1
+    pinned = f"{ref.rsplit(':', 1)[0]}@{digest}"
+    rc = _pull(pinned)
+    if rc != 0:
+        return rc
+    return run_capture(["docker", "tag", pinned, ref])
 
 
 def _env_file_value(name: str) -> str | None:
@@ -685,6 +802,44 @@ def _normalize_image(ref: str) -> str:
     if ref and "@" not in ref and ":" not in ref.rsplit("/", 1)[-1]:
         ref += ":latest"
     return ref
+
+
+def _image_repo_digests(image_id: str) -> list[str]:
+    """`RepoDigests` of a local image: `name@sha256:...` for each registry
+    reference it was pulled by - the digest the tag resolved to at pull time."""
+    try:
+        result = subprocess.run(
+            ["docker", "image", "inspect", "--format", "{{json .RepoDigests}}", image_id],
+            capture_output=True, text=True, timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if result.returncode != 0:
+        return []
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return []
+    return [d for d in data if isinstance(d, str)] if isinstance(data, list) else []
+
+
+def _running_matches_pinned_digest(cid: str, want: str) -> bool:
+    """A compose image pinned `name:tag@sha256:...` matches a container created
+    from the bare `name:tag` when the image it runs IS that digest.
+
+    docker-compose.yml pins the infra images by digest since 2026-10-30, so a
+    Docker Hub rebuild under the same tag is a Dependabot PR and not a silent
+    drift. `.Config.Image` is the string the container was created with, so it
+    differs from the pinned form for every container created before the pins -
+    and recreating a data layer that is already on the pinned bytes would be a
+    stop, a forced backup and minutes of downtime for nothing."""
+    if "@sha256:" not in want:
+        return False
+    digest = want.rsplit("@", 1)[1]
+    image_id = _inspect(cid, "{{.Image}}")
+    if not image_id:
+        return False
+    return any(d.rsplit("@", 1)[-1] == digest for d in _image_repo_digests(image_id))
 
 
 _DURATION_RE = re.compile(r"(\d+(?:\.\d+)?)(ns|us|µs|ms|s|m|h)")
@@ -995,7 +1150,7 @@ def plan_infra(target_tag: str, opts: dict[str, bool | int], previous_tag: str) 
         want = _normalize_image(str(new.get("image", "")))
         running = _normalize_image(_inspect(cid, "{{.Config.Image}}") or "")
         reasons = []
-        if want and running != want:
+        if want and running != want and not _running_matches_pinned_digest(cid, want):
             reasons.append(f"image {running or 'unknown'} -> {want}")
         if _definition(current_services.get(svc)) != _definition(new):
             reasons.append("its compose definition changed")
@@ -1486,10 +1641,10 @@ def main() -> int:
     set_phase("pulling")
     for img in IMAGES_TO_PULL:
         ref = f"ghcr.io/{GHCR_OWNER}/fileheron-{img}:{target_tag}"
-        if _pull(ref) != 0:
+        if pull_verified(ref) != 0:
             write_job_field(
                 status="failed",
-                error=f"pull failed for {ref}",
+                error=f"pull or signature verification failed for {ref}; nothing was changed",
                 finished_at=utcnow_iso(),
             )
             return 2

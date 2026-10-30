@@ -1,6 +1,13 @@
+# The infra images (db, redis, clamav, tusd) are pinned `tag@sha256:<index
+# digest>`: a tag on Docker Hub is re-pointed at rebuilds, and a tag-only pin
+# follows them silently, where a digest pin makes each one a Dependabot PR
+# (the `docker` ecosystem bumps tag and digest together). The in-app updater
+# treats a digest bump like a tag bump - the service is recreated, health-gated,
+# with the forced backup for the database - and leaves a service alone whose
+# running image already IS the pinned digest (run.py::_running_matches_pinned_digest).
 services:
   db:
-    image: mariadb:12.3.3
+    image: mariadb:12.3.3@sha256:d46e102fa8b9b72bfcdeb56f9dd538742092119dc8b11f31fe662605cd234cd9
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-db
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)
@@ -35,7 +42,7 @@ services:
         max-file: "3"
 
   redis:
-    image: redis:8.10.2-alpine3.23
+    image: redis:8.10.2-alpine3.23@sha256:9f8d2d789b9a1d1e3f283f979aa9cbf393373806472e1ccd460e2f9c869b833b
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-redis
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)
@@ -197,7 +204,7 @@ services:
     # downloads on 425 while files sit ready_unscanned). Tracked by the `docker`
     # dependabot ecosystem as of 2026-07-30 - before that, nothing in the repo
     # watched container pins at all.
-    image: clamav/clamav:1.5.4
+    image: clamav/clamav:1.5.4@sha256:bda39705e291105049c3936e2803ac90b955172af8030f94f05dce1252df6c6d
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-clamav
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)
@@ -328,7 +335,7 @@ services:
   tusd:
     # Pinned - `:latest` is a moving pointer; tusd has had protocol-version
     # bumps that can desync from @uppy/tus on the SPA side.
-    image: tusproject/tusd:v2.10.1
+    image: tusproject/tusd:v2.10.1@sha256:7b1c552a8b42f4b36cb01f2a3bd49f82ab078b2eefd191459e716141dd50376c
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-tusd
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)
@@ -422,7 +429,20 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-updater-shim
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)
-    mem_limit: ${UPDATER_SHIM_MEM_LIMIT:-128m}
+    # Root with the docker socket is root on the host, so the container itself
+    # keeps nothing it does not need: every capability dropped except
+    # DAC_OVERRIDE (the /state dir is uid 1000, mode 0775 - root without it
+    # cannot create a file there), a read-only rootfs with /tmp as the only
+    # writable place (the heartbeat, the docker CLI's context store and
+    # cosign's TUF cache live there through HOME), and a pids ceiling. Defence
+    # in depth against a bug in the shim, not a boundary - the socket is the
+    # boundary.
+    cap_drop: [ALL]
+    cap_add: [DAC_OVERRIDE]
+    read_only: true
+    tmpfs: [/tmp]
+    pids_limit: 64
+    mem_limit: ${UPDATER_SHIM_MEM_LIMIT:-256m}
     cpus: ${UPDATER_SHIM_CPUS:-0.5}
     environment:
       # Host-side absolute paths - the shim spawns the executor via
@@ -432,9 +452,24 @@ services:
       UPDATER_HOST_STATE: ${UPDATER_HOST_STATE:-${PWD:-/opt/fileHeron}/data/updater}
       COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-fileheron}
       GHCR_OWNER: phoen-ix
+      HOME: /tmp
+      # The executor image must carry a cosign signature from this repository's
+      # release workflow (keyless, GitHub's OIDC issuer) or the shim refuses the
+      # update; it passes the same policy to the executor for the app images.
+      # A fork that does not sign sets SHIM_REQUIRE_SIGNATURE=false - it then
+      # trusts its registry account alone, and the shim says so on every job.
+      # A fork that renamed the repository sets SHIM_SIGNER_IDENTITY_RE.
+      SHIM_REQUIRE_SIGNATURE: ${SHIM_REQUIRE_SIGNATURE:-true}
+      SHIM_SIGNER_IDENTITY_RE: ${SHIM_SIGNER_IDENTITY_RE:-}
+      UPDATER_EXECUTOR_MEM_LIMIT: ${UPDATER_EXECUTOR_MEM_LIMIT:-512m}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/updater:/state
+      # The shim's own memory - the version running before the last successful
+      # job, the only version a Rollback may return to. Mounted by nothing else:
+      # the daemon creates the directory root-owned when it is absent, which is
+      # exactly right here (the one data/ dir that must NOT be uid 1000).
+      - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/updater-private:/private
     networks: [internal]
     # A hung shim used to be invisible until an admin's Update spun forever.
     # shim.sh keeps an "alive until" epoch in this file: extended every poll,

@@ -7,7 +7,17 @@ summary and points here. Read this before changing the code listed below.
 
 ## Current state
 
-Backend **`v2.28.0`** is the newest tag (2026-10-23): Python 3.15.1 in the backend, worker and
+Backend **`v2.29.0`** is the newest tag (2026-10-30): the updater audit - every published
+image is cosign-signed and the shim verifies the executor image (and the executor the app
+images) before running anything, by digest; the shim refuses an update to an older version
+than the daemon reports and binds a rollback to the version it recorded in the new root-owned
+`data/updater-private/`; the executor's `/state` I/O is symlink-safe with no in-place
+fallback and the `.env` rewrite is atomic; both updater containers drop capabilities; the
+infra images are pinned `tag@sha256` (`docs/engineering/self-update.md` §What the updater
+trusts). No migration; one default move (signature verification ON, opt-out
+`SHIM_REQUIRE_SIGNATURE=false`). The update recreates db, redis and clamav where the running
+build of the tag is older than the pinned digest, with the forced backup.
+**`v2.28.0`** (2026-10-23): Python 3.15.1 in the backend, worker and
 updater-executor images (the backend image builds hiredis and PyYAML in a `deps` stage: no
 cp315 wheels yet); no migration, no host step, no default move. Desktop client
 **`client-v1.6.0`** is tagged beside it: Python 3.15 in the .exe, so it needs Windows 10 or
@@ -145,6 +155,7 @@ record.
 | v2.27.1 | - | - | - (security patch: the frontend image on nginx 1.31.7, which fixes five nginx CVEs) |
 | v2.27.2 | - | - | - (security patch: Pillow 13.0.0 and certifi 2026.10.23 in the backend; images on python 3.14.9, nginx 1.31.8, alpine 3.24.3) |
 | v2.28.0 | - | - | - (Python 3.15.1 in the backend, worker and updater-executor images; the backend image builds hiredis and PyYAML in a `deps` stage and its runtime stage stays compiler-free. Desktop `client-v1.6.0` tagged beside it: Python 3.15, Windows 10 or newer) |
+| v2.29.0 | - | - where the updater fast-forwards the checkout (the executor recreates the shim with its new definition - the `/private` mount, `cap_drop`, `read_only`, `tmpfs` - at the end of the update). Where it SKIPS (dirty or diverged checkout, override file, `COMPOSE_FILE`, infra sync off): `git pull && docker compose up -d --no-deps updater-shim` afterwards; until then the shim verifies signatures but does not bind rollbacks, and says so once. The update recreates **db, redis and clamav** where the running build of the tag is older than the pinned digest (Docker Hub rebuilt those tags), with the forced DB backup; the update TO v2.29.0 is supervised by the old shim (no verification) and runs the new executor (verifies the app images) | **image signature verification ON** (`SHIM_REQUIRE_SIGNATURE=false` is the fork opt-out; `SHIM_SIGNER_IDENTITY_RE` for a renamed repository). The shim refuses an update below the running version (`downgrade refused`) and a rollback to anything but the version it recorded in `data/updater-private/` (`rollback refused`; the first rollback after v2.29.0 has no record and is warned, not refused). Infra images pinned `tag@sha256` (a Dependabot digest bump is an infra recreate on the next update, like a tag bump). Shim `mem_limit` default 128m → 256m (cosign). `GET /api/admin/system/update-jobs/{id}` caps `log_tail` at 200 × 2,000 chars and the free-text fields at 500 |
 
 Per-release admin-facing notes for v2.13.0 and newer are in `RELEASE_NOTES.md`,
 one `# file:Heron vX.Y.Z` section each, newest first; older releases live in

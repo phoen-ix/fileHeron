@@ -74,9 +74,12 @@ class Host:
         cfg = base_config(self.ws)
         self.running = {s: cfg["services"][s]["image"] for s in executor.INFRA_SYNC_ORDER}
         self.missing: set[str] = set()
+        # RepoDigests of a running image, keyed by what `_inspect` answers.
+        self.digests: dict[str, list[str]] = {}
         monkeypatch.setattr(executor, "_compose_config", self._compose_config)
         monkeypatch.setattr(executor, "_container_id", self._container_id)
         monkeypatch.setattr(executor, "_inspect", self._inspect)
+        monkeypatch.setattr(executor, "_image_repo_digests", lambda image_id: self.digests.get(image_id, []))
 
     # --- docker fakes ---
     def _compose_config(self, path, _tag):
@@ -530,6 +533,7 @@ def flow(executor, monkeypatch):
     ))
     monkeypatch.setattr(executor, "capture_alembic_head", lambda: "abc123")
     monkeypatch.setattr(executor, "_pull", lambda ref, quiet=False: events.append(f"pull {ref}") or 0)
+    monkeypatch.setattr(executor, "verify_image_signature", lambda ref: "sha256:" + "a" * 64)
 
     def run_capture(cmd, env=None):
         if "up" in cmd:
@@ -718,3 +722,145 @@ def test_the_compose_config_output_is_never_logged():
     fn = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "_compose_config")
     called = {n.func.id for n in ast.walk(fn) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
     assert not called & {"log_line", "run_capture", "print", "add_warning"}
+
+
+# --- audit 2026-10-30: digest-pinned infra, signed app images -----------------
+
+PINNED = "mariadb:12.3.3@sha256:" + "d4" * 32
+
+
+def test_a_pinned_digest_already_running_is_not_recreated(host):
+    """docker-compose.yml pins the infra images by digest since 2026-10-30. A
+    container created from the bare tag whose image IS that digest must not be
+    recreated on the update that lands the pins - for the database that would be
+    a stop, a forced backup and minutes of downtime for nothing."""
+    host.init()
+    host.release(lambda s: s["db"].__setitem__("image", PINNED), stay=True)
+    host.running["db"] = "mariadb:12.3.3"
+    host.digests["mariadb:12.3.3"] = ["mariadb@sha256:" + "d4" * 32]
+    assert "db" not in host.plan().services
+
+
+def test_a_pinned_digest_the_running_image_lacks_is_drift(host):
+    host.init()
+    host.release(lambda s: s["db"].__setitem__("image", PINNED), stay=True)
+    host.running["db"] = "mariadb:12.3.3"
+    host.digests["mariadb:12.3.3"] = ["mariadb@sha256:" + "ee" * 32]
+    plan = host.plan()
+    assert "db" in plan.services
+    assert plan.reasons["db"].startswith("image mariadb:12.3.3 -> mariadb:12.3.3@sha256:")
+
+
+def test_a_container_already_on_the_pinned_reference_is_not_drift(host):
+    host.init()
+    host.release(lambda s: s["db"].__setitem__("image", PINNED), stay=True)
+    host.running["db"] = PINNED
+    assert "db" not in host.plan().services
+
+
+def test_a_tag_without_a_digest_never_consults_the_running_digests(executor, monkeypatch):
+    monkeypatch.setattr(executor, "_inspect", lambda *_a: pytest.fail("inspected"))
+    assert executor._running_matches_pinned_digest("cid", "mariadb:12.3.3") is False
+
+
+def _canned_cosign(monkeypatch, executor, *, stdout: str, rc: int = 0, stderr: str = ""):
+    import subprocess
+
+    def run(cmd, **_kw):
+        assert cmd[:2] == ["cosign", "verify"]
+        assert "--certificate-oidc-issuer" in cmd and "--certificate-identity-regexp" in cmd
+        return subprocess.CompletedProcess(cmd, rc, stdout, stderr)
+
+    monkeypatch.setattr(executor.subprocess, "run", run)
+
+
+def test_a_verified_signature_yields_its_digest(executor, monkeypatch):
+    executor.STATE_FILE.write_text(json.dumps({"id": "j", "status": "pulling"}))
+    digest = "sha256:" + "ab" * 32
+    _canned_cosign(monkeypatch, executor, stdout=json.dumps(
+        [{"critical": {"image": {"docker-manifest-digest": digest}}}]))
+    assert executor.verify_image_signature("ghcr.io/o/fileheron-backend:v1.2.3") == digest
+
+
+@pytest.mark.parametrize(
+    ("stdout", "rc", "stderr"),
+    [
+        ("", 1, "Error: no matching signatures"),
+        ("[]", 0, ""),
+        (json.dumps([{"critical": {"image": {"docker-manifest-digest": "sha256:zz"}}}]), 0, ""),
+        (json.dumps([{"critical": {"image": {"docker-manifest-digest": "latest"}}}]), 0, ""),
+        ("not json", 0, ""),
+    ],
+)
+def test_anything_but_a_clean_verification_with_a_sha256_digest_is_refused(executor, monkeypatch, stdout, rc, stderr):
+    executor.STATE_FILE.write_text(json.dumps({"id": "j", "status": "pulling"}))
+    _canned_cosign(monkeypatch, executor, stdout=stdout, rc=rc, stderr=stderr)
+    assert executor.verify_image_signature("ghcr.io/o/fileheron-backend:v1.2.3") is None
+    log = json.loads(executor.STATE_FILE.read_text())["log_tail"]
+    assert any("ERROR" in line for line in log)
+
+
+def test_a_missing_cosign_binary_is_a_refusal_not_a_crash(executor, monkeypatch):
+    executor.STATE_FILE.write_text(json.dumps({"id": "j", "status": "pulling"}))
+
+    def run(cmd, **_kw):
+        raise FileNotFoundError("cosign")
+
+    monkeypatch.setattr(executor.subprocess, "run", run)
+    assert executor.verify_image_signature("ghcr.io/o/fileheron-backend:v1.2.3") is None
+
+
+def test_an_app_image_is_pulled_by_its_verified_digest_and_tagged(executor, monkeypatch):
+    calls: list[list[str]] = []
+    monkeypatch.setattr(executor, "verify_image_signature", lambda ref: "sha256:" + "ab" * 32)
+    monkeypatch.setattr(executor, "run_capture", lambda cmd, env=None: calls.append(cmd) or 0)
+    assert executor.pull_verified("ghcr.io/o/fileheron-backend:v1.2.3") == 0
+    assert calls == [
+        ["docker", "pull", "ghcr.io/o/fileheron-backend@sha256:" + "ab" * 32],
+        ["docker", "tag", "ghcr.io/o/fileheron-backend@sha256:" + "ab" * 32, "ghcr.io/o/fileheron-backend:v1.2.3"],
+    ]
+
+
+def test_an_unverifiable_app_image_is_not_pulled(executor, monkeypatch):
+    executor.STATE_FILE.write_text(json.dumps({"id": "j", "status": "pulling"}))
+    monkeypatch.setattr(executor, "verify_image_signature", lambda ref: None)
+    monkeypatch.setattr(executor, "run_capture", lambda cmd, env=None: pytest.fail(f"ran {cmd}"))
+    assert executor.pull_verified("ghcr.io/o/fileheron-backend:v1.2.3") == 1
+
+
+def test_the_signature_opt_out_pulls_by_tag_with_a_warning_in_the_job_log(executor, monkeypatch):
+    executor.STATE_FILE.write_text(json.dumps({"id": "j", "status": "pulling"}))
+    monkeypatch.setenv("EXECUTOR_REQUIRE_SIGNATURE", "false")
+    monkeypatch.setattr(executor, "verify_image_signature", lambda ref: pytest.fail("verified anyway"))
+    calls: list[list[str]] = []
+    monkeypatch.setattr(executor, "run_capture", lambda cmd, env=None: calls.append(cmd) or 0)
+    assert executor.pull_verified("ghcr.io/o/fileheron-backend:v1.2.3") == 0
+    assert calls == [["docker", "pull", "ghcr.io/o/fileheron-backend:v1.2.3"]]
+    assert any("WARN image signature verification is switched off" in line
+               for line in json.loads(executor.STATE_FILE.read_text())["log_tail"])
+
+
+def test_an_unverifiable_app_image_stops_the_update_before_anything_changes(executor, flow, monkeypatch):
+    events, _state = flow
+    monkeypatch.setattr(executor, "verify_image_signature", lambda ref: None)
+    assert executor.main() == 2
+    state = json.loads(executor.STATE_FILE.read_text())
+    assert state["status"] == "failed" and "signature" in state["error"]
+    assert not [e for e in events if e.startswith(("tag ", "up ", "backup", "ff", "sync"))]
+    assert executor.read_current_tag() == "v1.0.0"
+
+
+def test_the_default_signer_identity_is_the_release_workflow_on_a_release_tag(executor, monkeypatch):
+    import re
+
+    monkeypatch.delenv("EXECUTOR_SIGNER_IDENTITY_RE", raising=False)
+    identity = re.compile(executor._signer_identity_re())
+    base = f"https://github.com/{executor.GHCR_OWNER}/fileHeron/.github/workflows/"
+    assert identity.search(base + "server-release.yml@refs/tags/v2.29.0")
+    assert not identity.search(base + "server-release.yml@refs/heads/main"), "a manual run must not count"
+    assert not identity.search(base + "server-release.yml@refs/tags/v2.29.0-rc1")
+    assert not identity.search(base + "ci.yml@refs/tags/v2.29.0"), "only the release workflow signs releases"
+    other_owner = base.replace(executor.GHCR_OWNER, "someone-else")
+    assert not identity.search(other_owner + "server-release.yml@refs/tags/v2.29.0")
+    monkeypatch.setenv("EXECUTOR_SIGNER_IDENTITY_RE", "^custom$")
+    assert executor._signer_identity_re() == "^custom$"

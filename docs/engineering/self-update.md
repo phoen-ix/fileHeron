@@ -58,3 +58,118 @@ The deploy and backup half of this section (its introduction, `restore.sh`'s man
 - **The executor's option defaults protect the update that installs it.** That update's job comes from the OLD backend with no `options`, so `_OPTION_DEFAULTS` must stay `infra_sync=True, backup_on_db_change=True` - that is what backs up before the first MariaDB upgrade. Bounds are duplicated in the registry and pinned equal (`test_the_retention_bounds_match_the_executors`). The Update-dialog checkbox only exists from the release AFTER, and rollbacks run the older executor, which ignores options.
 - **A release's compose app sections must run the PREVIOUS app release too.** After an infra sync the checkout is at the new tag, and auto-rollback (and Rollback) move only app images, against that compose file and the new infra.
 - **Pre-update backups live in `backups/pre-update/<stamp>_<from>-to-<to>/`** (db.sql, redis.rdb, KIND, manifest.txt), invisible to backup.sh's keep-7 (counts `backups/*/` with a manifest), the drill (`backups/20*`) and restic. 0700/0600 and chowned to the owner of `backups/` - the executor is root and backup.sh's host user must be able to delete them. Retention runs on each update and never deletes the newest. The dump password travels as `MYSQL_PWD` env, never argv.
+
+## What the updater trusts (audit 2026-10-30)
+
+The shim runs as root with the host docker socket and spawns the executor with
+the socket, the host checkout (`/workspace`) and the state dir (`/state`)
+mounted. Two inputs reach that privileged side, and both are treated as hostile:
+
+- **`/state` = `data/updater/`, owned by uid 1000, mounted read-write into the
+  backend AND the worker.** Any code execution in the web app writes every byte
+  of it. So: every executor read of a file there is `O_NOFOLLOW` and requires a
+  regular file (`_read_json`), every write is a randomly named `O_EXCL` temp in
+  the same directory plus `os.replace` (`_replace_file`), and there is NO
+  in-place fallback - a lost progress line is cheaper than a root write through
+  a path the backend chose. Before this, the temp name was predictable
+  (`.current_job.json.tmp`), written with `write_text` (follows a symlink), and
+  a failure wrote `STATE_FILE` in place: a planted symlink could redirect a root
+  write into the operator's checkout (the uid-1000 operator runs `scripts/*.sh`
+  from it, and is in the `docker` group). Pinned by `test_no_executor_write_
+  goes_through_a_path_the_backend_can_plant` and the symlink tests beside it.
+- **The registry.** Images are pulled from `ghcr.io/<GHCR_OWNER>/` by tag, and
+  until v2.29.0 nothing checked who built them: a registry account, a leaked
+  `write:packages` token or a compromised Actions run could ship an image that
+  runs as root with the socket on every instance at its next update.
+  `server-release.yml` now signs every image it publishes (cosign, keyless,
+  `id-token: write` on the `build` job only; the boot-smoked backend is signed
+  after its push by the digest the registry assigned). The signing certificate
+  names the workflow and ref: `https://github.com/<owner>/fileHeron/.github/
+  workflows/server-release.yml@refs/tags/vX.Y.Z`, issuer
+  `https://token.actions.githubusercontent.com`. Signatures attach to the
+  DIGEST, so `publish-latest`'s re-tag needs none; a `workflow_dispatch` run
+  signs under `refs/heads/<branch>`, which the verifiers reject by design.
+
+**The shim is the enforcement point**, because it alone decides which executor
+image runs - the executor's own re-validation cannot protect against a job that
+selects an OLDER executor. For a pending job, in order, each failing the job
+with the hand fix in the message:
+
+1. tag shape (`case` by character set, then `grep -Eqx`); `action` ∈
+   {update, rollback};
+2. the running version, from `docker inspect <project>-backend`'s
+   `org.opencontainers.image.version` label (the baked `FH_VERSION`) - never
+   from the job file. `0.0.0-dev` / no container = unknown: the downgrade check
+   is skipped with a WARN, and nothing is recorded;
+3. **update:** `version_lt target running` → `downgrade refused`. A redeploy of
+   the running version passes (`version_lt` is strict);
+4. **rollback:** when `/private/rollback_target.json` exists, the target must
+   equal its `tag` → else `rollback refused`, naming both and the hand fix
+   (remove the file as root). No record → WARN, the job's target stands;
+5. `cosign verify --certificate-oidc-issuer … --certificate-identity-regexp
+   "$SIGNER_IDENTITY_RE" <executor image by tag>` → the manifest digest from
+   the JSON; `docker pull` AND `docker run` by `<repo>@sha256:<digest>`, so what
+   runs is what was verified even if the tag moves in between. **Unsigned is
+   allowed in exactly one case:** a rollback whose target is the recorded one
+   (releases before v2.29.0 are unsigned). `SHIM_REQUIRE_SIGNATURE=false` skips
+   the check with a WARN on startup and on every job.
+
+**The private record** (`/private` = `data/updater-private/`, a bind mount on
+the shim only; the daemon creates it root:root when absent, which is the one
+`data/` dir that must NOT be uid 1000; `.gitignore`d, no `.gitkeep`). It is
+written in two steps because the executor recreates the shim as its LAST step,
+so the shim that claimed a job rarely sees its `docker run` return: at claim
+time `claim.json {id, running}`; in the poll loop's terminal arm, `healthy` with
+`claim.id == state.id` promotes `running` to `rollback_target.json {tag}` and
+removes the claim; `failed`/`rolled_back` only remove it. After a successful
+ROLLBACK the record is the version just left, matching the public file's
+semantics. A shim recreated from an older compose file (a checkout the executor
+could not fast-forward) has no `/private`: it logs that once and binds nothing.
+
+**The executor verifies what it deploys** (`pull_verified`): for every
+`IMAGES_TO_PULL` ref, `verify_image_signature` → `docker pull <repo>@<digest>`
+→ `docker tag <repo>@<digest> <ref>`, so the `compose up` (pull policy
+`missing`) runs exactly the verified image. Any failure fails the job before
+anything on the host changes. The identity and the opt-out arrive from the
+shim as `EXECUTOR_SIGNER_IDENTITY_RE` / `EXECUTOR_REQUIRE_SIGNATURE`; the
+default identity follows `GHCR_OWNER`. Infra images (mariadb, redis, clamav,
+tusd) are not ours to sign: `docker-compose.yml` pins them `tag@sha256:` so a
+Docker Hub rebuild is a Dependabot PR, and `_running_matches_pinned_digest`
+keeps `plan_infra` from recreating a container whose image already IS the
+pinned digest (`.Config.Image` differs for every container created before the
+pins). On the reference host on 2026-10-30 three of the four running builds
+were OLDER than the pinned ones, so the update that lands the pins recreates
+db, redis and clamav, with the forced backup.
+
+**Capabilities.** The socket makes both containers root-equivalent by design;
+dropping capabilities is defence in depth against a bug in them (the symlink
+class above was exactly such a bug). Shim (compose): `cap_drop: [ALL]`,
+`cap_add: [DAC_OVERRIDE]` (the `/state` dir is uid 1000, 0775 - root without it
+cannot create a file there), `read_only: true`, `tmpfs: [/tmp]`, `HOME=/tmp`
+(the docker CLI's context store and cosign's TUF cache), `pids_limit: 64`,
+`mem_limit` 256m (cosign). Executor (`docker run` in shim.sh): `--security-opt
+no-new-privileges --cap-drop ALL --cap-add CHOWN,DAC_OVERRIDE,DAC_READ_SEARCH,
+FOWNER,SETUID,SETGID --pids-limit 256 --memory 512m` - CHOWN for the backups it
+hands to the checkout's owner, DAC_* to write the uid-1000 state dir and the
+operator's checkout as root, FOWNER to `chmod` the operator-owned `backups/`,
+SETUID/SETGID for `_git(user=owner)`. A missing capability shows as a
+`PermissionError` in the job log: add that capability, never drop the set.
+
+**`.env` is rewritten atomically** (`write_current_tag`): `.env` holds
+`JWT_SECRET` - the root of every Fernet key - and is deliberately absent from
+the backups, so a truncate-then-write was one crash away from an instance
+nobody can recover. The temp file lands beside the TARGET of a symlinked
+`.env` (an operator may keep theirs elsewhere; `/workspace` is theirs, so
+following their link is fine), with the target's mode and owner, and
+`os.replace` swaps it in. Not a regular file → the job fails.
+
+**Transition.** The update TO v2.29.0 is supervised by the OLD shim (no
+verification) and runs the NEW executor, which verifies the app images (signed
+from v2.29.0 on). From then on the new shim verifies the executor. The first
+rollback from v2.29.0 targets an unsigned executor (v2.28.0) and has no
+private record yet (the installing job was claimed by the old shim): it is
+WARNED, not refused. Forks: `SHIM_REQUIRE_SIGNATURE=false` or their own
+`SHIM_SIGNER_IDENTITY_RE`, both plain `.env` variables.
+
+**Accepted residual #9** (`decisions.md`): `alembic_head` in the public
+`rollback_target.json` stays backend-writable; it only feeds `alembic stamp`.

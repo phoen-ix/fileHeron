@@ -73,6 +73,9 @@ data/quarantine/*
 !data/quarantine/.gitkeep
 data/updater/*
 !data/updater/.gitkeep
+# Root-owned, the updater-shim's alone (docker-compose.yml): no .gitkeep, the
+# daemon creates it when absent.
+data/updater-private/
 backups/*
 !backups/.gitkeep
 

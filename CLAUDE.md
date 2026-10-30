@@ -24,7 +24,7 @@ How this file was trimmed and split, and why it stays short: [`docs/history.md`]
 
 ## Current state
 
-Backend **`v2.28.0`** is the newest tag (Python 3.15; v2.27.2 a Pillow/certifi security patch; v2.27.1 an nginx security patch; v2.27.0 passkey sign-in, off by default; v2.26.0 folder uploads, v2.25.3 a dependency refresh, v2.25.2 the 2026-10-10 audit fixes, v2.25.0 encryption at rest, off by default) and **`client-v1.6.0`** the newest desktop client tag (Python 3.15, Windows 10 or newer; tagged with v2.28.0); the reference host runs **v2.25.2**. What each release changed, the host's infra and the per-tag migrations, host steps and default moves are in [`releases.md`](docs/engineering/releases.md).
+Backend **`v2.29.0`** is the newest tag (the updater verifies image signatures, refuses downgrades and binds rollbacks inside the shim, infra images pinned by digest; v2.28.0 Python 3.15; v2.27.2 a Pillow/certifi security patch; v2.27.1 an nginx security patch; v2.27.0 passkey sign-in, off by default; v2.26.0 folder uploads, v2.25.3 a dependency refresh, v2.25.2 the 2026-10-10 audit fixes, v2.25.0 encryption at rest, off by default) and **`client-v1.6.0`** the newest desktop client tag (Python 3.15, Windows 10 or newer; tagged with v2.28.0); the reference host runs **v2.25.2**. What each release changed, the host's infra and the per-tag migrations, host steps and default moves are in [`releases.md`](docs/engineering/releases.md).
 
 ## Commands
 
@@ -270,6 +270,9 @@ One doc per subsystem in `docs/engineering/`. They are not auto-loaded. **Before
 - Every `docker compose up` in `updater-executor/run.py` passes `--no-deps`, and the executor writes only statuses every older shim knows.
 - The executor's `_OPTION_DEFAULTS` protect the update that installs it; infra is never rolled back.
 - Turning automatic updates on is step-up gated, which is why those keys are not registry tunables.
+- **`/state` (`data/updater/`) is written by the backend and the worker: the privileged side treats it as hostile.** The shim is the enforcement point - it alone picks the executor image: it verifies that image's cosign signature against the release workflow's identity and runs it BY DIGEST, refuses an `update` below the version the daemon's label reports for the backend container, and binds a `rollback` to the version it recorded itself in `data/updater-private/` (root-owned; nothing else mounts it). The executor verifies the app images the same way (`pull_verified`). `SHIM_REQUIRE_SIGNATURE=false` is the fork opt-out, passed through to the executor.
+- **Every executor read under `/state` is `O_NOFOLLOW` + regular-file and every write a random `O_EXCL` temp + `os.replace` (`_read_json` / `_replace_file`), with NO in-place fallback** - a predictable temp name written with `write_text` let a planted symlink redirect a root write into the host checkout. The `.env` rewrite is atomic for a different reason: `.env` is the one file no backup restores.
+- **Infra images are pinned `tag@sha256`**; `plan_infra` treats a container whose running image already IS the pinned digest as no drift (`_running_matches_pinned_digest`), so the pins do not recreate a data layer that is already on those bytes.
 #### Deploy, rollback, backups, drills → [`deploy-and-backups.md`](docs/engineering/deploy-and-backups.md)
 - `scripts/` run from the working tree; `backend/` and `frontend/` reach a host only through a tagged release.
 - `deploy.sh`: the caller's environment beats `.env`, and the source-build fallback is gated on `is_published_tag`.

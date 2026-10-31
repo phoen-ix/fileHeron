@@ -20,6 +20,13 @@ though it served the signed image. `:latest` is now the signed image itself,
 and the release workflow verifies all five `:latest` images before it publishes
 a release. The updater never used `:latest`, so updates were not affected.
 
+**Security: pyasn1 0.6.5 in the backend image.** 0.6.4 had four high-rated
+advisories (CVE-2026-119194, -119195, -119196, -119197): crafted ASN.1 input
+makes its decoder spend quadratic CPU time. In file:Heron only passkey
+registration reads ASN.1 through it (an Android "android-key" attestation),
+and registering a passkey needs a signed-in user who re-enters their password -
+so the exposure was a signed-in user tying up a worker, not an outside attacker.
+
 ## On this update
 
 - A patch release: automatic updates install it. No migration, no host step,

@@ -17,10 +17,13 @@ const EYEBROW = new RegExp(
   'g',
 )
 
+/** The text of an HTML fragment, as the browser parses it (nested tags included). */
+const textOf = (html: string) => new DOMParser().parseFromString(html, 'text/html').body.textContent ?? ''
+
 /** The literal words of each eyebrow, outside its `{{ … }}` interpolations. */
 function literalEyebrows(src: string): string[] {
   return [...src.matchAll(EYEBROW)]
-    .map((m) => m[2]!.replace(/\{\{[\s\S]*?\}\}/g, '').replace(/<[^>]*>/g, ''))
+    .map((m) => textOf(m[2]!.replace(/\{\{[\s\S]*?\}\}/g, '')))
     .filter((text) => /\p{L}/u.test(text))
     .map((text) => text.trim())
 }
@@ -40,6 +43,9 @@ describe('eyebrows', () => {
       '/ verify',
     ])
     expect(literalEyebrows('<p v-if="n > 0" class="fh-eyebrow">done</p>')).toEqual(['done'])
+    expect(literalEyebrows('<span class="fh-eyebrow">/ <b>account</b> / 2fa</span>')).toEqual([
+      '/ account / 2fa',
+    ])
     expect(literalEyebrows(`<span class="fh-eyebrow">/ {{ $t('verify.eyebrow') }}</span>`)).toEqual([])
     expect(literalEyebrows(`<span class="fh-eyebrow"\n  >/ {{ $t('a.b') }}</span\n>`)).toEqual([])
   })

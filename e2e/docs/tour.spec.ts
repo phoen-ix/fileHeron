@@ -343,10 +343,13 @@ test('admin mail log + one mail', async () => {
   pinLogs()
   await page.goto('/admin/mail-log')
   await title(page, 'Mail log')
-  // A mail whose body carries no send-time timestamp.
-  const first = page.locator('tr', { hasText: 'needs your approval' }).locator('a[href^="/admin/mail-log/"]').first()
-  await expect(first).toBeVisible()
+  await expect(page.locator('tbody tr a[href^="/admin/mail-log/"]').first()).toBeVisible()
   await shoot(page, 'admin-mail-log', ADMIN_CROP)
+  // A mail whose body carries no send-time timestamp. Searched for, not taken
+  // from page 1: after the whole e2e suite (scripts/e2e.sh) the suite's own
+  // mails push it off the first page.
+  await page.getByPlaceholder('Search subject / recipient').fill('needs your approval')
+  const first = page.locator('tr', { hasText: 'needs your approval' }).locator('a[href^="/admin/mail-log/"]').first()
   await first.click()
   await title(page, 'Mail')
   await shoot(page, 'admin-mail-detail', ADMIN_CROP)

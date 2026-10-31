@@ -1,3 +1,66 @@
+# file:Heron v2.29.2
+
+**A wrong password that locks an account no longer stalls the server.** The
+sign-in attempt that locked an account sent its owner the lockout warning while
+the account's database record was still held, and on MariaDB that made the
+request wait 50 seconds. For those 50 seconds the server answered no one else
+either - every page, download and upload waited - and the warning then went
+missing from the mail log. Anyone could set it off by guessing passwords for an
+existing account. The lock is now saved first, and the sign-in answers at once.
+Update soon.
+
+**Retry finishes the upload it retries.** Two fixes for large uploads, the ones
+that resume after an interruption:
+
+- Retry after a failed upload registered the file a second time. The data went
+  into the first entry, while the second one stayed "uploading" on the share
+  page and held back the email to the recipients until the cleanup of stalled
+  uploads removed it. Retry now carries on with the same file.
+- Once the server had refused an upload's authorisation (it expires after an
+  hour, or the cleanup had already ended the file), every further Retry failed
+  the same way. Now the next Retry starts that file afresh.
+
+**Smaller fixes in the web app:**
+
+- Text typed into a legal page or an email template just before clicking
+  **Save** is saved too; the last keystrokes used to be lost.
+- An invitation you send shows up under *Pending invites* at once, without
+  reloading the page.
+- A failed **Check now** for updates shows its error and time in the version
+  card at once, not only after a reload.
+- Screen readers: the logo upload, the backup file picker and the scheduled
+  tasks' fields are announced by what they are (they were all called
+  "Filter"); the sortable columns in *Sent* and *Received* are read as column
+  headers again, with their sort order; the home page has a main heading.
+
+**Desktop client 1.6.1 is released beside it** (see below).
+
+## On this update
+
+- A patch release: automatic updates install it. No migration, no host step,
+  no default change.
+- **Redis moves to 8.10.3** (a patch release of the same version). The updater
+  recreates the Redis container with the app stopped - a few seconds - and
+  Redis keeps its data. The database, ClamAV and tusd stay as they are, so
+  there is no forced database backup. Where the updater cannot sync the
+  infrastructure (local changes in the checkout, an override file, infra sync
+  switched off) Redis stays on 8.10.2 until you run `git fetch --tags && git
+  merge --ff-only v2.29.2 && docker compose up -d --no-deps redis`; the
+  release works with either.
+- The backend, worker and updater images run Python 3.15.2 (was 3.15.1), and
+  the web app is built with Node.js 26.13.0.
+
+## Desktop client 1.6.1
+
+- The app carries setuptools 84.2.1, which fixes a low-rated flaw
+  (GHSA-xmj3-9gf7-h52w) in how setuptools installs Python packages on Windows.
+  The app never installs packages, so the flaw could not be reached through
+  it; the update stops security scanners from flagging the `.exe`.
+- The app carries Python 3.15.2 (was 3.15.1), the newest bug-fix release.
+- Features and settings are unchanged.
+
+---
+
 # file:Heron v2.29.1
 
 **A fix to the v2.29.0 update: the updater now recreates an infrastructure

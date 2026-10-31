@@ -1,3 +1,20 @@
+# Desktop client 1.6.1
+
+**Security and bug-fix updates to what the app carries inside it.**
+
+Requires server **v2.6.1 or newer** (unchanged).
+
+---
+
+- The app carries setuptools 84.2.1 (was 84.0.0), which fixes a low-rated flaw
+  (GHSA-xmj3-9gf7-h52w) in how setuptools installs Python packages on Windows.
+  The app never installs packages, so the flaw could not be reached through
+  it; the update stops security scanners from flagging the `.exe`.
+- The app carries Python 3.15.2 (was 3.15.1), the newest bug-fix release.
+- Features and settings are unchanged.
+
+---
+
 # Desktop client 1.6.0
 
 **The app now runs on Python 3.15, and needs Windows 10 or newer.**

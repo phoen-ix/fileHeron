@@ -7,7 +7,18 @@ summary and points here. Read this before changing the code listed below.
 
 ## Current state
 
-Backend **`v2.29.1`** is the newest tag (2026-10-31): the infra sync also reads each
+Backend **`v2.29.2`** is the newest tag (2026-10-31): the failed sign-in that locks an
+account commits before it sends the lockout mail (`_maybe_send_lockout_email`) - the mail
+log's insert waited out MariaDB's 50 s lock wait on the request's own `FOR UPDATE` and froze
+the event loop meanwhile; an upload Retry reuses its file id and tus metadata, and drops them
+after `TUS_ENVELOPE_EXPIRED`/`FILE_RECORD_MISSING`; frontend fixes (rich-text save, pending
+invites, the release-check card, five a11y names, sortable `<th>`, the home page's h1);
+python 3.15.2, node 26.13.0, redis 8.10.3 (an infra recreate of redis alone, app stopped, no
+forced backup). No migration, no host step, no default move. Desktop client
+**`client-v1.6.1`** is tagged beside it: Python 3.15.2, setuptools 84.2.1 (GHSA-xmj3-9gf7-h52w, low) - it
+is in the .exe, not build-only: PyInstaller resolves keyring's jaraco/backports imports to
+setuptools' vendored copies and bundles setuptools (`pyi_rth_setuptools` in the build log).
+**`v2.29.1`** (same day): the infra sync also reads each
 infra container's capabilities, read-only root and security options back from Docker and
 recreates one that differs from the release (`_runtime_drift`) - the file-to-file
 definition check compared the release with itself on a checkout already at the tag, which
@@ -171,6 +182,7 @@ record.
 | v2.28.0 | - | - | - (Python 3.15.1 in the backend, worker and updater-executor images; the backend image builds hiredis and PyYAML in a `deps` stage and its runtime stage stays compiler-free. Desktop `client-v1.6.0` tagged beside it: Python 3.15, Windows 10 or newer) |
 | v2.29.0 | - | - where the updater fast-forwards the checkout (the executor recreates the shim with its new definition - the `/private` mount, `cap_drop`, `read_only`, `tmpfs` - at the end of the update). Where it SKIPS (dirty or diverged checkout, override file, `COMPOSE_FILE`, infra sync off): `git pull && docker compose up -d --no-deps updater-shim` afterwards; until then the shim verifies signatures but does not bind rollbacks, and says so once. The update recreates **all four infra services** - their compose definition changed (`cap_drop`/`cap_add`), and db, redis and clamav also run older builds than the pinned digests on most hosts - db and redis with the app stopped and the forced DB backup; the update TO v2.29.0 is supervised by the old shim (no verification) and runs the new executor (verifies the app images) | **image signature verification ON** (`SHIM_REQUIRE_SIGNATURE=false` is the fork opt-out; `SHIM_SIGNER_IDENTITY_RE` for a renamed repository). The shim refuses an update below the running version (`downgrade refused`) and a rollback to anything but the version it recorded in `data/updater-private/` (`rollback refused`; the first rollback after v2.29.0 has no record and is warned, not refused). Infra images pinned `tag@sha256` (a Dependabot digest bump is an infra recreate on the next update, like a tag bump). Shim `mem_limit` default 128m → 256m (cosign). **Every service drops all Linux capabilities** (`cap_drop: [ALL]`) and adds back the measured minimum of its image's root phase: db `CHOWN, DAC_READ_SEARCH, SETGID, SETUID`; redis those plus `FOWNER`; clamav `CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID`; frontend `CHOWN, NET_BIND_SERVICE, SETGID, SETUID`; backend/worker/tusd nothing. `GET /api/admin/system/update-jobs/{id}` caps `log_tail` at 200 × 2,000 chars and the free-text fields at 500 |
 | v2.29.1 | - | - (a patch: automatic updates install it. The executor recreates any infra container whose running `CapDrop`/`CapAdd`/`ReadonlyRootfs`/`SecurityOpt` differs from the release - nothing on an install that updated to v2.29.0 normally; tusd where the checkout was already at v2.29.0 before that update) | - (the backend `:latest` is now the signed manifest itself; app-image pulls run `docker pull -q`; pyasn1 0.6.4 → 0.6.5 in the backend image) |
+| v2.29.2 | - | - (a patch: automatic updates install it. The executor recreates redis alone - its pin moved to `8.10.3-alpine3.23` - with the app stopped and no forced backup; where infra sync skips, redis stays on 8.10.2 until `docker compose up -d --no-deps redis` after the ff) | - (images on python 3.15.2 and node 26.13.0. Desktop `client-v1.6.1` tagged beside it: Python 3.15.2 and setuptools 84.2.1 in the .exe) |
 
 Per-release admin-facing notes for v2.13.0 and newer are in `RELEASE_NOTES.md`,
 one `# file:Heron vX.Y.Z` section each, newest first; older releases live in

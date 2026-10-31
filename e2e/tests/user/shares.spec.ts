@@ -211,6 +211,31 @@ test('outbox: sort by subject, group by recipient, filter by recipient', async (
   await expect(page.locator('tbody tr').first()).toContainText(`A ${tag}`)
 })
 
+test('outbox: more than a page of shares pages through, every share once', async ({ page }) => {
+  const sender = await newUser('employee', 'pager')
+  const to = await newUser('client', 'pagerto')
+  await connect(sender, to)
+  const token = await tokenOf(sender)
+  const tag = uid()
+  for (let n = 1; n <= 51; n++) await createShare(token, { users: [to.id], subject: `Paged ${tag} #${n}.` })
+  const rows = page.locator('tbody tr')
+  const numbers = async () => (await rows.allInnerTexts()).map((row) => Number(/#(\d+)\./.exec(row)?.[1]))
+
+  await signIn(page, sender)
+  await page.goto('/outbox')
+  await expect(rows).toHaveCount(50) // a page is 50 shares
+  await expect(page.getByText('page 1 of 2')).toBeVisible()
+  const first = await numbers()
+  await page.getByRole('button', { name: /^next/ }).click()
+  await expect(page.getByText('page 2 of 2')).toBeVisible()
+  await expect(rows).toHaveCount(1)
+  const all = [...first, ...(await numbers())].sort((a, b) => a - b)
+  expect(all).toEqual(Array.from({ length: 51 }, (_, i) => i + 1))
+  await page.getByRole('button', { name: /prev$/ }).click()
+  await expect(page.getByText('page 1 of 2')).toBeVisible()
+  await expect(rows).toHaveCount(50)
+})
+
 test("someone else's share is refused, not shown", async ({ page }) => {
   const owner = await newUser('employee', 'private')
   const to = await newUser('client', 'privateto')
@@ -340,6 +365,22 @@ test.describe.serial('share approval', () => {
 
     // A file added after the approval waits for review before recipients get it.
     const token = await tokenOf(sender)
+    // The approver signs off on what the page showed (content_fingerprint,
+    // which moves with the file's state): open it once the scan has finished,
+    // or the decision is refused as "changed since you opened it".
+    const scanned = (fileId: string) =>
+      expect
+        .poll(
+          async () =>
+            (
+              await ok<{ files: Array<{ id: string; state: string }> }>(
+                apiFetch(token, `/api/shares/${share.id}`),
+                'read share',
+              )
+            ).files.find((f) => f.id === fileId)?.state,
+          { timeout: 30_000 },
+        )
+        .toBe('clean')
     const added = await upload(token, share.id, 'late.txt', 'late')
     await ok(
       apiFetch(token, `/api/shares/${share.id}/files-added`, {
@@ -348,6 +389,7 @@ test.describe.serial('share approval', () => {
       }),
       'announce the added file',
     )
+    await scanned(added)
     await boss.goto(`/share/${share.id}`)
     await expect(boss.getByText(/1 file was added after this share was approved/)).toBeVisible()
     await boss.getByRole('button', { name: 'Release added files' }).click()
@@ -364,6 +406,7 @@ test.describe.serial('share approval', () => {
       }),
       'announce the second added file',
     )
+    await scanned(nope)
     await boss.goto(`/share/${share.id}`)
     await boss.getByRole('button', { name: 'Discard added files' }).click()
     await expect(boss.getByText('Added files discarded.')).toBeVisible()

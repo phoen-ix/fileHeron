@@ -1,12 +1,14 @@
 import type { Page } from '@playwright/test'
 
-import { connect, expect, newUser, restoreSettings, session, setSettings, signIn, test, uid } from './lib'
+import { apiFetch } from '../../helpers'
+import { admin, connect, expect, newUser, ok, restoreSettings, session, setSettings, signIn, test, uid } from './lib'
 
 /* Secrets and secret requests composed in the UI (the reveal and answer
  * halves: tests/secrets.spec.ts and tests/secret-requests.spec.ts): the
  * create form with its blockers, a link and a passphrase, the three boxes and
- * the state filter, the sender's link management and Burn now, and
- * cancelling a request. The feature ships off; on for this file only. */
+ * the state filter, the sender's link management and Burn now, cancelling a
+ * request, and a link secret burned by wrong passphrases. The feature ships
+ * off; on for this file only. */
 
 const confirmDialog = (page: Page) => page.getByRole('dialog').getByRole('button').last()
 
@@ -167,5 +169,56 @@ test.describe.serial('secrets composed in the UI', () => {
     await anon.goto(`/r#${link.split('#')[1]}`)
     await expect(anon.getByTestId('public-request-error')).toBeVisible()
     for (const p of [t, anon]) await p.context().close()
+  })
+
+  test('a link secret set to burn is gone after the allowed wrong passphrases', async ({ browser }) => {
+    // The allowance is read when the secret is sent: 2 here (10 by default).
+    const KEY = 'secrets.passphrase_max_failures'
+    const token = await admin()
+    const knobs = await ok<{ items: Array<{ key: string; value: unknown; is_overridden: boolean }> }>(
+      apiFetch(token, '/api/admin/settings/advanced'),
+      'read knobs',
+    )
+    const was = knobs.items.find((i) => i.key === KEY)!
+    const setKnob = (value: unknown) =>
+      ok(
+        apiFetch(token, '/api/admin/settings/advanced', {
+          method: 'PUT',
+          body: JSON.stringify({ updates: { [KEY]: value } }),
+        }),
+        'set knob',
+      )
+    await setKnob(2)
+    let url: string
+    try {
+      const sent = await ok<{ link_url: string }>(
+        apiFetch(token, '/api/secrets', {
+          method: 'POST',
+          body: JSON.stringify({
+            content: `burned-${uid()}`,
+            passphrase: 'the-right-passphrase',
+            max_views: 1,
+            create_link: true,
+            burn_on_failures: true,
+          }),
+        }),
+        'send secret',
+      )
+      url = sent.link_url
+    } finally {
+      await setKnob(was.is_overridden ? was.value : null)
+    }
+
+    const anon = await session(browser)
+    await anon.goto(`/s#${url.split('#')[1]}`)
+    await anon.getByTestId('reveal-passphrase').fill('wrong-one')
+    await anon.getByTestId('reveal-button').click()
+    await expect(anon.getByText('That passphrase is not correct.')).toBeVisible()
+    await anon.getByTestId('reveal-passphrase').fill('wrong-two')
+    await anon.getByTestId('reveal-button').click()
+    await expect(anon.getByTestId('public-secret-error')).toContainText('This secret is no longer available.')
+    await anon.reload()
+    await expect(anon.getByTestId('public-secret-error')).toBeVisible()
+    await anon.context().close()
   })
 })

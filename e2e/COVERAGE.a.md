@@ -17,7 +17,7 @@ notifications. The admin console is part b (`COVERAGE.b.md`); the index is `COVE
   in `e2e/tests/user/` (this part) and the older journeys in `e2e/tests/`. Test ids below are
   `<file under e2e/tests/> › <title>`.
 
-Totals: 30 routes × 4 roles = 120 sweep cells, all ✅. Features: 97 - ✅ 87, ❌ 10 (a 0, b 0, c 10, d 0, e 0).
+Totals: 30 routes × 4 roles = 120 sweep cells, all ✅. Features: 97 - ✅ 90, ❌ 7 (a 0, b 0, c 7, d 0, e 0).
 
 ## Routes × roles (breadth)
 
@@ -134,7 +134,7 @@ Role gate on the admin console for non-admins: `user/sweep.spec.ts › client �
 | D5 | Outbox: subject search, state filter, clear filters | employee | `user/shares.spec.ts › outbox: search, state filter, and bulk expiry` | ✅ |
 | D6 | Outbox bulk expiry with its confirm dialog | employee | same | ✅ |
 | D7 | Outbox: sort, group by, filter by recipient | employee | `user/shares.spec.ts › outbox: sort by subject, group by recipient, filter by recipient` | ✅ |
-| D8 | List paging | employee | ❌ (c) needs more than a page of shares; `frontend/tests/components/Pager.test.ts`, `backend/tests/test_pagination_tiebreaker.py` | ❌ |
+| D8 | List paging | employee | `user/shares.spec.ts › outbox: more than a page of shares pages through, every share once` | ✅ |
 | D9 | Someone else's share is refused | client | `user/shares.spec.ts › someone else's share is refused, not shown` | ✅ |
 | D10 | Share page: edit download limit, edit expiry | employee | `user/shares.spec.ts › share page: limit, expiry, preview, delete a file, ZIP, end the share` | ✅ |
 | D11 | File preview modal | employee | same | ✅ |
@@ -158,8 +158,8 @@ Role gate on the admin console for non-admins: `user/sweep.spec.ts › client �
 | E4 | Remove a queued file before sending | employee | `user/uploads.spec.ts › a queued file is removed before sending` | ✅ |
 | E5 | Over the storage quota: refused with the reason | employee | `user/uploads.spec.ts › an upload over the storage quota is refused with the reason` | ✅ |
 | E6 | Folder upload keeps the tree (page + ZIP) | admin | `folder-upload.spec.ts › a picked folder keeps its structure on the share page and in the ZIP` | ✅ |
-| E7 | Direct upload (below the threshold) through the edge | admin | `edge-behaviour.spec.ts › a direct upload lands through the edge proxy` | ✅ |
-| E8 | The browser picks direct vs resumable by size | employee | ❌ (c) the e2e build forces resumable (`VITE_DIRECT_UPLOAD_THRESHOLD=1`); `frontend/tests/composables/useUpload.threshold.test.ts` | ❌ |
+| E7 | Direct upload (below the threshold) through the edge | admin, employee | `edge-behaviour.spec.ts › a direct upload lands through the edge proxy` (the API through the edge); `user/uploads.spec.ts › under the direct-upload ceiling a file goes directly, at or over it resumable` (the browser) | ✅ |
+| E8 | The browser picks direct vs resumable by size (the server's live ceiling) | employee | `user/uploads.spec.ts › under the direct-upload ceiling a file goes directly, at or over it resumable` | ✅ |
 | E9 | Leaving the page mid-upload asks first | employee | ❌ (c) `frontend/tests/composables/useUploadLeaveGuard.test.ts` ("asks before an in-app navigation while uploads run") | ❌ |
 
 ### Public links
@@ -188,7 +188,7 @@ Role gate on the admin console for non-admins: `user/sweep.spec.ts › client �
 | G6 | Compose a request with a link; the target sees it under Requests; cancel; closed link | employee, client, guest | `user/secrets.spec.ts › secrets composed in the UI › a secret request is composed with a link, then cancelled` | ✅ |
 | G7 | Answer a request (account) and open the answer | client, admin | `secret-requests.spec.ts › secret requests › an account target answers and the requester opens the answer` | ✅ |
 | G8 | Answer a link request anonymously (`/r#token`), once; requester passphrase | guest, admin | `secret-requests.spec.ts › secret requests › a link request with the requester passphrase is answered through /r#token` | ✅ |
-| G9 | Destroyed after N wrong passphrases (policy) | guest | ❌ (c) `backend/tests/test_secret_reveal.py::test_burn_mode_through_a_link_ends_the_secret_when_it_was_the_only_way_in` | ❌ |
+| G9 | Destroyed after N wrong passphrases (policy) | guest | `user/secrets.spec.ts › secrets composed in the UI › a link secret set to burn is gone after the allowed wrong passphrases` | ✅ |
 
 ### Notifications, legal pages
 

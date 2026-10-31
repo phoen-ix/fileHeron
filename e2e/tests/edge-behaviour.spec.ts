@@ -7,11 +7,10 @@ import { ADMIN, BASE, apiFetch, apiLogin } from '../helpers'
  * syntax; the unit tests in backend/tests/infra check what the file SAYS. Only
  * a request through the running stack checks what it DOES.
  *
- * Also covers the direct-upload branch through the edge (tests-14): the e2e
- * frontend is built with VITE_DIRECT_UPLOAD_THRESHOLD=1 so the browser always
- * takes the resumable path, which left POST /api/uploads/direct - the branch
- * every file under 100 MB takes in production - untested end to end. It is
- * exactly the path the nginx body cap governs, which is why it belongs here.
+ * Also covers the direct-upload branch through the edge (tests-14): POST
+ * /api/uploads/direct - the branch every file under 100 MB takes in production -
+ * is exactly the path the nginx body cap governs, which is why it belongs here.
+ * (The browser's choice between it and tus: user/uploads.spec.ts.)
  *
  * From the 2026-07-30 audit. */
 

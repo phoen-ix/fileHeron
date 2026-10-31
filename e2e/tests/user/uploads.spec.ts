@@ -7,17 +7,18 @@ import { admin, connect, expect, newUser, ok, signIn, test, tokenOf } from './li
  * forceResumableUploads): a dropped connection mid-file resumes at the
  * server's offset instead of starting over, a file that keeps failing ends in
  * an error state with a working Retry, and a queued file can be removed
- * before sending. (Plain uploads, folders and the direct path: upload-
- * resumable, folder-upload and edge-behaviour specs.) */
+ * before sending. With a 1 KB ceiling the browser sends a small file directly
+ * and a large one resumable. (Plain uploads, folders and the direct path
+ * through the edge: upload-resumable, folder-upload and edge-behaviour specs.) */
 
 const MB = 1024 * 1024
 const CHUNK = 8 * MB // TUS_CHUNK_BYTES in frontend/src/composables/useUpload.ts
 
-async function newShareForm(page: import('@playwright/test').Page) {
+async function newShareForm(page: import('@playwright/test').Page, ceiling = 1) {
   const sender = await newUser('employee', 'uploader')
   const to = await newUser('client', 'uploadto')
   await connect(sender, to)
-  await forceResumableUploads(page)
+  await forceResumableUploads(page, ceiling)
   await signIn(page, sender)
   await page.goto('/share/new')
   const box = page.locator('.recipient-picker').getByRole('combobox')
@@ -39,6 +40,35 @@ async function filesOf(token: string, shareUrl: string) {
   )
   return share.files.map((f) => [f.original_filename, f.size_bytes])
 }
+
+test('under the direct-upload ceiling a file goes directly, at or over it resumable', async ({ page }) => {
+  const { sender } = await newShareForm(page, 1024)
+  const init: string[] = []
+  let direct = 0
+  let patches = 0
+  page.on('request', (r) => {
+    if (r.method() === 'PATCH' && r.url().includes('/uploads/')) patches++
+    if (r.method() !== 'POST') return
+    if (r.url().endsWith('/api/uploads/direct')) direct++
+    if (r.url().endsWith('/api/uploads/init')) init.push(r.postDataJSON().filename)
+  })
+  await page.locator('input.dropzone-input').setInputFiles([
+    { name: 'small.txt', mimeType: 'text/plain', buffer: Buffer.alloc(1023, 115) },
+    { name: 'large.bin', mimeType: 'application/octet-stream', buffer: Buffer.alloc(1024, 108) },
+  ])
+  await page.getByRole('button', { name: 'Create + send' }).click()
+  await expect(page.getByText('All files sent')).toBeVisible({ timeout: 30_000 })
+  // Two files, one init (for the large one), so the small one went directly.
+  expect(init).toEqual(['large.bin'])
+  expect(direct).toBe(1)
+  expect(patches).toBeGreaterThan(0)
+  await page.getByRole('button', { name: 'View share' }).click()
+  await expect(page).toHaveURL(/\/share\//)
+  expect((await filesOf(await tokenOf(sender), page.url())).sort()).toEqual([
+    ['large.bin', 1024],
+    ['small.txt', 1023],
+  ])
+})
 
 test('a connection dropped mid-file resumes at the server offset', async ({ page }) => {
   const { sender } = await newShareForm(page)

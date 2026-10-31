@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import { randomInt } from 'node:crypto'
 
 import {
   expect,
@@ -20,7 +21,7 @@ export const BACKEND = process.env.E2E_BACKEND_CONTAINER ?? 'fileheron_e2e-backe
 
 /** A short unique suffix for names and addresses. */
 export function uid(): string {
-  return `${Date.now().toString(36)}${Math.floor(Math.random() * 46656).toString(36)}`
+  return `${Date.now().toString(36)}${randomInt(46_656).toString(36)}`
 }
 
 /** Signs a context in through the API: the refresh cookie lands in the

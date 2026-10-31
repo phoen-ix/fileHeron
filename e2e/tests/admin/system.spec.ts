@@ -17,7 +17,7 @@ test.describe('status & updates', () => {
     await expect(page.getByRole('heading', { name: 'Version' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Live checks' })).toBeVisible()
     await page.getByRole('button', { name: 'Refresh' }).click()
-    await expect(page.getByText(/^Refreshed|refreshed/).first()).toBeVisible()
+    await expect(page.getByText(/^Refreshed /)).toBeVisible()
     await page.getByRole('button', { name: 'Re-run' }).click()
     await expect(toast(page, 'Live checks refreshed.')).toBeVisible()
     const live = page.locator('section.card', {

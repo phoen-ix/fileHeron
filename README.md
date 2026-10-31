@@ -1456,6 +1456,10 @@ dependency audit.
 The Playwright journeys in `e2e/tests/` run against a real compose stack - always under
 `COMPOSE_PROJECT_NAME=fileheron_e2e`, never the directory's default `fileheron`
 ([CONTRIBUTING.md](CONTRIBUTING.md#end-to-end-playwright-against-a-real-compose-stack)).
+`scripts/e2e.sh` does it start to finish: builds the prod images, starts the stack (with a
+stand-in OIDC provider for the SSO journeys), runs every spec and then the docs tour as a
+render check, and tears it down; `scripts/e2e.sh tests/user/shares.spec.ts` runs just that
+file. What the suite covers, feature by feature, is [`e2e/COVERAGE.md`](e2e/COVERAGE.md).
 
 Every screenshot in the docs comes from the docs tour (`e2e/docs/`), which seeds a demo
 organisation through the API and photographs every screen into

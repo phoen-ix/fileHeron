@@ -44,6 +44,16 @@ with the e2e overrides: `AV_SKIP=true`, `ENVIRONMENT=development`,
 published credentials. It is also what makes the teardown safe to run.
 
 ```bash
+cd e2e && npm ci && npx playwright install chromium && cd ..
+scripts/e2e.sh                                  # stack up, every spec, docs render check, stack down
+PORT_BASE=24300 scripts/e2e.sh tests/user/auth.spec.ts   # another port, one file
+```
+
+`scripts/e2e.sh` sets `COMPOSE_PROJECT_NAME=fileheron_e2e` itself (and refuses `fileheron`),
+binds `127.0.0.1:${PORT_BASE:-8080}` (API `+3`, the stand-in OIDC provider `+4`), refuses a
+checkout with a `.env` or a non-empty `data/`, and tears down with `down -v` in a trap. By hand:
+
+```bash
 export COMPOSE_PROJECT_NAME=fileheron_e2e
 docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build
 cd e2e && npm ci && npx playwright install --with-deps && npm test
@@ -51,6 +61,8 @@ cd e2e && npm ci && npx playwright install --with-deps && npm test
 # tear the throwaway project down again (-v drops its volumes too)
 cd .. && docker compose -f docker-compose.yml -f docker-compose.e2e.yml down -v
 ```
+
+Coverage, feature by feature: [`e2e/COVERAGE.md`](e2e/COVERAGE.md).
 
 ### Docs screenshots
 

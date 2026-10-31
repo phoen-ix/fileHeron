@@ -28,6 +28,7 @@ on:
       - 'docker/**'
       - 'docker-compose*.yml'
       - 'e2e/**'
+      - 'scripts/e2e.sh'
       - '.github/workflows/e2e.yml'
   # Daily so the suite has real teeth on a direct-to-main repo (PRs are rare),
   # and so base-image drift and dependency rot surface even in a quiet week -
@@ -48,47 +49,35 @@ concurrency:
 jobs:
   playwright:
     runs-on: ubuntu-latest
+    # Two shards, each on its own stack; the docs tour runs after shard 2.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     env:
       COMPOSE_PROJECT_NAME: fileheron_e2e
-      E2E_BACKEND_CONTAINER: fileheron_e2e-backend
-      # Compose requires these (${VAR:?}); test-only values.
+      # Compose requires these (${VAR:?}) for the pre-build below; scripts/e2e.sh
+      # sets the same test-only values itself.
       DB_ROOT_PASSWORD: e2e-root-not-a-secret
       DB_PASSWORD: e2e-db-not-a-secret
       JWT_SECRET: e2e-jwt-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       TUS_HOOK_SECRET: e2e-tus-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-      APP_URL: http://localhost:8080
+      E2E_IMAGE_TAG: fileheron_e2e
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Prepare data dirs (UID-1000-owned, as the containers write them)
-        # backend/worker/tusd run as UID 1000; the bind-mount sources are
-        # runner-owned at checkout, so writes (uploads, files) would 500 with
-        # EACCES. Mirror install.sh. (db/redis manage their own 999-owned dirs.)
-        run: |
-          mkdir -p data/files data/uploads data/quarantine data/updater
-          sudo chown -R 1000:1000 data/files data/uploads data/quarantine data/updater
-
-      - name: Build + start the stack
+      - name: Build the images
         # Retry: Docker Hub base-image pulls (mariadb/nginx) intermittently 502 /
-        # time out from GitHub runners. up --build is idempotent, so just retry.
+        # time out from GitHub runners. The build cache makes the script's own
+        # `up --build` below a no-op rebuild.
         run: |
           for i in 1 2 3; do
-            docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build && exit 0
-            echo "::warning::build/up attempt $i failed (likely a Docker Hub hiccup); retrying in 20s"
+            docker compose -f docker-compose.yml -f docker-compose.e2e.yml build backend worker frontend oidc \
+              && docker compose -f docker-compose.yml -f docker-compose.e2e.yml pull db redis tusd clamav updater-shim && exit 0
+            echo "::warning::build attempt $i failed (likely a Docker Hub hiccup); retrying in 20s"
             sleep 20
           done
-          echo "build/up failed after 3 attempts"; exit 1
-
-      - name: Wait for the stack to answer
-        run: |
-          for _ in $(seq 1 60); do
-            if curl -fsS http://localhost:8080/api/health >/dev/null 2>&1 \
-               && curl -fsS http://localhost:8080/ >/dev/null 2>&1; then
-              echo "stack ready"; exit 0
-            fi
-            sleep 5
-          done
-          echo "stack never became ready"; exit 1
+          echo "build failed after 3 attempts"; exit 1
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -105,80 +94,43 @@ jobs:
           npm ci --no-audit --no-fund
           npx playwright install --with-deps chromium
 
-      - name: Run Playwright
-        working-directory: e2e
-        run: npx playwright test
-
-      # The docs tour as a render check: every page the README shows, mounted in
-      # a real browser against this stack, failing on an uncaught page error or
-      # a missing element (v2.17.1 shipped an admin sidebar showing only
-      # "Overview" because nothing rendered it). It runs LAST because it seeds a
-      # demo organisation and changes settings the specs above rely on. Its
-      # screenshots carry the e2e fixtures - never commit them; the README's
-      # come from scripts/docs-screenshots.sh (or docs-screenshots.yml).
-      - name: Docs tour (render check)
-        working-directory: e2e
+      # The suite as locally: scripts/e2e.sh starts the stack (SPA on 8080,
+      # API 8083, the stand-in OIDC IdP 8084) and runs this shard's specs;
+      # shard 2 then runs the docs tour as a render check - every page the
+      # README shows, mounted in a real browser against this stack, failing on
+      # an uncaught page error or a missing element (v2.17.1 shipped an admin
+      # sidebar showing only "Overview" because nothing rendered it). The tour
+      # runs LAST because it seeds a demo organisation and changes settings the
+      # specs rely on; its screenshots carry the e2e fixtures - never commit
+      # them, the README's come from scripts/docs-screenshots.sh (or
+      # docs-screenshots.yml). E2E_FULL_STACK adds clamav and the updater shim,
+      # and the script ends by requiring every container running and healthy:
+      # this stack is the one place the capability policy in docker-compose.yml
+      # (cap_drop ALL + a measured cap_add per service) is exercised, and `up`
+      # returning 0 is not a verdict on it. The script tears the stack down in
+      # its trap and writes the stack log to $ARTIFACTS/stack.log on failure.
+      - name: E2E suite (shard ${{ matrix.shard }}/2) + docs tour (render check)
         env:
-          DOCS_SCREENSHOT_DIR: docs-tour-out
-        run: npx playwright test -c playwright.docs.config.ts
-
-      # The capability policy in docker-compose.yml (cap_drop ALL plus a measured
-      # cap_add per service) is exercised by nothing but this stack, and `up -d`
-      # returning 0 is not a verdict on it: a redis that silently stays root, a
-      # clamav whose init dies under `set -eu`, an nginx master that cannot bind
-      # :80 would all pass the journeys above (AV_SKIP is on, and the frontend
-      # is healthchecked before they start - but a later crash loop is not). So
-      # every container must be running and healthy at the end, after clamav's
-      # first signature download has had its say.
-      - name: Every container is running and healthy
-        run: |
-          set -euo pipefail
-          compose="docker compose -f docker-compose.yml -f docker-compose.e2e.yml"
-          # A fresh clamav downloads ~150 MB of signatures before clamd can
-          # answer, which can outlast its start_period and read `unhealthy`
-          # until a probe passes - so health gets five minutes to settle; a
-          # container that is not running fails at once.
-          for _ in $(seq 1 60); do
-            json=$($compose ps -a --format json)
-            dead=$(printf '%s' "$json" | jq -rs 'flatten | map(select(.State != "running")) | length')
-            [ "$dead" = "0" ] || break
-            settling=$(printf '%s' "$json" | jq -rs 'flatten | map(select(.Health != "" and .Health != "healthy")) | length')
-            [ "$settling" = "0" ] && break
-            sleep 5
-          done
-          bad=$($compose ps -a --format json \
-                | jq -rs 'flatten | map(select(.State != "running" or (.Health != "" and .Health != "healthy")))
-                          | .[] | "\(.Service) state=\(.State) health=\(.Health)"')
-          if [ -n "$bad" ]; then
-            echo "::error::containers not running and healthy under the capability policy: $bad"
-            for svc in $(printf '%s\n' "$bad" | cut -d' ' -f1); do
-              echo "::group::logs $svc"; $compose logs --no-color --tail 100 "$svc"; echo "::endgroup::"
-            done
-            exit 1
-          fi
-          $compose ps
-
-      - name: Stack logs on failure
-        if: failure()
-        run: docker compose -f docker-compose.yml -f docker-compose.e2e.yml logs --tail=300
+          ARTIFACTS: ${{ runner.temp }}/e2e
+          E2E_FULL_STACK: '1'
+          E2E_DOCS_TOUR: ${{ matrix.shard == 2 && '1' || '0' }}
+        run: bash scripts/e2e.sh --shard=${{ matrix.shard }}/2
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:
-          name: playwright-report
-          path: e2e/playwright-report/
+          name: playwright-report-${{ matrix.shard }}
+          path: ${{ runner.temp }}/e2e/playwright-report/
           retention-days: 7
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:
-          name: docs-tour
+          name: docs-tour-${{ matrix.shard }}
           path: |
-            e2e/docs-tour-out/
-            e2e/test-results/
+            ${{ runner.temp }}/e2e/docs-tour/
+            ${{ runner.temp }}/e2e/test-results/
+            ${{ runner.temp }}/e2e/docs-tour-results/
+            ${{ runner.temp }}/e2e/stack.log
           if-no-files-found: ignore
           retention-days: 7
-
-      - name: Tear down
-        if: always()
-        run: docker compose -f docker-compose.yml -f docker-compose.e2e.yml down -v

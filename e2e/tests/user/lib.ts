@@ -152,8 +152,28 @@ export async function createShare(token: string, o: ShareOpts = {}): Promise<{ i
       }),
       'announce files',
     )
+    await scanned(token, share.id, ids)
   }
   return { id: share.id, linkUrl: share.public_link?.url }
+}
+
+/** Wait until the worker has marked these uploads clean (the scan is skipped in
+ * e2e, but still a job). Pages that list files do not refresh on their own, so
+ * one opened earlier shows "Scanning" and no Download link, and an approver's
+ * page signs a content fingerprint that moves with the file state. */
+export async function scanned(token: string, shareId: string, fileIds: string[]): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const share = await ok<{ files: Array<{ id: string; state: string }> }>(
+          apiFetch(token, `/api/shares/${shareId}`),
+          'read share',
+        )
+        return share.files.filter((f) => fileIds.includes(f.id) && f.state !== 'clean').length
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(0)
 }
 
 export async function upload(token: string, shareId: string, name: string, text: string): Promise<string> {

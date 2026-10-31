@@ -3,7 +3,7 @@
 Part a (`COVERAGE.md`) owns everything outside `/admin` and the index; this file
 maps every admin route and every admin feature to a test in `e2e/tests/admin/`.
 
-- **Extraction** (2026-10-30, unchanged since 2026-10-24): `grep -oE "name: 'admin-[a-z0-9-]+'" frontend/src/router/index.ts | sort -u`
+- **Extraction** (2026-10-31, unchanged since 2026-10-24): `grep -oE "name: 'admin-[a-z0-9-]+'" frontend/src/router/index.ts | sort -u`
   → 49 route names (48 pages - tab leaves included - plus the `admin-settings`
   redirect), and the unnamed redirect `settings/home-page`; the
   features per page are the controls of `frontend/src/views/Admin*.vue` and
@@ -31,7 +31,7 @@ Every route below is visited by the parameterised sweep (`sweep.spec.ts`):
 | guest → admin | signing in lands on the admin page asked for | `sweep.spec.ts › as a guest › after signing in, the guest lands on the admin page they asked for` |
 | client / employee (API) | every console collection answers 403 | `sweep.spec.ts › as a client › the admin API answers 403 to a client`, `sweep.spec.ts › as a employee › the admin API answers 403 to a employee` |
 | guest (API) | every console collection answers 401 | `sweep.spec.ts › as a guest › the admin API answers 401 to a guest` |
-| client / employee | no Admin link in the app | `sweep.spec.ts › as a client › the sidebar shows no admin link to a client`, `sweep.spec.ts › as a employee › the sidebar shows no admin link to a employee` |
+| admin / client / employee | the user menu's Admin item: it opens the console for the admin, a client or employee has none | `sweep.spec.ts › as the admin › the user menu leads to the admin console`, `sweep.spec.ts › as a client › the user menu offers no Admin item to a client`, `sweep.spec.ts › as a employee › the user menu offers no Admin item to a employee` |
 
 | # | Route (name) | Path | Admin render ✅ |
 |---|---|---|---|
@@ -173,7 +173,7 @@ Every route below is visited by the parameterised sweep (`sweep.spec.ts`):
 | Quarantine: purge; history keeps the row | ✅ `quarantine.spec.ts › an infected file is purged; file history keeps the record` |
 | Quarantine link from the uploader's page | ✅ `quarantine.spec.ts › the uploader page links a quarantined file to the quarantine` |
 | Quarantine › Alerts & scanner tab: admin fan-out, AV status panel | ✅ `policies.spec.ts › quarantine alerts: the admin fan-out is saved; the AV panel reports dev mode` |
-| AV panel: "Reload signatures" against a running clamd | ❌ (c) the e2e stack runs AV_SKIP (no clamd); `backend/tests/test_quarantine_admin.py` |
+| AV panel: "Reload signatures" against a running clamd | ❌ (c) the e2e stack runs AV_SKIP (no clamd); `backend/tests/test_av_reload_route.py` (clamd faked at the socket: reload, other reply, AV_SKIP, unreachable, admin-only, an audit row each) |
 | Share approval: enable, approvers, scope, content review → a new share waits | ✅ `policies.spec.ts › share approval: on, every share waits for an approver` |
 | Share approval: inert-combination warning | ✅ `policies.spec.ts › share approval: the inert combination is called out` |
 | Public links: mode + allowlist and its effect; outside recipients + offer invite | ✅ `policies.spec.ts › public links: admins only, with an allowlisted employee; outside recipients on` |
@@ -221,7 +221,7 @@ Every route below is visited by the parameterised sweep (`sweep.spec.ts`):
 | Anomaly detection (switch + thresholds) | ✅ `tunables.spec.ts › admin-settings-anomaly: anomaly.multi_network_threshold is saved, kept and reset`, `tunables.spec.ts › admin-settings-anomaly (switch): anomaly.enabled is saved, kept and reset` |
 | Encryption at rest: turn on (ack + password), files encrypted, turn off | ✅ part a `encryption-at-rest.spec.ts › encryption at rest › the admin turns it on: acknowledgement first, then the password` |
 | Encryption at rest: status, counts, custody gate, cancel | ✅ `system.spec.ts › encryption at rest (page) › state, counts and the custody acknowledgement gate are shown` |
-| Encryption at rest: "Retry" deferred files | ❌ (c) needs a failed encryption run; `backend/tests/test_encrypt_release_lane.py` |
+| Encryption at rest: "Retry" deferred files | ❌ (c) needs a failed encryption run; `backend/tests/test_encryption_settings_route.py::test_retry_failed_*` (clears the deferrals and restarts the backfill, Redis down, admin-only) |
 | Audit log: event/target filters, actor link, details, CSV export | ✅ `logs.spec.ts › audit log › filters by event and target, shows a row in full, exports CSV` |
 | Audit log: date range | ✅ `logs.spec.ts › audit log › the date range narrows the list` |
 

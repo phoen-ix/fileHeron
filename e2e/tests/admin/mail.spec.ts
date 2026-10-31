@@ -34,7 +34,9 @@ test.describe('outgoing mail (SMTP)', () => {
       // The test mail goes nowhere: the failure is reported in the page.
       await page.getByPlaceholder('Recipient email for the test').fill('ops@e2e.example')
       await page.getByRole('button', { name: 'Send test email' }).click()
-      await expect(page.getByText('Test email failed.')).toBeVisible({ timeout: 30_000 })
+      await expect(page.getByText('Test email failed.')).toBeVisible({
+        timeout: 30_000,
+      })
     } finally {
       await api('/api/admin/settings/email', {
         method: 'PUT',
@@ -58,7 +60,14 @@ test.describe('email templates', () => {
   test('edit a template per language, preview it, reset it to the default', async ({
     admin: page,
   }) => {
-    const subject = `Your invitation ${uid()}`
+    const s = uid()
+    const subject = `Your invitation ${s}`
+    const subjectDe = `Ihre Einladung ${s}`
+    const marker = `Marker ${s}:`
+    const subjectField = page.getByRole('textbox', { name: 'Subject' })
+    const pill = page.locator('.editor-head .fh-pill')
+    const frame = page.getByTitle('Preview', { exact: true })
+    const text = page.locator('pre.preview-text')
     try {
       await page.goto('/admin/settings/email-templates')
       await page
@@ -66,34 +75,42 @@ test.describe('email templates', () => {
         .getByRole('button', { name: 'Invitation' })
         .click()
       await expect(page.getByRole('heading', { name: 'Invitation', level: 2 })).toBeVisible()
-      await page.getByRole('tab', { name: 'Deutsch' }).click()
-      await expect(page.getByRole('tab', { name: 'Deutsch' })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      )
-      await page.getByRole('tab', { name: 'English' }).click()
 
-      const subjectField = page.getByRole('textbox', { name: 'Subject' })
+      // English: subject, and a placeholder inserted at the cursor of the body.
       await subjectField.fill(subject)
-      // Placeholders insert at the cursor of the body.
-      await page.getByRole('textbox', { name: 'Message body' }).click()
+      const body = page.getByRole('textbox', { name: 'Message body' })
+      await body.click()
+      await page.keyboard.press('ControlOrMeta+End')
+      await page.keyboard.type(` ${marker} `)
       await page.getByText('Available placeholders').click()
-      await page.locator('.ph-token').first().click()
+      await page.getByRole('button', { name: '[RECIPIENT]', exact: true }).click()
+      await expect(body).toContainText(`${marker} [RECIPIENT]`)
       await page.getByRole('button', { name: 'Save' }).click()
       await expect(toast(page, 'Template saved')).toBeVisible()
-      await expect(page.locator('.editor-head .fh-pill')).toHaveText('Customised')
+      await expect(pill).toHaveText('Customised')
 
+      // The preview fills the placeholder with sample data, as HTML and as text.
       await page.getByRole('button', { name: 'Preview' }).click()
       await expect(page.getByRole('heading', { name: 'Preview', level: 2 })).toBeVisible()
-      await expect(page.locator('.tpl-editor')).toContainText(subject)
+      await expect(page.locator('.preview-subject')).toContainText(subject)
+      await expect(frame.contentFrame().locator('body')).toContainText(`${marker} Grace Hopper`)
+      await expect(text).toHaveCount(0)
       await page.getByRole('button', { name: 'Plain text' }).click()
+      await expect(text).toContainText(`${marker} Grace Hopper`)
+      await expect(frame).toHaveCount(0)
       await page.getByRole('button', { name: 'HTML', exact: true }).click()
+      await expect(frame).toBeVisible()
+      await expect(text).toHaveCount(0)
 
       // The saved subject is what an invitation now carries.
-      const email = `tpl-${uid()}@e2e.local`
+      const email = `tpl-${s}@e2e.local`
       await api('/api/account/invite', {
         method: 'POST',
-        body: JSON.stringify({ email, target_role: 'client', display_name_hint: 'Tpl' }),
+        body: JSON.stringify({
+          email,
+          target_role: 'client',
+          display_name_hint: 'Tpl',
+        }),
       })
       await expect
         .poll(async () =>
@@ -103,17 +120,37 @@ test.describe('email templates', () => {
         )
         .toContain(subject)
 
+      // The e2e stack has no SMTP host: the test send says so.
       await page.getByRole('button', { name: 'Send test to me' }).click()
-      await expect(page.locator('.toast').first()).toBeVisible()
+      await expect(toast(page, 'SMTP host is empty')).toBeVisible()
+
+      // German: its own override, the English one untouched.
+      await page.getByRole('tab', { name: 'Deutsch' }).click()
+      await expect(page.getByRole('tab', { name: 'Deutsch' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      )
+      await expect(pill).toHaveText('Default')
+      await subjectField.fill(subjectDe)
+      await page.getByRole('button', { name: 'Save' }).click()
+      await expect(toast(page, 'Template saved')).toBeVisible()
+      await expect(pill).toHaveText('Customised')
+      await page.getByRole('button', { name: 'Preview' }).click()
+      await expect(page.locator('.preview-subject')).toContainText(subjectDe)
+      await page.getByRole('tab', { name: 'English' }).click()
+      await expect(subjectField).toHaveValue(subject)
 
       await page.getByRole('button', { name: 'Reset to default' }).click()
       await confirm(page)
       await expect(toast(page, 'Reverted to the built-in default')).toBeVisible()
-      await expect(page.locator('.editor-head .fh-pill')).toHaveText('Default')
+      await expect(pill).toHaveText('Default')
+      await expect(subjectField).not.toHaveValue(subject)
     } finally {
-      await api('/api/admin/settings/email-templates/invite/en', { method: 'DELETE' }).catch(
-        () => undefined,
-      )
+      for (const loc of ['en', 'de']) {
+        await api(`/api/admin/settings/email-templates/invite/${loc}`, {
+          method: 'DELETE',
+        }).catch(() => undefined)
+      }
     }
   })
 
@@ -165,7 +202,9 @@ test.describe('inbound mail (IMAP)', () => {
       )
 
       await page.getByRole('button', { name: 'Test connection' }).click()
-      await expect(page.getByText('Connection failed')).toBeVisible({ timeout: 30_000 })
+      await expect(page.getByText('Connection failed')).toBeVisible({
+        timeout: 30_000,
+      })
       await page.getByRole('button', { name: 'Fetch now' }).click()
       // The connection error comes back as a warning toast.
       await expect(page.locator('.toast[data-tone="warn"]').first()).toBeVisible({

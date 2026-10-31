@@ -20,7 +20,13 @@ import {
  * answers 401 to a guest and 403 to a non-admin. COVERAGE.b.md maps each
  * route to these tests. */
 
-type Ids = { user: number; group: number; mail: number; inbox: number; sso: string }
+type Ids = {
+  user: number
+  group: number
+  mail: number
+  inbox: number
+  sso: string
+}
 
 /** [route name, path] - the path takes the ids seeded in beforeAll. */
 const ROUTES: Array<[string, (ids: Ids) => string]> = [
@@ -123,7 +129,23 @@ test.beforeAll(async () => {
     method: 'POST',
     body: JSON.stringify({ name: `Sweep group ${s}`, description: '' }),
   })
-  const mails = await api<{ items: Array<{ id: number }> }>('/api/admin/mail-log')
+  // A mail-log row of its own: an invitation to a unique address.
+  const invitee = `sweep-${s}@e2e.local`
+  await api('/api/account/invite', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: invitee,
+      target_role: 'client',
+      display_name_hint: 'Sweep',
+    }),
+  })
+  let mails: { items: Array<{ id: number }> } = { items: [] }
+  await expect
+    .poll(async () => {
+      mails = await api(`/api/admin/mail-log?recipient_email=${encodeURIComponent(invitee)}`)
+      return mails.items.length
+    })
+    .toBe(1)
   const sso = await api<{ id: string }>('/api/admin/settings/sso/providers', {
     method: 'POST',
     body: JSON.stringify({
@@ -166,6 +188,15 @@ test.describe('as the admin', () => {
       expectClean(w)
     })
   }
+
+  test('the user menu leads to the admin console', async () => {
+    const page = await ctx.newPage()
+    await page.goto('/inbox')
+    await page.getByRole('button', { name: 'Menu' }).click()
+    await page.getByRole('menuitem', { name: 'Admin' }).click()
+    await expect(page).toHaveURL(/\/admin$/)
+    await page.close()
+  })
 
   test('/admin/settings redirects to General', async () => {
     const page = await ctx.newPage()
@@ -239,10 +270,12 @@ for (const role of ['client', 'employee'] as const) {
       }
     })
 
-    test(`the sidebar shows no admin link to a ${role}`, async () => {
+    test(`the user menu offers no Admin item to a ${role}`, async () => {
       const page = await ctx.newPage()
-      await page.goto('/')
-      await expect(page.getByRole('link', { name: /^admin$/i })).toHaveCount(0)
+      await page.goto('/inbox')
+      await page.getByRole('button', { name: 'Menu' }).click()
+      await expect(page.getByRole('menuitem', { name: 'Account' })).toBeVisible()
+      await expect(page.getByRole('menuitem', { name: 'Admin' })).toHaveCount(0)
       await page.close()
     })
   })

@@ -158,7 +158,7 @@ class Host:
 
 def bump_db_and_redis(s):
     s["db"]["image"] = "mariadb:12.3.3"
-    s["redis"]["image"] = "redis:8.10.2-alpine3.23"
+    s["redis"]["image"] = "redis:8.10.3-alpine3.23"
 
 
 @pytest.fixture
@@ -176,7 +176,7 @@ def test_behind_with_new_images_plans_exactly_those_services_and_a_fast_forward(
     plan = host.plan()
     assert plan.skip_reason is None
     assert plan.services == ["db", "redis"]
-    assert plan.images == {"db": "mariadb:12.3.3", "redis": "redis:8.10.2-alpine3.23"}
+    assert plan.images == {"db": "mariadb:12.3.3", "redis": "redis:8.10.3-alpine3.23"}
     assert plan.ff_commit == sha
     # an image bump is not also reported as a definition change
     assert plan.reasons["db"] == "image mariadb:11.8.3 -> mariadb:12.3.3"

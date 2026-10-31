@@ -150,7 +150,7 @@ trap loader_down EXIT
 echo "[restore] loading redis snapshot with AOF disabled …"
 docker rm -f -v "$REDIS_LOADER" >/dev/null 2>&1 || true
 docker run -d --rm --name "$REDIS_LOADER" \
-    -v "$ROOT/data/redis":/data redis:8.10.2-alpine3.23 \
+    -v "$ROOT/data/redis":/data redis:8.10.3-alpine3.23 \
     redis-server --appendonly no > /dev/null
 
 # Wait for DBSIZE to return an INTEGER, not for the socket to answer. redis-cli

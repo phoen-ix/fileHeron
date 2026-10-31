@@ -19,13 +19,15 @@ beforeEach(() => {
 })
 
 const uppyCalls = { addFile: 0, upload: 0, meta: [] as unknown[] }
+const uppyOn: Record<string, (...args: unknown[]) => void> = {}
 vi.mock('@uppy/tus', () => ({ default: class {} }))
 vi.mock('@uppy/core', () => ({
   default: class FakeUppy {
     use() {
       return this
     }
-    on() {
+    on(event: string, fn: (...args: unknown[]) => void) {
+      uppyOn[event] = fn
       return this
     }
     addFile(f: { meta: unknown }) {
@@ -35,7 +37,7 @@ vi.mock('@uppy/core', () => ({
     }
     removeFile() {}
     getFile() {
-      return null
+      return { meta: uppyCalls.meta.at(-1) }
     }
     getFiles() {
       return []
@@ -109,7 +111,11 @@ describe('useUpload direct-vs-TUS threshold', () => {
 
     expect(initUpload).toHaveBeenCalledTimes(1)
     expect(initUpload).toHaveBeenCalledWith(
-      expect.objectContaining({ share_id: 'share-1', filename: 'big.bin', size_bytes: 100 * MB + 1 }),
+      expect.objectContaining({
+        share_id: 'share-1',
+        filename: 'big.bin',
+        size_bytes: 100 * MB + 1,
+      }),
     )
     expect(directUpload).not.toHaveBeenCalled()
     expect(uppyCalls.addFile).toBe(1)
@@ -133,6 +139,37 @@ describe('useUpload direct-vs-TUS threshold', () => {
     expect(uppyCalls.addFile).toBe(2)
     expect(uppyCalls.meta[1]).toEqual(uppyCalls.meta[0])
     expect(item.fileId).toBe('fid-tus')
+    wrapper.unmount()
+  })
+
+  it('a Retry after the server refused the envelope registers the file afresh', async () => {
+    // pre-create refuses an expired envelope or a row the stale sweep ended;
+    // no upload exists to resume, so only a new init can carry on.
+    const wrapper = mount(makeHost(ref('share-1')))
+    const u = wrapper.vm.u
+    u.add([fileOfSize('big.bin', 100 * MB + 1)])
+    await u.start()
+    const item = u.items.value[0]
+    uppyOn['upload-error']!(
+      { id: 'fake-id' },
+      new Error(
+        'tus: unexpected response while creating upload, originated from request (method: POST, ' +
+          'response code: 500, response text: ERR_INTERNAL_SERVER_ERROR: unexpected response code ' +
+          'from hook endpoint (403): {"error":"Upload authorisation expired.","code":"TUS_ENVELOPE_EXPIRED"})',
+      ),
+    )
+    expect(item.state).toBe('error')
+    initUpload.mockResolvedValueOnce({
+      data: { file_id: 'fid-tus-2', upload_metadata_header: 'meta-hdr-2' },
+    })
+    await u.retry(item.uid)
+
+    expect(initUpload).toHaveBeenCalledTimes(2)
+    expect(uppyCalls.meta[1]).toMatchObject({
+      fileId: 'fid-tus-2',
+      uploadMetadataHeader: 'meta-hdr-2',
+    })
+    expect(item.fileId).toBe('fid-tus-2')
     wrapper.unmount()
   })
 

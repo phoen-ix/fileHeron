@@ -178,6 +178,14 @@ export function useUpload(shareId: Ref<string | null>) {
     item.state = 'error'
     item.error = err?.message ?? null
     item.errorCode = 'UPLOAD_FAILED'
+    // tusd's pre-create refused the envelope (tusd relays the hook's reply in
+    // the response text): it expired (1 h) or its file row is no longer
+    // uploading (the stale sweep). No upload was created, so nothing can
+    // resume - the next Retry must register the file afresh.
+    if (/TUS_ENVELOPE_EXPIRED|FILE_RECORD_MISSING/.test(item.error ?? '')) {
+      item.fileId = null
+      item.resumable = undefined
+    }
     pushLog(item, 'error', { error: item.error ?? 'UPLOAD_FAILED' })
   })
 

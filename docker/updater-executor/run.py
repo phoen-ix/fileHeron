@@ -713,12 +713,14 @@ def pull_verified(ref: str) -> int:
     if not _signature_required():
         log_line(f"WARN image signature verification is switched off (EXECUTOR_REQUIRE_SIGNATURE); "
                  f"pulling {ref} by tag")
-        return _pull(ref)
+        return _pull(ref, quiet=True)
     digest = verify_image_signature(ref)
     if digest is None:
         return 1
     pinned = f"{ref.rsplit(':', 1)[0]}@{digest}"
-    rc = _pull(pinned)
+    # Quiet: five images' layer progress pushed the planning lines out of the
+    # 200-line job log, which is how the v2.29.0 tusd miss left no trace in it.
+    rc = _pull(pinned, quiet=True)
     if rc != 0:
         return rc
     return run_capture(["docker", "tag", pinned, ref])
@@ -1051,8 +1053,10 @@ def plan_infra(target_tag: str, opts: dict[str, bool | int], previous_tag: str) 
     the backup that must precede any change has not run yet.
 
     A service changes when its running image differs from the release's, when
-    its `compose config` definition differs, or when a checkout file it
-    bind-mounts is touched by the fast-forward. Compose's own recreate decision
+    its `compose config` definition differs, when the running container's
+    capabilities, read-only root or security options differ from the release's
+    (`_runtime_drift`), or when a checkout file it bind-mounts is touched by the
+    fast-forward. Compose's own recreate decision
     (the config-hash label) is never used: it already differs between host-
     and executor-created containers for identical definitions."""
     if not opts["infra_sync"]:
@@ -1154,6 +1158,9 @@ def plan_infra(target_tag: str, opts: dict[str, bool | int], previous_tag: str) 
             reasons.append(f"image {running or 'unknown'} -> {want}")
         if _definition(current_services.get(svc)) != _definition(new):
             reasons.append("its compose definition changed")
+        drift = _runtime_drift(cid, new)
+        if drift:
+            reasons.append("the running container differs: " + ", ".join(drift))
         files = sorted(_bind_files(new) & touched)
         if files:
             reasons.append("changed " + ", ".join(files))
@@ -1174,6 +1181,50 @@ def _definition(svc_cfg: object) -> str:
     if not isinstance(svc_cfg, dict):
         return json.dumps(svc_cfg)
     return json.dumps({k: v for k, v in svc_cfg.items() if k != "image"}, sort_keys=True)
+
+
+def _caps(values: object) -> list[str]:
+    """compose writes `CHOWN`, the daemon reports `CAP_CHOWN`; `ALL` stays `ALL`."""
+    if not isinstance(values, list):
+        return []
+    return sorted({str(v).upper().removeprefix("CAP_") for v in values})
+
+
+def _runtime_drift(cid: str, svc_cfg: dict) -> list[str]:
+    """Where the RUNNING container's security policy - capabilities, read-only
+    root, security options - differs from the release's definition.
+
+    The definition check compares two compose FILES, so it cannot see a
+    container created from an older file than the checkout holds: a checkout
+    already at the tag (pulled by hand, or a working copy) compares the release
+    with itself. That is how the v2.29.0 update left the reference host's tusd
+    on Docker's default capabilities. These keys are read back from the
+    container. A security option the daemon added is tolerated; one the release
+    asks for that the container lacks is drift. An unreadable answer is no
+    drift: the image check already treats an uninspectable container as drift."""
+    try:
+        hc = json.loads(_inspect(cid, "{{json .HostConfig}}") or "null")
+    except ValueError:
+        return []
+    if not isinstance(hc, dict):
+        return []
+
+    def show(caps: list[str]) -> str:
+        return ",".join(caps) or "none"
+
+    drift = []
+    for key, field in (("cap_drop", "CapDrop"), ("cap_add", "CapAdd")):
+        want, have = _caps(svc_cfg.get(key)), _caps(hc.get(field))
+        if want != have:
+            drift.append(f"{key} {show(have)} -> {show(want)}")
+    want_ro, have_ro = bool(svc_cfg.get("read_only")), bool(hc.get("ReadonlyRootfs"))
+    if want_ro != have_ro:
+        drift.append(f"read_only {str(have_ro).lower()} -> {str(want_ro).lower()}")
+    have_opts = {str(o) for o in hc.get("SecurityOpt") or []}
+    missing = sorted({str(o) for o in svc_cfg.get("security_opt") or []} - have_opts)
+    if missing:
+        drift.append("security_opt lacks " + ", ".join(missing))
+    return drift
 
 
 def fast_forward_checkout(plan: InfraPlan, target_tag: str) -> bool:

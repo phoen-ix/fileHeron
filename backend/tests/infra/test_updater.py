@@ -1068,3 +1068,28 @@ def test_every_release_image_is_signed_by_the_workflow():
     assert any("boot_smoke == true" in c for c in conditions), "the boot-smoked backend is not signed"
     for job in ("gate", "publish-latest", "release"):
         assert "id-token" not in wf["jobs"][job].get("permissions", {}), f"{job} does not sign"
+
+
+def test_latest_is_the_signed_manifest_itself_and_the_release_proves_it():
+    """`:latest` must carry the version tag's DIGEST, or no signature covers it.
+    With one single-platform source - the boot-smoked backend is a plain
+    `docker push` - `imagetools create` wraps it in a new one-entry index by
+    default: v2.29.0's backend `:latest` answered `cosign verify` with "no
+    signatures found" while serving the signed bytes. `--prefer-index=false` is
+    a carbon copy (reproduced against a local registry on 2026-10-31), and the
+    job verifies every `:latest` before the release that gates on it."""
+    import yaml
+
+    wf = yaml.safe_load((ROOT / ".github" / "workflows" / "server-release.yml").read_text(encoding="utf-8"))
+    job = wf["jobs"]["publish-latest"]
+    runs = [str(s.get("run", "")) for s in job["steps"]]
+    creates = [r for r in runs if "imagetools create" in r]
+    assert creates, "publish-latest no longer moves :latest with imagetools"
+    for r in creates:
+        assert "--prefer-index=false" in r, "imagetools create would re-wrap a single manifest"
+    names = [str(s.get("name", "")) + str(s.get("uses", "")) for s in job["steps"]]
+    move = next(i for i, r in enumerate(runs) if "imagetools create" in r)
+    verify = next(i for i, r in enumerate(runs) if "cosign verify" in r and ':latest"' in r)
+    assert move < verify, ":latest is verified before it is moved"
+    assert any(n.startswith("sigstore/cosign-installer@") for n in names[:verify])
+    assert "publish-latest" in wf["jobs"]["release"]["needs"]

@@ -7,7 +7,15 @@ summary and points here. Read this before changing the code listed below.
 
 ## Current state
 
-Backend **`v2.29.0`** is the newest tag (2026-10-30): the updater audit - every published
+Backend **`v2.29.1`** is the newest tag (2026-10-31): the infra sync also reads each
+infra container's capabilities, read-only root and security options back from Docker and
+recreates one that differs from the release (`_runtime_drift`) - the file-to-file
+definition check compared the release with itself on a checkout already at the tag, which
+left the reference host's tusd on default capabilities through the v2.29.0 update; the
+backend `:latest` is a carbon copy of the signed manifest (`--prefer-index=false`) and the
+release verifies every `:latest`; app-image pulls are quiet so the plan stays in the
+200-line job log. No migration, no host step, no default move.
+**`v2.29.0`** (2026-10-30): the updater audit - every published
 image is cosign-signed and the shim verifies the executor image (and the executor the app
 images) before running anything, by digest; the shim refuses an update to an older version
 than the daemon reports and binds a rollback to the version it recorded in the new root-owned
@@ -96,8 +104,9 @@ no test mounted AdminLayout); v2.17.2 is that one-line fix plus
 (a manual Update from v2.28.0, 2026-10-30 22:55 UTC: the new executor verified
 every image's signature and recreated db, redis and clamav onto the digest pins;
 tusd kept its old container, without the capability drop, because the checkout
-was already at the tag, so the definition check compared the file with itself;
-encryption at rest is off there). v2.26.0 and later are MINOR
+was already at the tag, so the definition check compared the file with itself -
+recreated by hand on 2026-10-31, and the reason for v2.29.1; encryption at rest is
+off there). v2.26.0 and later are MINOR
 releases, which the default patch scope never installs - they wait for a click on
 Update. The working tree's `scripts/` are live there
 as always. Its infra has been on `mariadb:12.3.3` /
@@ -159,6 +168,7 @@ record.
 | v2.27.2 | - | - | - (security patch: Pillow 13.0.0 and certifi 2026.10.23 in the backend; images on python 3.14.9, nginx 1.31.8, alpine 3.24.3) |
 | v2.28.0 | - | - | - (Python 3.15.1 in the backend, worker and updater-executor images; the backend image builds hiredis and PyYAML in a `deps` stage and its runtime stage stays compiler-free. Desktop `client-v1.6.0` tagged beside it: Python 3.15, Windows 10 or newer) |
 | v2.29.0 | - | - where the updater fast-forwards the checkout (the executor recreates the shim with its new definition - the `/private` mount, `cap_drop`, `read_only`, `tmpfs` - at the end of the update). Where it SKIPS (dirty or diverged checkout, override file, `COMPOSE_FILE`, infra sync off): `git pull && docker compose up -d --no-deps updater-shim` afterwards; until then the shim verifies signatures but does not bind rollbacks, and says so once. The update recreates **all four infra services** - their compose definition changed (`cap_drop`/`cap_add`), and db, redis and clamav also run older builds than the pinned digests on most hosts - db and redis with the app stopped and the forced DB backup; the update TO v2.29.0 is supervised by the old shim (no verification) and runs the new executor (verifies the app images) | **image signature verification ON** (`SHIM_REQUIRE_SIGNATURE=false` is the fork opt-out; `SHIM_SIGNER_IDENTITY_RE` for a renamed repository). The shim refuses an update below the running version (`downgrade refused`) and a rollback to anything but the version it recorded in `data/updater-private/` (`rollback refused`; the first rollback after v2.29.0 has no record and is warned, not refused). Infra images pinned `tag@sha256` (a Dependabot digest bump is an infra recreate on the next update, like a tag bump). Shim `mem_limit` default 128m → 256m (cosign). **Every service drops all Linux capabilities** (`cap_drop: [ALL]`) and adds back the measured minimum of its image's root phase: db `CHOWN, DAC_READ_SEARCH, SETGID, SETUID`; redis those plus `FOWNER`; clamav `CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID`; frontend `CHOWN, NET_BIND_SERVICE, SETGID, SETUID`; backend/worker/tusd nothing. `GET /api/admin/system/update-jobs/{id}` caps `log_tail` at 200 × 2,000 chars and the free-text fields at 500 |
+| v2.29.1 | - | - (a patch: automatic updates install it. The executor recreates any infra container whose running `CapDrop`/`CapAdd`/`ReadonlyRootfs`/`SecurityOpt` differs from the release - nothing on an install that updated to v2.29.0 normally; tusd where the checkout was already at v2.29.0 before that update) | - (the backend `:latest` is now the signed manifest itself; app-image pulls run `docker pull -q`) |
 
 Per-release admin-facing notes for v2.13.0 and newer are in `RELEASE_NOTES.md`,
 one `# file:Heron vX.Y.Z` section each, newest first; older releases live in

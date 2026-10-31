@@ -1,3 +1,36 @@
+# file:Heron v2.29.1
+
+**A fix to the v2.29.0 update: the updater now recreates an infrastructure
+container that does not carry the release's security settings.** v2.29.0 made
+every service drop all Linux capabilities. The updater decided which of the
+database, Redis, ClamAV and tusd to recreate by comparing the compose file in
+the checkout with the release's - so on an install whose checkout already held
+the new file before the update (pulled by hand, or a checkout that is also a
+working copy), it compared the release with itself, and a container whose
+image had not changed kept its old settings. On the reference install that was
+tusd, still running with Docker's default capabilities after the update. The
+updater now also reads each of those containers' capabilities, read-only root
+and security options back from Docker and recreates the ones that differ from
+the release, wherever the checkout is.
+
+**`:latest` now verifies like the version tags.** Moving `:latest` re-wrapped
+the backend image in a new index, so `cosign verify
+ghcr.io/phoen-ix/fileheron-backend:latest` answered "no signatures found" even
+though it served the signed image. `:latest` is now the signed image itself,
+and the release workflow verifies all five `:latest` images before it publishes
+a release. The updater never used `:latest`, so updates were not affected.
+
+## On this update
+
+- A patch release: automatic updates install it. No migration, no host step,
+  no default change.
+- An install that went to v2.29.0 the normal way recreates nothing. One whose
+  checkout already held the v2.29.0 compose file recreates the containers that
+  missed the capability settings - usually just tusd, a few seconds, and
+  uploads in progress resume.
+- The update's job log no longer fills with image download progress, so the
+  lines saying what the updater decided stay in it.
+
 # file:Heron v2.29.0
 
 **The updater now checks who built an image before it runs it.** Every server

@@ -76,6 +76,9 @@ class Host:
         self.missing: set[str] = set()
         # RepoDigests of a running image, keyed by what `_inspect` answers.
         self.digests: dict[str, list[str]] = {}
+        # `docker inspect`'s HostConfig per service; absent = created with no
+        # capability, read-only or security option, like base_config.
+        self.hostcfg: dict[str, dict] = {}
         monkeypatch.setattr(executor, "_compose_config", self._compose_config)
         monkeypatch.setattr(executor, "_container_id", self._container_id)
         monkeypatch.setattr(executor, "_inspect", self._inspect)
@@ -91,8 +94,12 @@ class Host:
     def _container_id(self, svc):
         return None if svc in self.missing else f"cid-{svc}"
 
-    def _inspect(self, cid, _fmt):
-        return self.running.get(cid.removeprefix("cid-"))
+    def _inspect(self, cid, fmt):
+        svc = cid.removeprefix("cid-")
+        if fmt == "{{json .HostConfig}}":
+            return json.dumps(self.hostcfg.get(svc, {"CapDrop": None, "CapAdd": None,
+                                                     "ReadonlyRootfs": False, "SecurityOpt": None}))
+        return self.running.get(svc)
 
     # --- repo helpers ---
     def init(self, where: Path | None = None) -> str:
@@ -202,13 +209,81 @@ def test_an_initdb_script_change_does_not_recreate_a_running_database(host):
     assert plan.ff_commit is not None, "the checkout still fast-forwards"
 
 
-def test_at_the_tag_only_image_drift_counts(host):
+def test_at_the_tag_image_drift_counts(host):
     """The operator pulled the release by hand but never ran `up`."""
     host.init()
     host.release(bump_db_and_redis, stay=True)
     plan = host.plan()
     assert plan.ff_commit is None
     assert plan.services == ["db", "redis"]
+
+
+def drop_all_caps_on_tusd(s):
+    s["tusd"]["cap_drop"] = ["ALL"]
+
+
+def test_at_the_tag_a_running_container_without_the_release_caps_is_recreated(host):
+    """The v2.29.0 miss: the checkout was already at the tag, so the file-to-file
+    definition check compared the release with itself, tusd's image matched its
+    pin, and tusd kept Docker's default capabilities through the update."""
+    host.init()
+    host.release(drop_all_caps_on_tusd, stay=True)
+    plan = host.plan()
+    assert plan.ff_commit is None
+    assert plan.services == ["tusd"]
+    assert plan.reasons["tusd"] == "the running container differs: cap_drop none -> ALL"
+
+
+def test_behind_a_caps_change_reports_the_definition_and_the_running_container(host):
+    host.init()
+    host.release(drop_all_caps_on_tusd)
+    plan = host.plan()
+    assert plan.services == ["tusd"]
+    assert plan.reasons["tusd"] == ("its compose definition changed; "
+                                    "the running container differs: cap_drop none -> ALL")
+
+
+# The shape `docker inspect` reports for a container compose created from
+# docker-compose.yml's db policy, read off the reference host on 2026-10-31.
+_DB_POLICY = {"cap_drop": ["ALL"], "cap_add": ["CHOWN", "DAC_READ_SEARCH", "SETGID", "SETUID"],
+              "security_opt": ["no-new-privileges:true"]}
+_DB_RUNNING = {"CapDrop": ["ALL"], "CapAdd": ["CAP_CHOWN", "CAP_DAC_READ_SEARCH", "CAP_SETGID", "CAP_SETUID"],
+               "ReadonlyRootfs": False, "SecurityOpt": ["no-new-privileges:true"]}
+
+
+def test_a_container_already_on_the_release_policy_is_not_drift(executor):
+    """The daemon spells capabilities CAP_X; compose writes X. A false positive
+    here recreates the database - stop, forced backup, downtime - on EVERY update."""
+    executor._inspect = lambda _c, _f: json.dumps(_DB_RUNNING)
+    assert executor._runtime_drift("cid", _DB_POLICY) == []
+
+
+@pytest.mark.parametrize(("running", "drift"), [
+    ({**_DB_RUNNING, "CapAdd": ["CAP_CHOWN", "CAP_SETGID", "CAP_SETUID"]},
+     ["cap_add CHOWN,SETGID,SETUID -> CHOWN,DAC_READ_SEARCH,SETGID,SETUID"]),
+    ({**_DB_RUNNING, "CapAdd": [*_DB_RUNNING["CapAdd"], "CAP_SYS_ADMIN"]},
+     ["cap_add CHOWN,DAC_READ_SEARCH,SETGID,SETUID,SYS_ADMIN -> CHOWN,DAC_READ_SEARCH,SETGID,SETUID"]),
+    ({**_DB_RUNNING, "CapDrop": None, "CapAdd": None},
+     ["cap_drop none -> ALL", "cap_add none -> CHOWN,DAC_READ_SEARCH,SETGID,SETUID"]),
+    ({**_DB_RUNNING, "ReadonlyRootfs": True}, ["read_only true -> false"]),
+    ({**_DB_RUNNING, "SecurityOpt": None}, ["security_opt lacks no-new-privileges:true"]),
+])
+def test_each_policy_key_is_read_from_the_running_container(executor, running, drift):
+    executor._inspect = lambda _c, _f: json.dumps(running)
+    assert executor._runtime_drift("cid", _DB_POLICY) == drift
+
+
+def test_a_security_option_the_daemon_added_is_not_drift(executor):
+    executor._inspect = lambda _c, _f: json.dumps({**_DB_RUNNING, "SecurityOpt": [
+        "no-new-privileges:true", "label=disable"]})
+    assert executor._runtime_drift("cid", _DB_POLICY) == []
+
+
+@pytest.mark.parametrize("answer", [None, "", "not json", "[]"])
+def test_an_unreadable_host_config_is_not_drift(executor, answer):
+    executor._inspect = lambda _c, _f: answer
+    assert executor._runtime_drift("cid", _DB_POLICY) == []
+
 
 
 def test_ahead_without_infra_changes_syncs_from_the_checkout(host):
@@ -816,7 +891,7 @@ def test_an_app_image_is_pulled_by_its_verified_digest_and_tagged(executor, monk
     monkeypatch.setattr(executor, "run_capture", lambda cmd, env=None: calls.append(cmd) or 0)
     assert executor.pull_verified("ghcr.io/o/fileheron-backend:v1.2.3") == 0
     assert calls == [
-        ["docker", "pull", "ghcr.io/o/fileheron-backend@sha256:" + "ab" * 32],
+        ["docker", "pull", "-q", "ghcr.io/o/fileheron-backend@sha256:" + "ab" * 32],
         ["docker", "tag", "ghcr.io/o/fileheron-backend@sha256:" + "ab" * 32, "ghcr.io/o/fileheron-backend:v1.2.3"],
     ]
 
@@ -835,7 +910,7 @@ def test_the_signature_opt_out_pulls_by_tag_with_a_warning_in_the_job_log(execut
     calls: list[list[str]] = []
     monkeypatch.setattr(executor, "run_capture", lambda cmd, env=None: calls.append(cmd) or 0)
     assert executor.pull_verified("ghcr.io/o/fileheron-backend:v1.2.3") == 0
-    assert calls == [["docker", "pull", "ghcr.io/o/fileheron-backend:v1.2.3"]]
+    assert calls == [["docker", "pull", "-q", "ghcr.io/o/fileheron-backend:v1.2.3"]]
     assert any("WARN image signature verification is switched off" in line
                for line in json.loads(executor.STATE_FILE.read_text())["log_tail"])
 

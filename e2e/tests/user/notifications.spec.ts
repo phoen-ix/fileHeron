@@ -22,7 +22,8 @@ test('the bell lights up live for a new share, opens it, and clears', async ({ p
   await signIn(page, to)
   await page.goto('/inbox')
   const bell = page.getByRole('button', { name: 'Notifications' })
-  await expect(bell).toBeVisible()
+  // Signing in from a new device leaves its alert in the bell.
+  await expect(bell.locator('.bell-badge')).toHaveText('1')
 
   const share = await createShare(await tokenOf(sender), {
     users: [to.id],
@@ -30,7 +31,7 @@ test('the bell lights up live for a new share, opens it, and clears', async ({ p
     files: { 'ring.txt': 'ring' },
   })
   // Pushed over SSE: no reload.
-  await expect(bell.locator('.bell-badge')).toHaveText('1', { timeout: ANNOUNCED_WITHIN })
+  await expect(bell.locator('.bell-badge')).toHaveText('2', { timeout: ANNOUNCED_WITHIN })
   await bell.click()
   const pop = page.getByRole('region', { name: 'Notifications' })
   await pop.getByText(`${sender.name} sent you 1 file.`).click()

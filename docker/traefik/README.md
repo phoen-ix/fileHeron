@@ -282,7 +282,7 @@ providers:
 - [ ] `curl https://files.example.com/api/internal/tus-hooks` → 404
 - [ ] `curl -I https://files.example.com/` → `Strict-Transport-Security`
       **only if you added the headers middleware below.** Neither the sample
-      `dynamic.yml` in README.md nor the frontend nginx emits HSTS, so this
+      `dynamic.yml` in docs/operator-guide.md nor the frontend nginx emits HSTS, so this
       check failed on a correctly-installed stack until you add it
       (audit 2026-07-30):
 

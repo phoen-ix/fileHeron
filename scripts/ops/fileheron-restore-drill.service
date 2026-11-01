@@ -1,5 +1,5 @@
 # fileHeron end-to-end backup restore drill (oneshot, driven by the .timer).
-# Install: see scripts/ops/README or the main README "Backups & Restore".
+# Install: see docs/operator-guide.md "Restore".
 #   sudo cp scripts/ops/fileheron-restore-drill.{service,timer} /etc/systemd/system/
 #   sudo systemctl daemon-reload && sudo systemctl enable --now fileheron-restore-drill.timer
 #

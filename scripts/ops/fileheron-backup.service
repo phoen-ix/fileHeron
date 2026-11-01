@@ -1,5 +1,5 @@
 # fileHeron nightly backup (oneshot, driven by the .timer).
-# Install: see the main README "Backups & Restore". Adapt User=/paths to your
+# Install: see docs/operator-guide.md "Backups" and "Restore". Adapt User=/paths to your
 # deployment (these match the reference install at /opt/fileHeron).
 #   sudo cp scripts/ops/fileheron-backup.{service,timer} /etc/systemd/system/
 #   sudo systemctl daemon-reload && sudo systemctl enable --now fileheron-backup.timer

@@ -191,6 +191,29 @@ def test_too_little_space_refuses_before_anything_is_written(db, row, monkeypatc
     assert _queue(db) == []
 
 
+def test_the_free_space_floor(db, monkeypatch):
+    """Refuse when the rewrite would leave less than the floor free; pass when
+    it leaves exactly the floor. The floor is set here, not taken from conftest."""
+    from app.services import settings as settings_svc
+    from app.services import storage
+
+    floor, needed = 10_000, 500
+    settings_svc.set_value(db, key=settings_svc.Keys.STORAGE_LOW_THRESHOLD_BYTES, value=str(floor), actor=None)
+    db.commit()
+    backend = sb.get_storage_backend()
+    assert backend.supports_disk_stats
+
+    def free(n):
+        monkeypatch.setattr(storage, "get_disk_stats", lambda _p: {"free_bytes": n, "total_bytes": 10**9,
+                                                                   "used_bytes": 0, "percent_free": 50.0})
+
+    free(floor + needed - 1)
+    with pytest.raises(fe.InsufficientSpaceError):
+        fe.check_space(db, backend, needed)
+    free(floor + needed)
+    fe.check_space(db, backend, needed)
+
+
 def test_critically_low_storage_refuses(db, row):
     from app.services import settings as settings_svc
 

@@ -82,6 +82,11 @@ os.environ.setdefault("MAX_DIRECT_UPLOAD_BYTES", "104857600")
 os.environ["STORAGE_ROOT"] = "/tmp/fileheron-test/files"
 os.environ["TUS_UPLOAD_DIR"] = "/tmp/fileheron-test/uploads"
 os.environ["QUARANTINE_DIR"] = "/tmp/fileheron-test/quarantine"
+# FORCED too: an encryption rewrite refuses to leave less than this free on
+# STORAGE_ROOT (`file_encryption.check_space`), and with the 10 GiB default some
+# 30 encryption tests passed or failed on how full the host's /tmp was.
+# `test_encryption_swap_engine.py::test_the_free_space_floor` pins the guard.
+os.environ["STORAGE_LOW_THRESHOLD_BYTES"] = str(1024**2)
 os.environ.setdefault("TUS_PUBLIC_BASE", "/uploads/")
 
 import pytest

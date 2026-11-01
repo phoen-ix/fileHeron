@@ -12,7 +12,7 @@ Auto-detect and temporarily block scanning sources. Admin page "Blocked sources"
 and `/admin/settings/scan-guard` (POLICY, labelled "Auto-block rules (Scan
 guard)"). The state page is the item and the guard is its tab, deliberately: the
 guard ships OFF and the blocks page is the one an operator opens in an incident.
-→ README §Scan guard for the operator view.
+→ `docs/admin-guide.md` §Scan guard for the operator view.
 
 **It is the only control in this product that DENIES service, so it ships OFF**
 (`scan_guard.enabled` default false) and is defined by what it refuses to do.

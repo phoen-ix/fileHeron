@@ -7,7 +7,7 @@ summary and points here. Read this before changing the code listed below.
 
 ## Uploads
 
-→ README §Upload pipeline for the diagram. Flow: `POST /api/uploads/init` (HMAC
+→ `docs/developer-guide.md` §Upload pipeline for the diagram. Flow: `POST /api/uploads/init` (HMAC
 envelope, `files` row `state=uploading`) → tusd `POST /uploads/` with
 `Upload-Metadata: fh_payload + fh_sig` → pre-create hook → post-finish hook
 finalises into `./data/files/yyyy/mm/<uuid>.bin`, `state=ready_unscanned`,

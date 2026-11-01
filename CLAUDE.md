@@ -4,7 +4,7 @@
 
 A self-hosted, bidirectional file-sharing platform. Single org, three flat roles (admin · employee · client), files up to 30 GB, time-limited shares, optional public links (token + password + download-count limit).
 
-Source of truth for Claude Code sessions: **non-obvious invariants + pointers**, organised by SUBSYSTEM. `README.md` is the human manual, `RELEASE_NOTES.md` the per-release notes, `git log` the feature history - don't re-document here what those own; keep this to what would cause a wrong move if unknown.
+Source of truth for Claude Code sessions: **non-obvious invariants + pointers**, organised by SUBSYSTEM. `README.md` + `docs/*-guide.md` + `docs/configuration.md` are the human manual, `RELEASE_NOTES.md` the per-release notes, `git log` the feature history - don't re-document here what those own; keep this to what would cause a wrong move if unknown.
 
 How this file was trimmed and split, and why it stays short: [`docs/history.md`](docs/history.md).
 
@@ -14,7 +14,10 @@ How this file was trimmed and split, and why it stays short: [`docs/history.md`]
 |---|---|
 | `CLAUDE.md` (this file) | every Claude Code session: cross-cutting rules, and which deep dive to read before changing an area |
 | `docs/engineering/*.md` | anyone changing code in that area, Claude sessions included: the invariants and the reasons for them (§Per area) |
-| `README.md` | users, admins and operators: what the product does, install, configure, operate; the developer walkthrough at its end |
+| `README.md` | everyone: the overview - what the product does, quickstart, architecture, tech stack, tests/E2E/screenshots, coding conventions; one-line summaries linking to the guides |
+| `docs/user-guide.md`, `docs/admin-guide.md`, `docs/operator-guide.md` | users, admins, operators: the per-page manuals, install, operate |
+| `docs/configuration.md` | operators and admins: the settings reference (env vars, runtime settings, per-user preferences) |
+| `docs/developer-guide.md` | developers: the human walkthrough (code layout, request flow, uploads, workers, migrations) |
 | `CONTRIBUTING.md` | contributors: dev setup and the gates to run before pushing |
 | `SECURITY.md` | vulnerability reporters: supported versions, how to report, scope |
 | `RELEASE_NOTES.md` | admins upgrading the server: one section per release, newest first |

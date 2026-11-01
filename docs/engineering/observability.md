@@ -8,7 +8,7 @@ summary and points here. Read this before changing the code listed below.
 ## Error log + alerts + CSP
 
 Browsable server-error log + (separately) email alerts. Admin page "Errors & alerts" (System):
-tabs `/admin/error-log` (Log) and `/admin/settings/error-alerts` (Alerts). → README §Error log & alerts.
+tabs `/admin/error-log` (Log) and `/admin/settings/error-alerts` (Alerts). → `docs/admin-guide.md` §Error log & alerts.
 
 - **Log ≠ alert (decoupled).** The `notify_admin_error` ARQ job → `error_alert.handle_error_event` **LOGS first** (`services/error_log.py::record`) then runs the alert saferails. `error_log.enabled` (default **true**, 5xx + cron failures) is independent of `error_alert.enabled` (default **false**, emails); cooldown/hourly-cap/dedup-signature govern **emails only**. Don't re-couple them.
 - **Worker-source alerting has a GLOBAL default (`error_alert.source_worker`, true) plus the per-task `cron.<name>.alert_on_failure` override, and the per-task flag wins either way.** The per-task flag used to be the only control and defaults OFF, so the settings page read "alerting enabled" while every worker failure went unreported. `cron_schedule.effective` reads the SAME default so the Scheduled-tasks page cannot render every task "off" on a page whose failures do alert. **`source_worker` is optional on the PUT (`None` = leave unchanged)** - a newly-required field 422s any client one release behind, the same reasoning `APIBaseModel` keeps `extra="ignore"` for.

@@ -7,7 +7,7 @@ summary and points here. Read this before changing the code listed below.
 
 ## Shares
 
-→ README §Sending/Receiving/Managing a share for the feature surface.
+→ `docs/user-guide.md` §Sending/Receiving/Managing a share for the feature surface.
 
 - **Lifecycle:** `active → expired | revoked | deleted`; state pills stay visible after bytes are gone. `GET /api/shares` is paginated/sortable/filterable; rows render `effective_subject` (the file name when the subject is blank). **Default SPA list filter is `state=active`** - a recently-revoked share missing from the list is the filter, not a bug.
 - **Recipients** `share_recipients` per (share, user OR group). Group visibility is **dynamic** - `is_authorized_to_download` joins memberships at query time, so removing a member instantly revokes access to past shares. **Connections** (`client_employee_connections`): `invite` source (sticky) + `shared_group` source (dynamic); ACL = OR. Two clients sharing a group do **not** connect. Group deletion → `409 GROUP_IN_USE` if recipient of an active share.
@@ -32,7 +32,7 @@ than detail shows a fully privileged viewer.
 ### Share approval / four-eyes
 
 `services/share_approval.py`, state `pending_approval`, SPA `/approvals`.
-→ README §Share approval for the operator view.
+→ `docs/user-guide.md` §Share approval for the operator view.
 
 - Approver-mode default is **admins_only** (deliberately diverges from `policy_gate`'s permissive `everyone` default - resolved locally, not via the shared gate).
 - **No self-approval, ever** - `can_decide` refuses `user.id == share.created_by_id` even for admins. `decide_added_files` repeats the check in the same ORDER (`can_approve` → self → state): an ordinary employee hits `FORBIDDEN` one check earlier, so a test asserting `SELF_APPROVAL` must use an approver as the creator.

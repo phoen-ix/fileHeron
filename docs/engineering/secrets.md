@@ -10,7 +10,7 @@ summary and points here. Read this before changing the code listed below.
 `services/secret.py` (policy, create, list, end) + `services/secret_reveal.py`
 (reveal); routers `secrets.py`, `public_secrets.py` (ungated, like `public.py`),
 `admin/secrets.py`, `admin/settings/secrets.py`; SPA `/secrets`, `/secrets/new`,
-`/secrets/:id`, public `/s`. Ships OFF (`secrets.enabled`). → README §Secrets for
+`/secrets/:id`, public `/s`. Ships OFF (`secrets.enabled`). → `docs/user-guide.md` §Secrets for
 the feature surface.
 
 - **The text is readable in exactly ONE place: the reveal response** (`POST /api/secrets/{id}/reveal`, `POST /api/public/secrets/reveal`, both `no-store`). Everything else is built from metadata; `tests/test_secret_no_leak.py` plants a canary and scans every table, log line, webhook, mail and response - extend it, never narrow it.

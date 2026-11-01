@@ -7,7 +7,7 @@ summary and points here. Read this before changing the code listed below.
 
 ## Antivirus
 
-→ README §Quarantine for the admin view.
+→ `docs/admin-guide.md` §Quarantine for the admin view.
 
 - ClamAV = separate compose service: read-only `./data/files`, read-write `./data/quarantine`; signature DB in `clamav-defs` volume. `enqueue("av_scan_file", file_id)` from post-finish + direct upload; ARQ `scan_path` over TCP to clamd (shared mount → zero copy).
 - **State machine:** `uploading → ready_unscanned → clean | infected → deleted`. Download codes: `425 SCAN_IN_PROGRESS`, `410 FILE_INFECTED`, `410 FILE_DELETED`.

@@ -7,7 +7,7 @@ summary and points here. Read this before changing the code listed below.
 
 ## Ops: deploy, rollback, backups, drills
 
-→ README §Backups & Restore and §Upgrades for the procedures (`scripts/backup.sh` →
+→ `docs/operator-guide.md` §Backups, §Restore and §Upgrades for the procedures (`scripts/backup.sh` →
 `./backups/<stamp>/{db.sql, files.tar.gz, quarantine.tar.gz, redis.rdb, manifest.txt}`,
 optional restic; `scripts/restore.sh` sha256-verifies + prompts a literal `restore`).
 The invariants that keep them true:

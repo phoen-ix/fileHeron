@@ -7,7 +7,7 @@ summary and points here. Read this before changing the code listed below.
 
 ## Public links
 
-→ README §Public links.
+→ `docs/user-guide.md` §Public links.
 
 - Per-share singleton (`UNIQUE(share_id)`). Token = 43-char urlsafe-b64, stored as `token_hash` (SHA-256, public consume path) + `token_encrypted` (Fernet, for the owner-facing re-viewable URL). Legacy `token_encrypted=NULL` → SPA shows "revoke and re-create", which must keep working: a missing guard once turned it into an unhandled IntegrityError → 500, making the documented remedy impossible.
 - URL `/d/{token}` → SPA wraps `GET /api/public/{token}` (metadata) + `…/files/{id}/download`. **Password:** Argon2. `POST …/unlock` sets signed cookie `fh_dl_unlock` (HMAC under JWT_SECRET, path-scoped, lifetime min(24h, expires_at)).

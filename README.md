@@ -6,13 +6,17 @@
 [![CI](https://github.com/phoen-ix/fileHeron/actions/workflows/ci.yml/badge.svg)](https://github.com/phoen-ix/fileHeron/actions/workflows/ci.yml)
 ![self-hosted](https://img.shields.io/badge/self--hosted-Docker%20Compose-2496ED)
 
-A self-hosted, **bidirectional** file-sharing platform. A company shares files
-outbound to clients; clients send files inbound to specific employees or to a
-generic company inbox. Built for resumable transfers up to ~30 GB, group-based
-access control, time-limited shares, and optional public links protected by token +
-password + download-count limit. Single organisation, three flat roles (admin /
-employee / client); the same UI serves all three, with admin-only links hidden for
-the rest.
+A self-hosted, **bidirectional** file-sharing platform for one organisation. The
+company shares files outbound to clients; clients send files inbound to specific
+employees or to a generic company inbox.
+
+Built for resumable transfers up to ~30 GB, group-based access control,
+time-limited shares, and optional public links protected by token + password +
+download-count limit. Three flat roles (admin / employee / client) share the same
+UI, with admin-only links hidden for the rest.
+
+**Status:** actively developed; the badges above show the latest server and
+desktop-client releases ([release notes](RELEASE_NOTES.md)).
 
 <p align="center">
   <img src="docs/screenshots/share-page.png" alt="A share's page: its files with their antivirus verdicts and preview, download and delete actions, and the share's public link" width="880">
@@ -41,17 +45,9 @@ admin console included: [the screenshot gallery](docs/screenshots/README.md).**<
 
 ## Table of contents
 
-- [Quickstart](#quickstart) · [Architecture](#architecture) · [Tech stack](#tech-stack) · [Highlights](#highlights)
-- [**Using file:Heron** (end-user guide)](#using-fileheron-end-user-guide)
-  - [Logging in](#logging-in) · [Sending](#sending-a-share-sharenew) · [Receiving](#receiving-a-share-inbox) · [Managing shares](#managing-your-shares-outbox) · [Public links](#public-links-anonymous-recipients) · [Preview](#in-browser-preview) · [Share approval](#share-approval-four-eyes) · [Secrets](#secrets-secrets) · [Account](#account-page-account)
-- [**Admin guide**](#admin-guide)
-  - [Users](#user-management) · [Groups](#groups) · [Audit log](#audit-log-adminaudit-log) · [File history](#file-history-adminfile-history) · [Sessions](#sessions-adminsessions) · [Quarantine](#quarantine-adminquarantine) · [Analytics](#analytics-adminanalytics) · [Error log & alerts](#error-log--alerts-adminerror-log--adminsettingserror-alerts) · [Webhooks](#webhooks-adminsettingswebhooks) · [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks)
-  - [Policies & settings](#policies--settings): API tokens · public links · 2FA · SSO · SMTP · IMAP · share approval · email-change · branding · maintenance · config backup · advanced
-- [**Operator guide**](#operator-guide)
-  - [Install](#first-install) · [Ports](#compose-ports) · [Traefik](#traefik-on-the-host) · [Hardening](#production-hardening-checklist) · [Storage](#storage-layout) · [Encryption at rest](#encryption-at-rest) · [Backups](#backups) · [Restore](#restore) · [Upgrades](#upgrades) · [Health & metrics](#health-checks--metrics) · [Background jobs](#background-jobs--housekeeping)
-  - [**Settings reference**](#settings-reference): [env vars](#1-environment-variables-boot) · [runtime settings](#2-admin-runtime-settings-hot---no-restart) · [per-user](#3-per-user-preferences-account)
-- [**Developer guide**](#developer-guide)
-  - [Code layout](#code-layout) · [Request flow](#request-flow-typical) · [Auth](#auth-specifics) · [Uploads](#upload-pipeline) · [Cron](#arq-workers--cron) · [Tests](#running-tests) · [Screenshots](#screenshots-and-end-to-end-tests) · [Conventions](#coding-conventions)
+- [Quickstart](#quickstart) · [Architecture](#architecture) · [Tech stack](#tech-stack) · [Highlights](#highlights) · [Documentation](#documentation)
+- [Using file:Heron](#using-fileheron) · [Administration](#administration) · [Operations](#operations) · [Configuration](#configuration)
+- [Development](#development): [Tests](#running-tests) · [Screenshots and E2E](#screenshots-and-end-to-end-tests) · [Conventions](#coding-conventions)
 - [License](#license)
 
 ## Quickstart
@@ -87,12 +83,12 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 If your host user isn't UID 1000, first make the data dirs writable by the
 containers: `docker run --rm -v "$PWD/data":/data alpine chown -R 1000:1000 /data/{uploads,quarantine,files,updater}`
-(see [Common operational issues](#common-operational-issues)).
+(see [Common operational issues](docs/operator-guide.md#common-operational-issues)).
 
 If no SMTP server is configured, outgoing email is not sent. Outside production
 it is printed to the container log instead - handy for dev; in production only its
 recipient and subject are logged (the body carries live one-time links), and the
-admin mail log keeps a masked copy. Full operator walkthrough: [First install](#first-install).
+admin mail log keeps a masked copy. Full operator walkthrough: [First install](docs/operator-guide.md#first-install).
 
 ## Architecture
 
@@ -118,14 +114,20 @@ admin mail log keeps a masked copy. Full operator walkthrough: [First install](#
  updater-shim ─► updater-executor   (in-app Update: back up, pull, swap, verify, roll back)
 ```
 
-- **Uploads:** the browser uses **Uppy + TUS** (resumable through any non-buffering proxy) and sends files under 100 MB (the default limit) as one direct upload; API clients use any TUS library (`tuspy`, `go-tus`, raw curl) against the same endpoint. tusd calls the backend on every upload event over HTTP hooks, so the backend decides who may upload what, and how much.
-- **Downloads** stream from FastAPI via `FileResponse` + kernel `sendfile()`, fast even for 30 GB files, with resume (HTTP Range). On S3 a plain file is a short-lived presigned redirect to the bucket; an [encrypted](#encryption-at-rest) file is decrypted by the backend as it streams.
+- **Uploads:** the browser uses **Uppy + TUS**, resumable through any non-buffering proxy.
+  - Files under 100 MB (the default limit) go as one direct upload.
+  - API clients use any TUS library (`tuspy`, `go-tus`, raw curl) against the same endpoint.
+  - tusd calls the backend on every upload event over HTTP hooks, so the backend decides who may upload what, and how much.
+- **Downloads** stream from FastAPI via `FileResponse` + kernel `sendfile()`, fast even for 30 GB files, with resume (HTTP Range).
+  - On S3 a plain file is a short-lived presigned redirect to the bucket; an [encrypted](docs/operator-guide.md#encryption-at-rest) file is decrypted by the backend as it streams.
 - **Virus scanning:** ClamAV scans each upload after finalize, before anyone can download it, up to clamd's own ~2 GiB ceiling; larger files are served flagged as not scanned. Infected files are quarantined and the parent share auto-revoked.
-- **Encryption at rest** (optional, off by default): after the scan each file is rewritten as AES-256-GCM ciphertext under its own key, so backups, disk images and the bucket hold no readable file contents. See [Encryption at rest](#encryption-at-rest).
-- **The ARQ worker** runs the scans, outgoing mail, webhooks and the scheduled tasks (expiry, cleanup, the inbound-mail poll, the encryption backfill, the update check), each re-timed on [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks).
-- **In-app updates:** the `updater-shim` container picks up an Update or Rollback requested in the admin console and runs `updater-executor`, which by default backs up the database and Redis, pulls the release's images, swaps the app containers, brings changed infrastructure along, checks health and rolls back on failure. See [Upgrades](#upgrades).
+- **Encryption at rest** (optional, off by default): after the scan each file is rewritten as AES-256-GCM ciphertext under its own key, so backups, disk images and the bucket hold no readable file contents. See [Encryption at rest](docs/operator-guide.md#encryption-at-rest).
+- **The ARQ worker** runs the scans, outgoing mail, webhooks and the scheduled tasks (expiry, cleanup, the inbound-mail poll, the encryption backfill, the update check), each re-timed on [Scheduled tasks](docs/admin-guide.md#scheduled-tasks-adminscheduled-tasks).
+- **In-app updates:** the `updater-shim` container picks up an Update or Rollback requested in the admin console and runs `updater-executor`. See [Upgrades](docs/operator-guide.md#upgrades).
+  - By default it backs up the database and Redis, pulls the release's images and swaps the app containers.
+  - It brings changed infrastructure along, checks health and rolls back on failure.
 - **The desktop client** (Windows) uses the same REST API as the web app.
-- Optional **S3-compatible** storage backend (see [storage backend](#storage-backend-storage_backend)).
+- Optional **S3-compatible** storage backend (see [storage backend](docs/operator-guide.md#storage-backend-storage_backend)).
 
 ## Tech stack
 
@@ -145,1321 +147,130 @@ admin mail log keeps a masked copy. Full operator walkthrough: [First install](#
 - **Bidirectional sharing** - outbound (company → client) and inbound (client → employee or a company-inbox group), with sortable/filterable/groupable Outbox & Inbox lists and a cross-user admin **File history**.
 - **Resumable transfers up to ~30 GB** (TUS) with a direct-multipart fast path under 100 MB; per-user quotas reserved atomically via Redis Lua. **Bulk ZIP** download of a whole share (single streamed archive).
 - **Time-limited shares** with editable expiry + "Expire now", **public links** (Argon2 password + brute-force lockout + atomic download-count limit), and an optional **four-eyes share approval** workflow.
-- **Secrets** (off by default) - send a password or other short text to people, groups, addresses without an account or a link; readable a set number of times and/or until a date, then destroyed. Encrypted per secret, optional passphrase as an extra encryption layer, never readable by admins.
+- **Secrets** (off by default) - send a password or other short text to people, groups, addresses without an account or a link.
+  - Readable a set number of times and/or until a date, then destroyed.
+  - Encrypted per secret, optional passphrase as an extra encryption layer, never readable by admins.
 - **Scoped, admin-governed API tokens** - least-privilege scopes (`403 INSUFFICIENT_SCOPE` outside them); a policy gate decides who may mint them.
 - **Antivirus on every upload** (ClamAV) with reversible quarantine; **in-browser preview** of PDFs / images / text from a strict allowlist.
 - **Encryption at rest** (off by default) - every stored file encrypted with a per-file key, so backups, disk images and the storage bucket hold no readable contents; downloads, resumes and ZIPs are unchanged.
 - **Auth**: Argon2id, JWT + rotating refresh with reuse-detection, TOTP + recovery codes, **WebAuthn/passkeys**, **multi-provider OIDC SSO**, HIBP breach check, per-user session cap, lockout + per-IP rate limits.
+- **Scan guard** (off by default) - blocks sources that probe for files that don't belong here (`/.env`, `/wp-login.php` …) or keep failing sign-in, with an allowlist and a CLI to unblock.
 - **Notifications** via one dispatch funnel (email + in-app SSE bell), per-user per-category channel prefs, one-click unsubscribe (RFC 8058).
 - **Email + branding self-service** - per-language **ProseMirror rich-text** editor for every email template and the imprint/privacy pages; logo white-labelling; inbound **IMAP** mailbox (replies / bounces / auto-replies surfaced in-app).
 - **Observability** - admin **Analytics** dashboard, **Error log** (+ configurable error/scanner alerts), **Webhooks**, **anomaly detection** (heuristic, alert-only), Prometheus `/api/metrics`, audit log, mail log.
-- **Operations** - in-app **self-update** with one-click rollback and optional **automatic updates** (off by default), **maintenance mode + drain-before-update**, **config backup/restore**, a runtime **settings registry** (knobs tunable live), admin-tunable **cron schedules**, dated backups + optional `restic`, and continuously-drilled restore.
+- **Operations** - everything an operator runs from the admin console or the shell:
+  - in-app **self-update** with one-click rollback and optional **automatic updates** (off by default)
+  - **maintenance mode + drain-before-update**, **config backup/restore**
+  - a runtime **settings registry** (knobs tunable live) and admin-tunable **cron schedules**
+  - dated backups + optional `restic`, and continuously-drilled restore
 - **i18n** EN + DE everywhere; **24-hour timestamps** in an admin-set IANA timezone across UI and email. Pluggable storage: local bind-mount (default) or any **S3-compatible** store.
 
----
-
-# Using file:Heron (end-user guide)
-
-Audience: anyone with an account - admin, employee, or client.
-
-## Logging in
-
-<img src="docs/screenshots/login.png" alt="The sign-in page" width="800">
-
-Open the app URL and you land on **Login**. Up to three ways to authenticate,
-depending on what the admin configured:
-
-1. **Email + password** (default). With 2FA on, submitting your password reveals one **Authentication code** field that accepts either a 6-digit TOTP code **or** a one-time recovery code (`XXXX-XXXX`) - no toggle. **Use a passkey instead** there takes a passkey registered on `/account` in place of the code (only one that verifies you with a PIN or fingerprint).
-2. **Passkey** - only while an admin has switched **passkey sign-in** on (`/admin/settings/twofa`): **Sign in with a passkey** needs no email and no password, and browsers that can also offer your passkeys in the email field's autofill. A passkey then also counts as two-factor authentication: with a passkey and no authenticator app, the password step ends with **Use your passkey**.
-3. **SSO (OIDC)** - one **Sign in with {provider}** button per enabled provider. With two-factor authentication set up, SSO ends on a second-factor page: your code, or your passkey while passkey sign-in is on.
-
-Five wrong passwords in a row **locks the account for 15 minutes** (you get one email,
-deduplicated to once per 6 h). After login you land on your **default landing page**
-(set in `/account`).
-
-## The page layout
-
-- Top **brand mark** ("file:Heron") - back to home (or a static label if home is disabled).
-- Centre nav: **Outbox**, **Inbox**, **New share** (plus **Approvals** if you're an approver, and **Secrets** when an admin has turned them on).
-- Right: 🔔 **notification bell** (live via SSE), then your **name menu** (Account, Admin for admins, Sign out).
-- One warm-amber accent on warm off-white; light theme only.
-
-## Sending a share (`/share/new`)
-
-<img src="docs/screenshots/share-new.png" alt="The new-share form: three files queued, a subject and message, a person and a group as recipients, and a seven-day expiry" width="640">
-
-1. **Pick recipients** - search shows who you may send to (employees see all employees + connected clients; clients see connected employees + any company-inbox group). Pick a **group** to address every current member (membership changes retroactively change who can read it).
-2. **Drop files** - under 100 MB go via one multipart POST; larger use resumable TUS (close the tab and resume later from the same browser). Total is capped by your quota. **Folders** keep their structure: drop a folder, or use **Choose a folder**, and the share page lists the files under their folders, the public link page too, and **Download all (ZIP)** recreates the tree.
-3. **Subject** (optional) - defaults to the first file's name.
-4. **Expiry** (required) - a preset ("1 hour", "7 days", ...) counts from when the files are **ready to download**, so a long upload never eats into it; a date and time you type stays exact. A share is never expired while an upload into it is still running. After the expiry passes, the hourly cleanup deletes the bytes.
-5. **Public link** (optional, if allowed) - set password, download-count limit, and "notify me on download". The URL is shown when the share is created and stays available on the share's page (owner and admins), with a QR code.
-
-Recipients are emailed once the files can actually be downloaded - after the upload **and** the virus scan - so the link never answers "scan in progress". Files added to a share later are announced the same way.
-
-Until the share can be sent, a list above **Create + send** says what is missing: no file yet, no recipient (or public link), or text typed into Recipients that was never picked from the list. An address with no account cannot be picked while *Recipients without an account* is off: clear the field (one click) and send the public link yourself - admins get a link to the switch.
-
-**Recipients without an account** (off by default; *Admin → Sharing → Public links → Recipients without an account*). When an admin turns it on, anyone allowed to create public links can type an address that matches no one and pick *Send a download link to …*. The form then asks **Email the download link to these addresses** (ticked by default): ticked, the address is emailed the share's public link once the files have landed (and, if the share needs approval, once it is approved); unticked, it is only recorded and you send the link yourself. This is separate from *Notify recipient(s) by email*, which covers recipients with an account. No account is created, and the link's password is never in the mail - pass it on yourself. Everyone emailed shares the one link and its download counter. Under the approval scope *outbound to clients*, such a share is held for approval. The addresses are shown on the share page (to you, admins and approvers) until the share ends; the daily cleanup then forgets them, and the mail log keeps the record of the send for its retention window. A second switch makes the form ask whether to also **invite** each address as a client account (unticked by default); the link goes out either way.
-
-## Receiving a share (`/inbox`)
-
-<img src="docs/screenshots/inbox.png" alt="A client's inbox with two shares from an employee" width="800">
-
-The inbox lists shares addressed to you (directly or via a group). Per file you see a
-**Download** button (scanned clean), "Scan in progress" (`425`), "Quarantined"
-(`410`), or "Deleted" (`410`).
-
-> **Client submissions are company-wide, by design.** A share a *client* sends in
-> (an "inbound" share) is not addressed to one person: **every employee and admin
-> can see and download it**, as can any other client who shares at least one group
-> with the sender. Clients do not pick recipients — they send to the organisation.
-> Outbound shares (staff → client) are the opposite: only the named recipients and
-> the members of recipient groups can see them. If you need per-recipient isolation
-> for inbound files, fileHeron is not a multi-tenant platform and does not provide
-> it. Tell your clients what the audience is before you invite them. Downloads stream via kernel `sendfile()`; each is
-logged (your IP, user, file, timestamp). A **Download all (ZIP)** option streams the
-whole share as one archive - built on the fly, never cached to disk, and
-**resumable**: an interrupted archive download continues from where it stopped
-rather than starting over, and the resume is not charged a second time against
-the share's download budget.
-
-## Managing your shares (`/outbox`)
-
-<img src="docs/screenshots/outbox.png" alt="The outbox filtered to every state, with active, revoked and expired shares" width="800">
-
-Click column headers to **sort**; **filter** by recipient/sender/state (default =
-active only)/free text; **group** by recipient or group. On a share's detail page:
-**Edit expiry**, **Expire now** (deletes bytes immediately), **Revoke**, **Add files**
-(creator-only, while active), and the **Public link panel** (create / view / copy /
-revoke).
-
-## Public links (anonymous recipients)
-
-<img src="docs/screenshots/public-link.png" alt="What an anonymous recipient sees after unlocking a password-protected public link: the message, the files and the downloads left" width="800">
-
-The recipient opens `/d/{token}` - subject + file list, no login. A password prompts
-to unlock first (10 wrong tries in 15 min *from at least 3 different addresses*
-locks the **link** for everyone; a single address just gets rate-limited, so one
-attacker cannot lock your recipients out). Each
-download decrements the counter atomically; at zero the link refuses further
-downloads. An interrupted download - a single file or the whole-share ZIP - can
-be resumed without spending another unit, as long as the server can corroborate
-that it really was in flight; a bare `Range:` header from a fresh connection is
-charged like any other download.
-
-## In-browser preview
-
-Supported files get a **Preview** button (in the share view and on `/d/{token}`) that
-renders inline instead of downloading: **PDF**, raster images (**PNG / JPEG / GIF /
-WebP**), and **plain text** (any `text/*`, shown as source). Content is served from a strict allowlist with
-`nosniff` + a restrictive CSP; SVG is never inline-rendered and HTML is served as
-`text/plain`. Admins can disable the whole feature at *Settings → General → File
-preview*.
-
-**Preview does not consume the download-count budget and is not logged as a
-download.** It delivers the original file, so anyone who can preview a file can
-save a copy of it without moving the counter — a preview-capable recipient is
-always someone already authorised to download. Treat `download_limit` as a cap
-on counted *download* actions, not as a hard cap on retrievals: if you need the
-latter for images, PDFs or text files, turn preview off at *Settings → General →
-File preview*. (Once the budget is fully spent, preview is refused too.)
-
-## Scan guard (blocking probes and brute force)
-
-Self-hosted instances get scanned constantly - requests for `/.env`,
-`/.git/config`, `/wp-login.php` and similar, looking for leaked secrets. These
-already 404 and land in the [error log](#error-log--alerts); the scan guard is
-the switch that makes them stop arriving.
-
-**It ships off.** Nothing is ever blocked until an admin enables it at
-*Settings -> Scan guard*, and every part of it is configurable there: which
-signals count, how many offences and over what period, how long a block lasts,
-whether repeat offenders are blocked for longer, and whether you are notified on
-every block.
-
-- **Probes for files that don't belong here** (on by default once enabled). One
-  hit is enough - these paths have no legitimate use, and a scanner typically
-  tries a hundred of them in seconds. Needs no list to maintain, though you can
-  add your own patterns.
-- **Repeated unknown API paths** (off). An expired share link also returns 404,
-  so this one can reach a real recipient. Public share links are never counted
-  regardless, and it only fires after many *different* paths.
-- **Repeated sign-in failures** (off) - counted on sign-in endpoints only, and
-  only when the failure means a *submitted secret was wrong*. The ordinary
-  two-factor prompt, a disabled account and an expired browser session all
-  produce the same status code and none of them count. It has its own, much
-  higher threshold than the probe signals (15 by default), because legitimate
-  people mistype passwords and a whole office can share one address - and a
-  source is exempted outright when its own successful sign-ins, across more than
-  one account, explain its failures. Account lockout and the per-address sign-in
-  limit already cover ordinary password guessing; this is the switch for someone
-  who keeps trying anyway.
-
-**Safeguards, because blocking is the one thing here that denies service:**
-signed-in users are never blocked; private, loopback and allowlisted addresses
-are never blocked; there is no permanent block at any level, so every mistake
-expires on its own; and blocked requests get an ordinary 404, so a scanner
-learns nothing. Put your own office address in the allowlist.
-
-**Blocking a whole network is off by default and worth thinking about before you
-turn it on** - an IPv4 /24 is 256 addresses, which may be a customer's office, a
-mobile carrier, or a mail-security gateway that fetches share links from many
-addresses at once.
-
-For IPv6, how much counts as "one network" is adjustable (*Settings → Scan
-guard*), because IPv6 addresses are handed out very
-differently depending on where they come from. **A shorter prefix is not simply
-"stricter"** - it is a bet about who else is behind it. The default /64 is one
-customer at most hosting providers. Widening to /56 or /48 is right for a range
-you know belongs to a single operator, and wrong for a hosting provider, where
-one /48 can be tens of thousands of unrelated customers renting servers. Some
-providers put several customers inside a single /64, so even the default can
-catch a neighbour. Widen it only when you know the answer for that range.
-Changing this releases any network blocks currently in force, since they were
-filed under the old grouping.
-
-Everything the guard is currently *doing* lives on its own page, *Blocked
-sources*: every block with its reason and expiry, filters for released and
-expired history, a Release button, "Release + allow" for a source that should
-never have been caught, blocking an address or range by hand, and the allowlist
-itself. It also shows a **watchlist** of sources accruing offences that have not
-been blocked yet, so you can see a scan building up - and allow or block it -
-before it crosses a threshold. (The watchlist keeps those addresses in memory
-for at most one counting window; turn it off under *Settings → Scan guard* if
-you would rather it never held them at all.)
-
-If a block ever locks *you* out - the check runs before sign-in, so you can't
-reach the admin page to undo it - release it from the host:
-
-```bash
-docker compose exec backend python scripts/unblock_ip.py --list
-docker compose exec backend python scripts/unblock_ip.py --all
-docker compose exec backend python scripts/unblock_ip.py 203.0.113.4
-```
-
-Naming your own address is enough even when what caught you was a whole *range*:
-the tool releases any block containing that address, not just one filed under
-exactly that text.
-
-## Share approval (four-eyes)
-
-<img src="docs/screenshots/approvals.png" alt="The approvals queue with one share waiting for review" width="800">
-
-Optional, admin-controlled. When enabled, a new share enters **pending approval** -
-recipients aren't notified and can't access anything until an **approver** approves
-(or rejects with a reason). Approvers get an **Approvals** queue; senders see "pending"
-or the rejection reason + a **Resubmit** button (files kept). Configure who approves,
-which shares need it, whether approvers may open files to review them, and whether
-approvers' own shares auto-approve, at *Settings → Share approval*. Off by default.
-
-**Approval covers the content, not just the share.** A share is judged when it is
-created, but its owner can keep adding files afterwards - so a file uploaded into
-a share that was *already* approved is held for its own decision instead of
-riding on the earlier one. The share itself stays live throughout: everything
-already approved keeps downloading, and any public link keeps working. Approvers
-see "N file(s) added after approval" on the share and can **release** them to
-recipients or **discard** them. For the same reason, a public link can no longer
-be attached to a share after it has been approved (ask an admin), a share
-cannot be approved while a file is still uploading, and an approval is refused if
-the contents changed since the approver opened the page.
-
-**A public link leaves the organisation.** With the scope *outbound to clients*,
-a share that carries a public link - or goes to an address without an account -
-is held like one addressed to a client. Attaching a link later to a live share
-that this policy would hold needs an admin (`409 APPROVAL_REQUIRED`); an
-approver whose own shares are exempt may still attach one to their own share.
-
-## Secrets (`/secrets`)
-
-<img src="docs/screenshots/secrets.png" alt="The secrets page: the Sent tab with one secret and its state" width="800">
-
-Off by default (*Admin → Sharing & files → Secrets → Policy*); once an admin turns
-it on, a **Secrets** link appears in the header. A secret is a password, a key or
-any short text (up to 10,000 characters) for named people or a link. It can be
-read a set number of times and/or until a date, and is then destroyed. Its text is
-never put in an email: recipients are told that a secret is waiting and open it in
-file:Heron.
-
-**Sending** (`/secrets/new`):
-
-1. **The secret** - type or paste it, or **Generate a password** (length and character classes; made in your browser).
-2. **Label** (optional) - the only part anyone sees before revealing it, and the only part in notifications and mail. Don't put the secret there.
-3. **Recipients** - people and groups, as for a share. If the admin allows it, staff can also type an **email address without an account** (each address gets its own link, mailed to it) and **create a link** to pass on themselves (chat, phone; with a QR code). Clients can send only to the employees they are connected to.
-4. **Limits** - a view limit, an expiry, or both (at least one); whichever comes first ends the secret. The form starts at 1 view and 7 days. How the views count: **Each person** (everyone who can read it gets them, each group member too) or **All together** (one pool; once used, it is gone for all). With a group among the recipients there is a third choice, **Each recipient**: every person, address and the link gets the views, and a group's members share theirs, so the first member's view can use them up for the rest.
-5. **Passphrase** (optional) - part of the encryption, not just a prompt: without it nobody can open the secret, not even the server's operator, and if it is lost the secret cannot be recovered. Tell the recipients another way. You may choose that too many wrong passphrases destroy the secret for that recipient.
-6. **Notify me when it is viewed** (off by default) - a notice for each view, and one when the secret is used up or expires unread.
-
-**Receiving.** A secret addressed to you is under **Secrets → Received**, and you
-are notified. Only the **Reveal** button uses a view: opening the page or a link
-costs nothing (mail scanners open links before people do). When it was the last
-view the page says so - copy it then. A group member can read a secret if they
-were in the group when it was sent **and** still are. A wrong passphrase never
-uses a view. Repeated wrong passphrases are slowed down, and a link is locked for
-a while only when they come from several addresses, so one person guessing cannot
-lock the real recipient out. If the sender or the admin chose so, too many wrong
-passphrases instead destroy the secret for that recipient.
-
-**Status.** Under **Secrets → Sent** the sender sees each secret's views left,
-who viewed it and when (with the address for a view through a link or an email
-link), and can **Burn now**, copy their links again, **replace the link** (a new
-URL with a fresh count) or remove it. Neither the sender nor an admin can read
-the secret itself. A link opens `/s#...`: the part after `#` never leaves the
-browser, so the token reaches no proxy or access log.
-
-**When a secret ends** - its views used, its expiry passed, or burned - its
-encrypted text, its key and its links are deleted from the database at once. The
-record (label, recipients, view log) is kept for 90 days (*Data retention &
-storage*, `0` keeps it), then pruned.
-
-**Requesting a secret** (`/secrets/requests/new`, or *Request a secret* on the
-Secrets page). Instead of sending, you ask someone for a password: say what you
-need (and an optional note - both are shown to whoever may answer, so never put a
-secret there), whom you ask (people, groups, addresses without an account - each
-mailed its own answer link - and/or a link you pass on yourself, under the same
-rules as sending), how long the request stays open, and how the answer may be
-read (views and/or how long after it arrives). The person asked types the secret
-on the request page (or on the `/r#...` page behind a link, without an account),
-optionally with a passphrase of their own. **The first answer closes the
-request**: every other link stops working, and the answer arrives as a secret that
-only you can open (you are told in-app and by mail). If you set a **passphrase**
-when asking, the answer is encrypted to it: nobody, the server included, can open
-it without that passphrase, and nobody has to pass a passphrase to you. Requests
-are under **Secrets → Requests** (*Asked by me* / *Asked of me*); you can cancel an
-open one, copy its links again, and discard the answer unread. An unanswered
-request expires at its time and you are told.
-
-<details>
-<summary>How a secret is protected</summary>
-
-- **Encryption.** Each secret's text is encrypted with a key made for it alone. That key is wrapped by the instance key (derived from `JWT_SECRET`, like TOTP secrets) and, with a passphrase, by an Argon2id key derived from the passphrase underneath. The passphrase is stored nowhere. `backend/scripts/rotate_jwt_secret.py` re-wraps the outer layer without needing any passphrase.
-- **Only recipients read it.** The text is in exactly one response: the reveal. Audit rows, webhooks and logs carry the label, ids and counts - never the text, a token or an address (the audit log counts addresses). Notifications and mail never carry the text; the sender's "viewed" notice names who viewed it - the person, or the address or link and its IP.
-- **Counting.** A view is claimed by one conditional `UPDATE ... WHERE views_used < limit` while the secret's row is locked, so two people revealing the last view at once cannot both get it.
-- **Tokens.** A link token is 43 random characters; the server stores its SHA-256 for lookup and an encrypted copy so the sender can copy the link again (showing it again is audited). The page posts the token in a request body, never in a URL, and the mail log masks it (`/s#<redacted>`, no resend).
-- **Ending is final.** Burned, expired and used-up secrets cannot be recovered from the database. A configuration import burns every active secret, and erasing a user deletes the secrets they sent.
-- **Requests.** An answer to a request is an ordinary secret whose only reader is the requester - the same encryption, counting and shredding. The requester's passphrase is turned into a key pair when asking and only the **public** key is kept; the answer is sealed to it inside the instance layer, so opening it needs the passphrase again. The first answer is claimed by one conditional `UPDATE` while the request row is locked, so two answers cannot both land. Answer links ride `/r#<token>` like secret links.
-- **API.** `/api/secrets` with six token scopes: `secrets:send` (also: answering a request), `secrets:read` (metadata, never the text), `secrets:reveal` (the text), `secrets:manage` (burn; create, replace or remove the link), `secrets:links` (read the links back) and `secrets:request` (ask for a secret: `/api/secret-requests`). Link and address holders use `POST /api/public/secrets/peek` (free) and `/reveal`, and `POST /api/public/secret-requests/peek` (free) and `/answer`.
-- **Desktop client.** A **Secrets** tab, shown when the server has secrets switched on: received, sent and requests, sending and requesting, revealing (masked until *Show*; *Copy* works while masked), answering a request, and the sender's status, links and *Burn now*. Links and addresses (the `/s` and `/r` pages) are opened in a browser.
-
-</details>
-
-## Account page (`/account`)
-
-<img src="docs/screenshots/account.png" alt="The account page with its section quick-nav" width="800">
-
-A single scrollable page (left quick-nav with scroll-spy):
-
-- **Profile** - display name + UI language (EN/DE), save instantly.
-- **Default landing page** - where you go after login.
-- **Password** - checked against HaveIBeenPwned (k-anonymity, no plaintext sent).
-- **Sessions** - every active session (browser + last-seen IP, 24-h timestamps); revoke any. Per-user cap (default 10): an 11th sign-in evicts your oldest and notifies you.
-- **Two-factor (TOTP)** - QR + secret, confirm, get 10 one-time recovery codes.
-- **Recovery codes** / **Passkeys** - regenerate codes; register/remove WebAuthn authenticators. While passkey sign-in is on, a passkey kept on the device is marked **Signs in without a password** - keep a second one, or an authenticator app, in case you lose that device.
-- **SSO connections** - connect/disconnect OIDC providers (refuses on email mismatch).
-- **Email address** - change your sign-in email (if the admin's [email-change policy](#policies--settings) allows it), via a confirm-by-email flow.
-- **Notifications** - per-category channel (off / email / in-app / both). Security-critical types (password reset, sign-in alerts) are shown but **locked on**.
-- **API tokens** - if policy allows: **Full access** or **Limited** (tick exactly what it may do across *Sharing*, *Files* and *Secrets*); a limited token is refused (`403 INSUFFICIENT_SCOPE`) outside its scopes. Plaintext shown once.
-
-Every email carries a **Manage subscriptions** footer link (and ordinary
-notifications a one-click **Unsubscribe**) that works **without logging in** via a
-signed token, plus native RFC 8058 one-click unsubscribe. If a 2FA enforcement policy
-covers your role/group, navigation forwards you to `/account/2fa` until you enrol.
-
----
-
-# Admin guide
-
-Audience: users with the **admin** role. Everything lives under `/admin`. The landing page
-is an **Overview** (what needs attention, a search over every setting, all pages as cards);
-the sidebar groups the pages by task: **People & access** · **Sharing & files** ·
-**Email & notifications** · **Security & audit** · **Site & appearance** · **System**.
-A policy and the state it produces share one page as tabs (Quarantine: Files | Alerts &
-scanner; API tokens: Tokens | Policy; Secrets: Secrets | Policy; Blocked sources: Blocks &
-allowlist | Auto-block rules (Scan guard); Errors & alerts: Log | Alerts); every tab keeps its
-historical URL.
-
-<img src="docs/screenshots/admin-overview.png" alt="The admin overview: the task-grouped sidebar, the setting search, attention tiles, service status and the recently changed settings" width="800">
-
-## User management
-
-<img src="docs/screenshots/admin-users.png" alt="The admin user list: employees and clients with role, status, 2FA, storage and last sign-in" width="800">
-
-- **`/admin/users`** - paginated, role/status filter, search. **Invite** (one-time link, 24 h; optional initial groups; pre-flights `USER_EXISTS` / `INVITE_PENDING`) or **create directly** (set a password; account active immediately, for out-of-band hand-off).
-- **`/admin/users/:id`** - edit name/role/quota (NULL = unlimited)/disabled, plus three irreversible actions: **Force password reset** (one-time token), **Erase user (GDPR)** (hard-deletes files and the secrets they sent, anonymises the row, audits `user_erased`; two-step with a pre-flight count), and **Erasure receipt PDF**. The page also shows the user's **sessions** and **current files** (with per-file delete) and authoritative **storage** figure.
-
-## Groups
-
-- **`/admin/groups`** + **`/admin/groups/:id`** - name, the **company-inbox** flag (addressable by every connected client), and members. Removing a member instantly revokes access to past group-targeted shares. Deletion refuses with `GROUP_IN_USE` (409) while the group is a recipient of an active share.
-
-## Audit log (`/admin/audit-log`)
-
-Filter by event type / target / time window, paginated newest-first; each row links the
-actor and shows IP + `request_id` for log correlation. **Export CSV** streams the
-current filter. See [audit events](#audit-events) for the full catalogue.
-
-## File history (`/admin/file-history`)
-
-Cross-user inventory of every file ever uploaded, joined with parent share + uploader +
-download stats. Hides deleted/abandoned rows by default. Each live row has **Delete**
-(hard-deletes bytes, frees quota, auto-revokes the parent share if it was the last live
-file); orphans keep **Reclaim**.
-
-## Sessions (`/admin/sessions`)
-
-Every signed-in session (a live refresh-token row) across all users - searchable,
-sortable by **Last active** (stale devices first). Revoke one session or all of a
-user's; both audited.
-
-## Quarantine (`/admin/quarantine`)
-
-Files ClamAV flagged. Bytes stay under `./data/quarantine/{share_id}/{filename}`. Per
-row: **Download** (forensics), **Release** (back to active, re-reserves quota,
-conditionally restores the share), **Purge** (unlink bytes, keep the marker row). **Release**
-requires a reason; Purge takes no body - you have already seen the file in the
-list and confirmed the dialog, and the `file_quarantine_purged` audit row
-records the actor and the file. Companion toggle at **`/admin/settings/quarantine`** fans an
-infection alert out to all admins.
-
-## Analytics (`/admin/analytics`)
-
-A usage dashboard - active users, shares/files created, downloads, top senders, and a
-**storage trend** fed by a tiny daily snapshot (`analytics_aggregate` cron). Charts are
-hand-rolled SVG (no charting dependency).
-
-## Error log & alerts (`/admin/error-log` + `/admin/settings/error-alerts`)
-
-A browsable record of server-side errors, with optional email alerting - **logging and
-alerting are independent**.
-
-- **Error log** (`/admin/error-log`) - one row per captured error: HTTP **5xx**,
-  opted-in **4xx**, and failed scheduled tasks. Columns include **client IP**, status,
-  code, path, and an "emailed" flag. Filter by code / status / source / **IP** / time;
-  open a row for full detail; **Export CSV**.
-- **Errors & alerts** (`/admin/settings/error-alerts`) - the **log** switch (on by
-  default for 5xx + cron failures), an opt-in **4xx capture** with a status allowlist
-  (e.g. `429, 409`), retention, and the **email** side: master toggle, 5xx and (opt-in)
-  4xx sources, recipients (all admins or a custom list), and anti-flood **cooldown +
-  hourly cap**. Logging captures every qualifying error even when alert emails are
-  deduped, capped, or off.
-- **Spotting scans.** Because the SPA serves a `200` shell for unknown page paths,
-  vuln-scanner probes (`/wp-login.php`, `/.env`, `/.git/config`, …) are routed at the
-  edge (nginx) to the backend, which returns `404 NOT_FOUND`; with `404` in the 4xx
-  allowlist they appear in the Error log with the source IP. A scan reads as a burst of
-  bogus 404s from one IP. Real-browser hits on nonexistent *page* paths (which nginx
-  answers `200` with the SPA shell) are additionally reported by the SPA itself via an
-  anonymous beacon (`POST /api/telemetry/page-404`, opt-in with 4xx capture, per-IP
-  rate-limited, query string stripped); those rows show `source: spa`. The per-minute
-  4xx capture ceiling is tunable on Advanced (`error_log.scan_capture_per_min`) if a
-  scan burst exceeds the default.
-
-## Webhooks (`/admin/settings/webhooks`)
-
-Register outbound webhook subscriptions (events such as share/file lifecycle) and
-inspect the **delivery log** (status, retries). Deliveries are pruned by retention.
-
-## Scheduled tasks (`/admin/scheduled-tasks`)
-
-Every background cron with its live status; set each to *every N minutes* or *daily at
-HH:MM* (site timezone) or disable it, and **Run now** on demand. Defaults reproduce the
-historical cadence. See [ARQ workers + cron](#arq-workers--cron).
-
-## Policies & settings
-
-Each policy editor follows the same shape - a **mode** (`everyone` /
-`employees_admins` / `admins_only`) plus an additive user/group **allowlist**; admins
-always pass.
-
-| Page | Route | Controls |
-|---|---|---|
-| API token policy | `/admin/settings/api-tokens` | Who may mint API tokens (+ allowlist). Cross-user inventory at `/admin/api-tokens` (disable/revoke, generate-for-user, per-token scopes). |
-| Public-link policy | `/admin/settings/public-links` | Who may mint public links. |
-| Secrets | `/admin/settings/secrets` (the *Policy* tab of **Secrets**; the *Secrets* tab at `/admin/secrets` lists every secret's metadata, with **Burn now**, and the *Requests* tab at `/admin/secret-requests` every secret request, with **Cancel**) | The on/off switch (off by default; turning it off stops new secrets, those already sent stay readable until they end), who may send secrets (default everyone; a client reaches only connected employees), who may send them outside the organisation - to an address or as a link (default employees and admins; never a client), what wrong passphrases do (slow down and lock, or destroy after N), and the limits: most views (100), latest expiry (90 days), longest life (90 days, also ending secrets that have only a view limit; `0` = none) and the passphrase throttle - the same rules decide who may ask for a secret, and whom. Admins never see a secret's text or its links. |
-| 2FA enforcement | `/admin/settings/twofa` | Which roles/groups must enrol TOTP (computed live; **no admin escape**). **Passkey sign-in** (off by default): a passkey alone signs in, and a passkey counts as 2FA - the desktop app cannot use passkeys yet, so people whose only second factor is a passkey sign in there with an API token. |
-| SSO providers | `/admin/settings/sso` | Multi-provider OIDC CRUD (entra/google/authentik/keycloak/custom presets, smart-prefill, test-discovery). DELETE refused while users are bound. |
-| SMTP / email | `/admin/settings/email` | Live SMTP override (DB beats env), HELO host, test-send with the error class/code surfaced. Password Fernet-encrypted, never echoed. |
-| Inbound mail (IMAP) | `/admin/settings/imap` | Poll a mailbox into the admin **Inbox** (`/admin/inbox`); labels REPLY / BOUNCE / AUTO; attachments are ClamAV-scanned; reuses SMTP creds by default. Off by default. |
-| Email templates | `/admin/settings/email-templates` | Per-(template, language) subject/body overrides in a **ProseMirror HTML** editor; placeholders, live preview, test-send, reset-to-default. Auth-link templates can't drop their required link. |
-| Share approval | `/admin/settings/share-approval` | The four-eyes workflow (who approves, which shares, content review, self-approval). |
-| Email-change policy | `/admin/settings/email-change` (the *Email change* tab of **Sign-in policies**) | Whether users may change their own sign-in email and the verification mode (`immediate` / `verify_new` / `verify_both`) + what happens to an OIDC binding on change. |
-| Branding & legal | `/admin/settings/branding` · `/admin/settings/legal` | Two tabs. Branding: logo (magic-byte-validated; per-surface toggles), optional logo link, application name. Legal pages: the imprint/privacy pages (per-language ProseMirror, nh3-sanitised). |
-| Site | `/admin/settings/general` | Site URL (overrides `APP_URL` for links) + IANA timezone (drives 24-h timestamps). A section of **General**, not its own route. |
-| Quarantine alerts / Home / MOTD | the Quarantine page's *Alerts & scanner* tab (`/admin/settings/quarantine`), and sections of `/admin/settings/general` | Single-knob toggles. Home page and MOTD are sections of **General**. |
-| Sign-in policies | `/admin/settings/sign-in` | Account lockout, per-address sign-in/registration limits, the HIBP breach check; *Email change* is its second tab. |
-| Files & transfers | `/admin/settings/transfers` | Share defaults, the direct-upload size cap, signed-URL lifetime + resume credit, in-browser preview. |
-| Anomaly detection | `/admin/settings/anomaly` | The four heuristic thresholds; advisory only. |
-| Encryption at rest | `/admin/settings/encryption` | Store every file encrypted with a key only this instance holds (off by default; turning it on needs a key-custody confirmation and your password, turning it off your password). Status, the background task's last run, and files set aside after repeated failures. See [Encryption at rest](#encryption-at-rest). |
-| Self-update | `/admin/system` | Releases API URL (forks repoint it), the postponed-update drain wait and **automatic updates** (off by default; turning them on asks for your password), on **Status & updates**; the poll cadence lives on [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks), not here. |
-| Maintenance mode | `/admin/settings/maintenance` | Pause **new** transfers (in-progress + resumable ones finish); standalone or via drain-before-update. |
-| Configuration backup | `/admin/settings/backup` | Export/import settings/branding/OIDC/webhooks/groups/users (+ optional logs) to one `*.fhbackup.json`; three secret modes (passphrase / ciphertext / exclude). Files and secrets excluded; import invalidates active shares, burns active secrets and revokes sessions. |
-| Data retention & storage | `/admin/settings/advanced` | What remains of the **registry overlay** on this page: every retention window and the low-disk thresholds, editable **live, clamped to safe bounds**. The other registry groups render on the page of their task through the same endpoint (`frontend/src/config/adminTunablePlacement.ts`): session lifetimes on **Sessions › Policy** (`/admin/settings/sessions`), lockout + sign-in limits + HIBP on **Sign-in policies**, the public-link brute-force limits on **Public links**, the secret limits and passphrase throttle on **Secrets › Policy**, the upload cap and download tunables on **Files & transfers**, anomaly thresholds on **Anomaly detection**, the alert throttle on **Errors & alerts**, the drain wait on **Status & updates**, the app name on **Branding & legal**. |
-
-**Anomaly detection** is heuristic and **alert-only** (it never blocks): an hourly cron
-flags mass-download, multi-network access, and login-failure spikes against the
-thresholds on `/admin/settings/anomaly`, dispatching an `ops_alert`.
-
-## Audit events
-
-110+ event types; the authoritative list is
-`backend/app/models/audit_log.py::AuditEventType`.
-
-<details>
-<summary>Grouped catalogue</summary>
-
-- **Auth / accounts:** `user_registered`, `user_created_by_admin`, `email_verified`, `login_success`, `login_failure`, `logout`, `account_locked`, `account_unlocked`, `rate_limited`, `password_changed`, `password_reset_requested`, `password_reset_consumed`, `totp_enabled`, `totp_disabled`, `recovery_code_used`, `role_changed`, `user_disabled`, `user_erased`, `admin_bootstrapped`.
-- **Email-change:** `email_change_requested`, `email_changed`, `email_change_cancelled`, `email_change_policy_changed`.
-- **Sessions / invites:** `refresh_token_rotated`, `refresh_token_reused`, `refresh_token_evicted`, `refresh_token_admin_revoked`, `invite_created`, `invite_consumed`, `invite_revoked`, `invite_purged`.
-- **Shares / files:** `share_created`, `share_revoked`, `share_expired`, `share_expiry_updated`, `share_limit_updated`, `share_files_added`, `share_failed`, `share_submitted_for_approval`, `share_approved`, `share_rejected`, `share_resubmitted`, `file_finalized`, `file_downloaded`, `file_deleted`, `file_expired`, `file_upload_abandoned`, `file_quarantined`, `file_quarantine_released`, `file_quarantine_purged`, `av_reload_triggered`.
-- **Encryption at rest:** `encryption_at_rest_changed`, `file_encryption_deferred` (stored unencrypted for now; the backfill retries), `file_encryption_failed` (set aside after repeated failures), `file_integrity_failed` (an encrypted file failed to authenticate while being read).
-- **Public links / groups:** `public_link_created`, `public_link_revoked`, `public_link_consumed`, `group_created`, `group_updated`, `group_deleted`, `group_member_added`, `group_member_removed`.
-- **Secrets:** `secret_created`, `secret_viewed`, `secret_burned` (every view used), `secret_expired`, `secret_revoked` (burned early by the sender, an admin or a config import), `secret_recipient_burned` (too many wrong passphrases), `secret_link_shown`, `secret_link_replaced`, `secret_link_removed`, `secret_policy_changed`, and for requests `secret_request_created`, `secret_request_answered`, `secret_request_cancelled`, `secret_request_expired`, `secret_request_link_shown`. Metadata only - never the text, a token or an address. `secret_created`, `secret_viewed`, `secret_burned`, `secret_request_created` and `secret_request_answered` are also webhook events.
-- **API tokens / OIDC:** `api_token_created` / `_revoked` / `_disabled` / `_reactivated` / `_admin_revoked` / `_admin_created`, `oidc_linked`, `oidc_unlinked`, `oidc_provider_created` / `_updated` / `_deleted`.
-- **Email / messaging:** `email_resent`, `email_undeliverable`, `email_template_changed`, `email_template_reset`, `smtp_config_changed`, `imap_config_changed`.
-- **Settings / policy:** `api_policy_changed`, `public_link_policy_changed`, `twofa_policy_changed`, `quarantine_policy_changed`, `share_defaults_policy_changed`, `share_approval_policy_changed`, `home_page_toggled`, `file_preview_toggled`, `motd_changed`, `branding_changed`, `legal_changed`, `site_url_changed`, `site_timezone_changed`, `updates_settings_changed`, `error_alert_settings_changed`, `webhook_created` / `_updated` / `_deleted`, `settings_changed`.
-- **Ops / self-update:** `cron_failed`, `cron_run_triggered`, `cron_schedule_changed`, `ops_alert_dispatched`, `anomaly_detected`, `config_backup_exported`, `config_backup_imported`, `maintenance_enabled`, `maintenance_disabled`, `update_triggered` / `_completed` / `_failed`, `update_postponed`, `update_postpone_cancelled`, `update_auto_scheduled`, `rollback_triggered` / `_completed` / `_failed`.
-
-</details>
-
----
-
-# Operator guide
-
-Audience: whoever runs the server. Linux host, Docker + Compose, Traefik on the host
-(not in compose).
-
-## System requirements
-
-- Linux host with Docker Engine ≥ 24 and **Docker Compose ≥ 2.24**. The
-  compose file uses the long-form `env_file:` with `required: false`, which
-  older Compose v2 releases reject outright - so "Compose v2" was not a
-  sufficient requirement and an operator on 2.20 met the documented floor and
-  still could not start the stack (audit 2026-07-30).
-- ~2 GB RAM minimum (clamd holds ~1.5 GB of signatures in memory).
-- Disk: ~500 MB for images + signatures + DB; the rest is uploads.
-- Outbound HTTPS for ClamAV `freshclam` updates and HIBP checks.
-
-## First install
-
-```bash
-git clone <repo> fileHeron && cd fileHeron
-cp .env.example .env
-```
-
-Rotate **at minimum** these secrets - the stack refuses to start with placeholders in
-production:
-
-| Variable | Purpose | Generate with |
-|---|---|---|
-| `DB_PASSWORD` + `DB_ROOT_PASSWORD` | MariaDB app + root | `openssl rand -hex 24` |
-| `JWT_SECRET` | JWT-HS256 + various HMACs | `openssl rand -hex 32` |
-| `TUS_HOOK_SECRET` | HMAC for tusd ↔ backend hooks | `openssl rand -hex 32` |
-
-Then either set `ADMIN_BOOTSTRAP_EMAIL` (and optionally `ADMIN_BOOTSTRAP_PASSWORD`) to
-bootstrap an admin on first run, or use the `/setup` web wizard. The wizard is anonymous
-until the first admin exists, so set `SETUP_TOKEN` (`openssl rand -hex 32`) before the
-instance is reachable and open `/setup?token=<SETUP_TOKEN>`: without the token the wizard
-refuses, and nobody who finds the fresh instance first can claim it. `install.sh` does this
-for you and prints the URL. Then:
-
-```bash
-docker compose up -d
-docker compose ps                       # healthy in ~45s (clamd warmup is slowest)
-curl http://127.0.0.1:8000/api/health
-```
-
-## Compose ports
-
-Everything binds to **127.0.0.1**; no service is publicly exposed - the host's Traefik
-terminates TLS and routes.
-
-- `127.0.0.1:${APP_BACKEND_PORT}` (default 8000) → FastAPI
-- `127.0.0.1:${APP_FRONTEND_PORT}` (default 8080) → nginx (SPA + tusd proxy)
-
-## Traefik on the host
-
-<details>
-<summary>Sample static + dynamic config</summary>
-
-```yaml
-# traefik.yml (static)
-entryPoints:
-  websecure:
-    address: ":443"
-certificatesResolvers:
-  acme:
-    acme:
-      email: ops@example.com
-      storage: /etc/traefik/acme.json
-      tlsChallenge: {}
-providers:
-  file:
-    filename: /etc/traefik/dynamic.yml
-```
-
-```yaml
-# dynamic.yml - routes + the internal-deny rule
-http:
-  routers:
-    fileheron-spa:
-      rule: "Host(`files.example.com`)"
-      service: fileheron-frontend
-      entryPoints: [websecure]
-      tls: { certResolver: acme }
-    fileheron-api:
-      rule: "Host(`files.example.com`) && PathPrefix(`/api`) && !PathPrefix(`/api/internal`)"
-      service: fileheron-backend
-      entryPoints: [websecure]
-      tls: { certResolver: acme }
-  services:
-    fileheron-backend:
-      loadBalancer:
-        servers: [{ url: "http://127.0.0.1:8000" }]
-    fileheron-frontend:
-      loadBalancer:
-        servers: [{ url: "http://127.0.0.1:8080" }]
-```
-
-</details>
-
-The `!PathPrefix(/api/internal)` clause is defence-in-depth for
-`/api/internal/tus-hooks` (HMAC-signed and network-isolated). Traefik **must overwrite,
-not append**, client-supplied `X-Forwarded-For`, and you must **not** set
-`forwardedHeaders.trustedIPs`/`insecure` on the public entrypoint - the backend trusts
-the leftmost XFF for audit/rate-limit IPs.
-
-## Production hardening checklist
-
-`install.sh` produces a production-ready `.env` (sets `ENVIRONMENT=production`,
-`COOKIE_SECURE=true`, derives `WEBAUTHN_RP_ID`, blanks the dev test account). If you
-write `.env` by hand, confirm each of these before going live:
-
-- **`ENVIRONMENT=production`** - forces secure cookies, disables `/docs` +
-  `/openapi.json`, enables HSTS, and turns the secret/`AV_SKIP` placeholder checks
-  into fatal boot errors (an unrecognised value aborts boot).
-- **Strong unique secrets** - `JWT_SECRET`, `TUS_HOOK_SECRET`, `DB_PASSWORD`,
-  `DB_ROOT_PASSWORD` (each >= 32 chars; production refuses placeholder values).
-  `install.sh` generates these with `openssl rand -hex 32`.
-- **`WEBAUTHN_RP_ID`** = your exact public host (no scheme/port), or passkeys break.
-- **`AV_SKIP=false`** - the ClamAV upload-scan gate (fatal if `true` in production).
-- **No dev test account** - leave `TEST_ACCOUNT_*` blank (only seeded outside production).
-- **Reverse proxy** - terminate TLS at Traefik (or equivalent); it MUST overwrite,
-  not append, `X-Forwarded-For`, and the backend/tusd ports stay bound to
-  `127.0.0.1` (never exposed publicly). See [Traefik on the host](#traefik-on-the-host).
-- **Defense-in-depth (recommended)** - set `METRICS_BEARER_TOKEN` (else `/api/metrics`
-  is disabled) and `TUS_HOOK_ALLOWED_IPS` to restrict the internal hook surface.
-- **Backups + drills** - enable the nightly backup timer + weekly restore drill
-  (see [Backups](#backups)).
-
-The runtime applies `no-new-privileges` to every container and drops **all Linux
-capabilities** from each, adding back only what the image's root phase needs to
-start - listed with the reason next to each one in `docker-compose.yml` (backend,
-worker and tusd never run as root and get nothing back). The app images are pinned
-by the release tag (`FH_TAG`, moved only by the in-app updater, which verifies
-their signatures) and the database, Redis, ClamAV and tusd images by digest;
-Argon2id + HIBP guard passwords.
-
-## Storage layout
-
-```
-./data/
-├── db/           # MariaDB datadir (bind-mounted)
-├── redis/        # Redis AOF + RDB
-├── uploads/      # tusd working dir; partial uploads
-├── files/        # finalized uploads (yyyy/mm/{file-uuid}.bin)
-└── quarantine/   # ClamAV-flagged files
-```
-
-`uploads/`, `files/`, `quarantine/` must share one filesystem (finalize is
-`shutil.move`). `data/{uploads,quarantine,files,updater}` must stay UID-1000-owned (a
-committed `.gitkeep` per dir + `install.sh` keep them so); if a bind-mount source is
-missing when compose starts, the root daemon recreates it `root:root` and UID 1000 can
-no longer write.
-
-### Storage backend (`STORAGE_BACKEND`)
-
-Default `local`. Set `STORAGE_BACKEND=s3` for any S3-compatible store (AWS, MinIO, …)
-via `S3_BUCKET` / `S3_REGION` / `S3_ENDPOINT_URL` / `S3_ACCESS_KEY_ID` /
-`S3_SECRET_ACCESS_KEY` / `S3_KEY_PREFIX`.
-
-<details>
-<summary>S3 behaviour + caveats</summary>
-
-- Uploads stream to the bucket (multipart for large files); downloads **307-redirect to a presigned URL** (app does auth + the single budget decrement first); AV scans via clamd **INSTREAM**; quarantine is a server-side key-prefix copy.
-- **Pick the backend at install time** - switching local↔s3 with existing data isn't automatic (an operator script copies bytes + rewrites `files.storage_path`). `uploads/` (tusd staging) always stays local.
-- Bucket durability/versioning is your responsibility; `scripts/backup.sh` only tars local `./data/files`. INSTREAM is bounded by clamd `StreamMaxLength` (raise it for large files; a file over that limit but under clamd's ~2 GiB ceiling scans as `error` and is not served). Files past the ceiling are not streamed to clamd at all - they are served flagged `av_unscanned`, since no verdict is obtainable. The low-disk guard is a no-op on s3. At-rest encryption is your bucket's SSE - or file:Heron's own, which also keeps the contents from the bucket's operator ([Encryption at rest](#encryption-at-rest)).
-
-</details>
-
-## Encryption at rest
-
-Off by default. Turn it on at **Admin › Security & audit › Encryption at rest**:
-tick that you have a safe copy of `.env`, then confirm with your password.
-
-**What it does.** Every file is stored encrypted (AES-256-GCM in 1 MiB chunks,
-a fresh key per file, wrapped by a key derived from `JWT_SECRET`). A new upload
-is encrypted right after its virus scan and before anyone is told it is there;
-until then it answers "scan in progress", as before. Files already stored are
-encrypted in the background by the scheduled task `encrypt_existing_files`, a
-few at a time; the unencrypted copy is deleted an hour later (a download that
-is still reading it finishes). Inbound mail attachments are stored encrypted
-from the start. Downloads, previews, resumes, the desktop client and ZIP
-archives work exactly as before.
-
-**What it protects:** file contents in backups, restic copies, disk images,
-a stolen disk, and the S3 bucket. **What it does not:** anyone who controls
-the server - the key lives beside the files. Also not covered: tusd's staging
-copy while an upload is in progress, and the disk blocks of a deleted
-unencrypted copy. On a **versioned** bucket, replaced unencrypted objects stay
-as noncurrent versions until a lifecycle rule removes them.
-
-> **Backups restore encrypted files only together with `.env`.** The archives
-> hold ciphertext; the key comes from `JWT_SECRET`, which backups deliberately
-> do not contain. A restore without it brings back the database and not one
-> encrypted file. `scripts/restore_validate.py` decrypts a sample and fails
-> loudly when the key does not match.
-
-**Turning it off** (also password-gated) stops encrypting new uploads; files
-already encrypted stay encrypted and keep working. A file that fails to encrypt
-is stored unencrypted for now (audited `file_encryption_deferred`) and the
-background task tries it again; after three failures it is set aside for a day
-(`file_encryption_failed`, **Try them again** on the page).
-
-**Rolling back** to a release from before encryption at rest is refused while
-encrypted files exist - that release would serve them as noise. Decrypt first:
-
-```bash
-docker compose exec backend python scripts/decrypt_files_at_rest.py --turn-off --purge-now
-```
-
-It refuses while encryption is on (unless `--turn-off`), waits for a running
-background pass, needs free space for one file at a time, and is safe to re-run.
+## Documentation
+
+| Guide | For |
+|---|---|
+| [User guide](docs/user-guide.md) | anyone with an account: sending, receiving, public links, secrets, account |
+| [Admin guide](docs/admin-guide.md) | admins: every `/admin` page, scan guard, policies, audit events |
+| [Operator guide](docs/operator-guide.md) | whoever runs the server: install, Traefik, hardening, storage, backups, upgrades |
+| [Settings reference](docs/configuration.md) | every environment variable, runtime setting and per-user preference |
+| [Developer guide](docs/developer-guide.md) | contributors: code layout, request flow, uploads, workers, migrations |
+| [Screenshot gallery](docs/screenshots/README.md) | every screen with a sentence each |
+| [CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md) · [RELEASE_NOTES.md](RELEASE_NOTES.md) | dev setup and gates · reporting vulnerabilities · per-release notes |
+| `docs/engineering/*.md` | the invariants per subsystem, for anyone changing code |
+
+## Using file:Heron
+
+Everything a signed-in user does, page by page: [User guide](docs/user-guide.md).
+
+- **[Logging in](docs/user-guide.md#logging-in)** - email + password (with 2FA), a passkey, or SSO, depending on what the admin enabled.
+- **[The page layout](docs/user-guide.md#the-page-layout)** - brand mark, centre navigation, notification bell and name menu.
+- **[Sending a share](docs/user-guide.md#sending-a-share-sharenew)** - pick recipients, drop files, set an expiry, optionally invite people without an account.
+- **[Receiving a share](docs/user-guide.md#receiving-a-share-inbox)** - the inbox of shares addressed to you or your groups; each file's download or scan state, and a resumable ZIP of the whole share.
+- **[Managing your shares](docs/user-guide.md#managing-your-shares-outbox)** - sort, filter and group the outbox; edit expiry, expire now, revoke, add files, manage the public link.
+- **[Public links](docs/user-guide.md#public-links-anonymous-recipients)** - `/d/{token}` for anonymous recipients, with optional password and download-count limit.
+- **[In-browser preview](docs/user-guide.md#in-browser-preview)** - PDFs, images and text from a strict allowlist, without spending the download budget.
+- **[Share approval](docs/user-guide.md#share-approval-four-eyes)** - the optional four-eyes check before a share is delivered.
+- **[Secrets](docs/user-guide.md#secrets-secrets)** - send or request a password or short text that is destroyed after its view limit or expiry.
+- **[Account page](docs/user-guide.md#account-page-account)** - profile and language, password, sessions, 2FA, passkeys, SSO, email address, notifications, API tokens.
+
+## Administration
+
+The admin console under `/admin`, page by page: [Admin guide](docs/admin-guide.md).
+
+- **[Users](docs/admin-guide.md#user-management)** and **[Groups](docs/admin-guide.md#groups)** - invites, roles, quotas, connections, company-inbox groups.
+- **[Audit log](docs/admin-guide.md#audit-log-adminaudit-log)**, **[File history](docs/admin-guide.md#file-history-adminfile-history)** and **[Sessions](docs/admin-guide.md#sessions-adminsessions)** - who did what, every file ever uploaded, every signed-in session.
+- **[Quarantine](docs/admin-guide.md#quarantine-adminquarantine)** - files ClamAV flagged; download, release or purge them.
+- **[Analytics](docs/admin-guide.md#analytics-adminanalytics)** and **[Error log & alerts](docs/admin-guide.md#error-log--alerts-adminerror-log--adminsettingserror-alerts)** - usage dashboard, server errors, email alerts.
+- **[Webhooks](docs/admin-guide.md#webhooks-adminsettingswebhooks)** and **[Scheduled tasks](docs/admin-guide.md#scheduled-tasks-adminscheduled-tasks)** - outbound event subscriptions; every cron with its schedule and **Run now**.
+- **[Scan guard](docs/admin-guide.md#scan-guard-blocking-probes-and-brute-force)** - auto-block rules for probes and brute force, blocks and allowlist.
+- **[Policies & settings](docs/admin-guide.md#policies--settings)** - API tokens, public links, 2FA, SSO, SMTP, IMAP, share approval, branding, maintenance, config backup, advanced.
+- **[Audit events](docs/admin-guide.md#audit-events)** - the 150+ event types, grouped.
+
+## Operations
+
+Installing and running the server: [Operator guide](docs/operator-guide.md).
+
+- **[System requirements](docs/operator-guide.md#system-requirements)** and **[First install](docs/operator-guide.md#first-install)** - Docker Compose ≥ 2.24, `install.sh`, the first admin.
+- **[Compose ports](docs/operator-guide.md#compose-ports)** and **[Traefik on the host](docs/operator-guide.md#traefik-on-the-host)** - everything binds to `127.0.0.1`; sample static and dynamic Traefik config.
+- **[Production hardening checklist](docs/operator-guide.md#production-hardening-checklist)** - what `install.sh` sets and what is left to you.
+- **[Storage layout](docs/operator-guide.md#storage-layout)** and **[Encryption at rest](docs/operator-guide.md#encryption-at-rest)** - `./data/`, the S3 backend, per-file AES-256-GCM.
+- **[Restore](docs/operator-guide.md#restore)** - `scripts/restore.sh`, pre-update backups, restore drills.
+- **[Upgrades](docs/operator-guide.md#upgrades)** - in-app self-update, automatic updates, image signatures, `scripts/deploy.sh` and `scripts/rollback.sh`.
+- **[Health checks & metrics](docs/operator-guide.md#health-checks--metrics)**, **[Background jobs](docs/operator-guide.md#background-jobs--housekeeping)**, **[Common issues](docs/operator-guide.md#common-operational-issues)** and **[Escape hatches](docs/operator-guide.md#operator-escape-hatches)**.
 
 ## Backups
 
-```bash
-./scripts/backup.sh
-# → ./backups/<YYYY-MM-DD_HHMMSS>/{db.sql, files.tar.gz, quarantine.tar.gz, redis.rdb, manifest.txt}
-```
+`./scripts/backup.sh` writes a dated directory (database, files, quarantine, Redis)
+and can push it to a `restic` repo. Details: [Backups](docs/operator-guide.md#backups).
 
 > **Back up `.env` separately - the backup does not contain it, and a restore
-> without it is unrecoverable.**
->
-> Every encrypted field in the database - TOTP secrets, OIDC client secrets,
-> SMTP/IMAP passwords, public-link tokens, webhook secrets - is encrypted under
-> a key derived from `JWT_SECRET`. Restore onto a host with a different one and
-> all of those rows come back **intact and permanently unreadable**: every 2FA
-> user locked out, SSO dead, outbound mail dead. Row counts, checksums and the
-> restore script's own output all look correct, because the data is there - it
-> just cannot be decrypted, and nothing can recover it.
->
-> Secrets are kept out of `./backups` deliberately: it is a plain directory,
-> frequently synced onward. Keep `.env` in your password manager or secret
-> store, and re-save it whenever you rotate `JWT_SECRET`.
-> `scripts/restore_validate.py` samples those fields and fails loudly on a key
-> mismatch - but only once you are already on the new host, which is too late to
-> go and fetch the old key.
->
-> The weekly restore drill cannot catch this: it restores on the same host,
-> reading the same `.env`.
->
-> With [encryption at rest](#encryption-at-rest) on, the same goes for every
-> encrypted **file** in `files.tar.gz` and `quarantine.tar.gz`.
+> without it is unrecoverable.** Every encrypted database field is encrypted under
+> a key derived from `JWT_SECRET`; restored with a different one, those rows come
+> back intact and permanently unreadable.
 
-With `BACKUP_RESTIC_REPO` + `BACKUP_RESTIC_PASSWORD` set, the dated dir is also pushed
-to that restic repo (S3/B2/SFTP/REST/local; password via `--password-file`, not env).
-Every snapshot carries a stable `fileheron` tag plus a per-run `fileheron-<stamp>`
-one, and retention selects on the stable tag - so the sweep only ever touches
-fileHeron's own snapshots and a repo shared with another application is safe.
+## Configuration
 
-Without `BACKUP_RESTIC_REPO` every run says so (`this backup is local-only, on the
-same disk as the data it protects`) and still exits 0. With it set, a run whose offsite
-copy was NOT written - password missing, `restic` not installed, or the push failed -
-exits **1** after the local backup and its retention are done, so the systemd unit's
-`OnFailure=` alert fires instead of a nightly silent gap.
+Three layers, each listed in full in the [Settings reference](docs/configuration.md):
 
-> **Upgrading to v2.12.0 with an existing restic repo:** snapshots written by
-> earlier versions carry only the per-run tag, so retention will skip them and
-> they will accumulate. Nothing was ever pruned before this release either, so
-> this is not new - but to bring the backlog under the policy, adopt them once
-> (needs `jq`):
->
-> ```bash
-> restic --repo "$BACKUP_RESTIC_REPO" snapshots --json \
->   | jq -r '.[] | select(any(.tags[]?; startswith("fileheron-"))) | .short_id' \
->   | xargs -r restic --repo "$BACKUP_RESTIC_REPO" tag --add fileheron
-> ```
->
-> The next nightly run then applies keep-daily 7 / weekly 4 / monthly 12 to
-> them. Check what it would drop first with `forget --dry-run`.
+1. **[Environment variables](docs/configuration.md#1-environment-variables-boot)** (`.env`, annotated in [`.env.example`](.env.example)) - read at boot; the only place for secrets and infrastructure.
+2. **[Admin runtime settings](docs/configuration.md#2-admin-runtime-settings-hot---no-restart)** (`/admin/settings/*`) - applied live, no restart.
+3. **[Per-user preferences](docs/configuration.md#3-per-user-preferences-account)** (`/account`).
 
-Schedule it nightly. A ready-made systemd timer ships in `scripts/ops/` (adapt
-`User=`/paths to your install):
+## Development
 
-```bash
-sudo cp scripts/ops/fileheron-backup.{service,timer} /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl enable --now fileheron-backup.timer
-```
-
-Or via host cron:
-
-```cron
-30 3 * * * cd /opt/fileHeron && ./scripts/backup.sh >> /var/log/fileheron-backup.log 2>&1
-```
-
-## Restore
-
-```bash
-./scripts/restore.sh ./backups/<stamp>/   # sha256-verifies, prompts for literal "restore", then reimports
-```
-
-`restore.sh` reads the manifest before it asks anything: a full backup (`db.sql`,
-`redis.rdb`, `files.tar.gz`, `quarantine.tar.gz`) replaces the database, Redis and
-`data/files` + `data/quarantine`; a **pre-update backup** (`db.sql` + `redis.rdb`,
-see below) replaces the database and Redis only and leaves the files alone. A
-manifest of neither shape stops before anything is touched.
-
-### Restoring a pre-update backup
-
-The in-app Update can back up the database and Redis first (a checkbox in the
-Update dialog; always, by default, when the release upgrades the database). Those
-backups land in `backups/pre-update/<stamp>_<from>-to-<to>/` - apart from the
-nightly ones, so they are not counted by the nightly retention, not drilled and not
-pushed to restic. The updater keeps the newest `updates.backup_keep` (3) and
-deletes any older than `updates.backup_max_age_days` (30) on each update; the newest
-one is always kept.
-
-**Undo an update's data, the server itself is fine** (for example a migration that
-went wrong): roll the app back, then restore:
-
-```bash
-scripts/rollback.sh <from-tag>          # or Rollback in /admin/system
-./scripts/restore.sh backups/pre-update/<dir>
-```
-
-The database, Redis, ClamAV and tusd stay on their new versions; the old app runs
-against them.
-
-**The database (or Redis) did not come back during an update.** The job names the
-backup and the old app is running again, but the data service is stuck on the
-release's definition. Go back to the previous compose file first - enough whenever
-the data directory itself is intact (a bad setting, an image problem):
-
-```bash
-git checkout <from-tag>                  # the compose file of the version you came from
-docker compose up -d --no-deps db        # or redis
-```
-
-**MariaDB cannot read its datadir any more** (it upgraded `data/db` before failing),
-or you need the old server version back: a major upgrade rewrites `data/db` in
-place and cannot be undone, so go back to an empty datadir on the old version and
-load the backup into it:
-
-```bash
-docker stop fileheron-backend fileheron-worker && docker compose stop db
-docker run --rm -v "$PWD/data":/d alpine mv /d/db /d/db.failed-upgrade
-git checkout <from-tag>                  # the compose file pins the old images
-sed -i 's/^FH_TAG=.*/FH_TAG=<from-tag>/' .env
-docker compose up -d db                  # fresh datadir, created from .env
-./scripts/restore.sh backups/pre-update/<dir>
-```
-
-The next update upgrades again, after a fresh backup. A database-only restore
-leaves files uploaded after the backup on disk without a row, and rows deleted
-after it are back without their bytes; `restore_validate.py` lists both:
-
-```bash
-docker cp scripts/restore_validate.py fileheron-backend:/app/scripts/
-docker compose exec -T backend python scripts/restore_validate.py
-```
-
-**Restore drills** prove the backup actually restores. `scripts/restore_drill_e2e.sh`
-restores the latest backup into an **isolated throwaway compose project** (own name,
-data, port - never touches the live stack), runs `alembic upgrade head`, then
-`scripts/restore_validate.py` (row counts, on-disk files, no orphan FKs, schema at
-head), and records success in `backups/LAST_SUCCESSFUL_DRILL`. It refuses an
-auto-selected backup older than `DRILL_MAX_BACKUP_AGE_HOURS` (default 48), so a
-drill cannot report green once backups have stopped arriving.
-
-> **Neither the backup nor the drill runs until you schedule it.** The units in
-> `scripts/ops/` ship with the repo; shipping is not scheduling. Install and
-> enable them explicitly, and check the result — a copied-but-not-enabled unit
-> is the failure mode that leaves an instance with no backups at all while the
-> files look present:
->
-> ```bash
-> sudo cp scripts/ops/fileheron-*.{service,timer} /etc/systemd/system/
-> sudo systemctl daemon-reload
-> sudo systemctl enable --now fileheron-backup.timer fileheron-restore-drill.timer
-> systemctl list-timers 'fileheron-*'     # confirm both are listed and active
-> ```
->
-> The units are copied, not symlinked, so re-copy and `daemon-reload` after
-> changing them. Both carry `OnFailure=fileheron-alert-failure@%n.service`, which
-> emails the app's admins - install that unit too, or a failed backup is only a
-> `failed` unit and a journald line. Set `BACKUP_RESTIC_REPO`/`BACKUP_RESTIC_PASSWORD` if you want the
-> archive pushed offsite; unset means local-only.
-
-## Upgrades
-
-Prefer the **in-app self-update**: `/admin/system` polls GitHub (filtered to backend
-`vX.Y.Z` tags, matched in full - so `v1.2.3-rc1` and the desktop client's
-`client-v*` tags are skipped) and surfaces an "Update available" banner with the changelog;
-**Update** drives the updater shim/executor and records the previous `FH_TAG` for
-one-click rollback. Manual path:
-
-```bash
-git pull && docker compose pull && docker compose up -d --build
-```
-
-**Automatic updates** are off by default. Turn them on under **Status & updates**; it
-asks for your password, because they install releases without anyone entering it.
-Choose which releases qualify (**patch only** - the default -, patch and minor, or any)
-and how long a release must have been public first (default **24 h**, so a quick
-follow-up fix can come out first). The task `auto_update` - its own row on Scheduled
-tasks, daily at 03:30 site time - then schedules an eligible release exactly like
-**Postpone**: new transfers pause, running ones finish (at most the drain wait), and the
-update below runs with the usual pre-update backup. Admins are alerted when one is
-scheduled and when it ends. A release whose automatic install fails or rolls back is not
-retried automatically; newer releases, and a manual **Update**, still are. Releases
-outside the chosen scope are announced as before.
-
-Alembic migrations run from the backend entrypoint on every boot - idempotent
-(`_has_table` / `_has_column` / `_has_index` guards), safe to re-run. **Roll-forward
-only**; back up before upgrading. (Image downgrade after a forward migration needs an
-`alembic stamp` from the newer image first.)
-
-**What an in-app Update does**, in order - nothing on the host changes before the
-backup has succeeded:
-
-1. Works out which infra services (database, Redis, ClamAV, tusd) the release
-   changes: a new image, a changed `docker-compose.yml` section, or a changed file
-   the service mounts from the checkout (`docker/clamav/clamd.conf`).
-2. Pulls the release's app images and the new infra images.
-3. Backs up the database and Redis to `backups/pre-update/` when the Update
-   dialog's box is checked - and regardless when the release changes the database
-   (`updates.backup_on_db_change`). A failed backup stops the update with nothing
-   changed.
-4. Fast-forwards your checkout to the release commit (`git merge --ff-only`, as
-   the checkout's owner), so `docker-compose.yml`, `docker/` and `scripts/` match
-   the release.
-5. Recreates the database and Redis if the release changes them, one at a time,
-   each waiting for its healthcheck. The backend and worker are stopped
-   meanwhile, so expect a few minutes of downtime when MariaDB upgrades itself
-   (`MARIADB_AUTO_UPGRADE=1`). If the database or Redis does not come back
-   healthy, the update stops, the old app is started again and the job names the
-   backup to restore (see *Restoring a pre-update backup*).
-6. Swaps backend, worker and frontend and waits for the new version; a failed
-   start rolls the APP back automatically. Infra is never rolled back
-   automatically - a MariaDB or Redis major has no way back in place.
-7. Recreates ClamAV and tusd if the release changes them, with the new app
-   already serving - neither is needed to answer a request, so the app is not
-   kept down while ClamAV loads its signatures. A failure only adds a warning.
-   Then it recreates the updater-shim.
-
-**What the updater trusts.** Every server image published from v2.29.0 on is
-signed when it is built (Sigstore cosign, keyless, under the identity of this
-repository's release workflow on a release tag). The updater-shim verifies that
-signature on the updater image for the requested version before running it, and
-runs it by the verified digest; the executor verifies the backend, worker,
-frontend and updater images the same way before swapping anything. An image
-without that signature is refused and nothing changes. The shim also refuses an
-Update to a version older than the one running (it asks Docker, not the
-request), and lets a Rollback return only to the version that was running before
-the last update - it records that itself in `data/updater-private/`, a
-root-owned directory the app containers never see (the first Rollback after
-v2.29.0 has no record yet and is allowed with a warning). **If you publish your
-own images** (a fork), set `SHIM_REQUIRE_SIGNATURE=false` in `.env` - you are
-then trusting your registry account alone - or sign them the same way and set
-`SHIM_SIGNER_IDENTITY_RE` to your workflow's identity if you renamed the
-repository. The database, Redis, ClamAV and tusd images are pinned by digest in
-`docker-compose.yml`, so a rebuild on Docker Hub arrives as a Dependabot pull
-request and is applied by the next update like any other infra change.
-
-**When the infra step is skipped** the app update still runs, and the job shows
-a warning with the manual command:
-
-```bash
-git fetch --tags && git merge --ff-only <tag> \
-  && docker compose up -d --no-deps db redis clamav tusd
-```
-
-It skips when the checkout has local edits to files the release changes, has
-diverged, or is ahead of the release with infra changes the release does not
-have; when a `docker-compose.override.yml` exists or `.env` sets `COMPOSE_FILE`
-(the updater cannot apply either); when the install is not a git checkout or is a
-shallow clone; when the release's compose file needs a variable your `.env` lacks;
-or when `updates.infra_sync` is off. Keep site settings in `.env`, not in
-`docker-compose.yml`. Your host Traefik config and the `scripts/ops/` systemd units
-(copies) stay manual. If the host reboots while the data layer is being
-recreated, bring the rest back with `docker compose up -d`.
-
-**The first update from a version without this** (v2.18.0 and older) already runs
-the new updater - the shim always runs the target release's executor - so it syncs
-infra and backs up before a database upgrade; the checkbox itself appears in the
-Update dialog from the following update on.
-
-**Scripted deploy / rollback (bootstrap + hotpatch).** `scripts/deploy.sh` pulls
-the GHCR images for `FH_TAG`, taken from the environment first and `.env` second
-(so `FH_TAG=v1.2.3 scripts/deploy.sh` works), defaulting to `latest`.
-
-If the pull fails it does **not** blindly build: with every image already present
-locally at that tag it proceeds with those and builds nothing, and for a published
-release tag (`vX.Y.Z`) it **fails with exit 3** rather than building - a local
-build is not that release, and tagging it as one would overwrite the very image a
-rollback needs. The build-from-source fallback remains for first install and for
-hotpatch tags, which is what it exists for; local builds are not sticky, so the
-next deploy tries GHCR again.
-
-`scripts/rollback.sh` with no args lists the rollable tags; with a `<tag>` it pins
-`FH_TAG=<tag>` in `.env` and rolls the four services onto it. (It used to re-tag
-the target as `:latest` instead, which left `.env` still naming the broken version
-so the next pull silently undid the rollback.) It requires the four service images
-locally; the `updater-executor` image is not required, since the in-app updater
-pulls that itself.
-
-Prefer the in-app updater for routine upgrades - it maintains its own rollback
-state (`data/updater/rollback_target.json`) that a manual `FH_TAG` flip leaves
-stale.
-
-## Health checks & metrics
-
-- `GET /api/health` → `{"status":"ok"}`, or `{"status":"db_unavailable"}` with a 503
-  when the database is unreachable. A Redis or ClamAV outage does NOT change
-  `status` - it adds a `degraded: [...]` field alongside `"status":"ok"`, because
-  the app still serves requests with rate-limit and AV fail-open semantics.
-  **Alert on the presence of `degraded`, not on `status`.** Build identifiers,
-  pool stats and `degraded` are returned only to loopback / compose-network
-  callers; a public caller gets bare liveness.
-  Each container also has its own Docker healthcheck (`docker compose ps`).
-- `GET /api/metrics` - Prometheus exposition, guarded by `METRICS_BEARER_TOKEN` and/or `METRICS_ALLOWED_IPS` (cached `METRICS_CACHE_TTL_SEC`).
-
-## Background jobs & housekeeping
-
-The ARQ `worker` runs the cron set (no host crontab) plus event-driven AV scan + email
-send. Cadences are admin-tunable on [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks);
-every retention window is a setting (`0` disables that pruning job). Full list with
-defaults: [ARQ workers + cron](#arq-workers--cron).
-
-## Common operational issues
-
-- **clamd slow to come up** - first boot does a full `freshclam` sync (~150 MB); watch `docker compose logs clamav`.
-- **tusd 500 on finalize** - usually a `TUS_HOOK_SECRET` mismatch between backend + tusd; restart both after changing.
-- **Upload stalls at "finalising"** - `data/uploads` and `data/files` must resolve to the same mount inside the backend container.
-- **Permission denied writing data/** - a missing bind-mount dir was recreated `root:root`. Chown only the app's own dirs:
-  `docker run --rm -v "$PWD/data":/data alpine chown -R 1000:1000 /data/{uploads,quarantine,files,updater}` (no restart needed).
-  Do **not** `chown -R 1000:1000 /data` wholesale - that also rewrites `data/db` and `data/redis`, whose
-  datadirs MariaDB and Redis expect to own; they will refuse to start.
-
-## Operator escape hatches
-
-- **Lost admin access** - `docker compose exec backend python scripts/promote_user.py <email>`.
-- **Leave encryption at rest** (or roll back to a release from before it) - `docker compose exec backend python scripts/decrypt_files_at_rest.py --turn-off` decrypts every stored file; add `--purge-now` before such a rollback so no replaced copy is left behind. See [Encryption at rest](#encryption-at-rest).
-- **Bypass ClamAV in CI/dev** - `AV_SKIP=true` (boot refuses `production + true`).
-- **Rotate `JWT_SECRET`** - `docker compose exec backend python /app/scripts/rotate_jwt_secret.py` re-encrypts every
-  Fernet-protected field (TOTP secrets, OIDC client secrets, public-link tokens,
-  the encrypted SMTP/IMAP passwords, each secret's wrapped key and secret links)
-  under the new secret - a secret's passphrase layer is untouched, so no passphrase
-  is needed. Stop the worker, run
-  with `OLD_JWT_SECRET`/`NEW_JWT_SECRET` set (`--dry-run` first; safe to re-run
-  after a crash), update `.env`, restart backend + worker. Rotating *without* it
-  locks out every TOTP user and breaks SSO, the stored SMTP password,
-  public-link re-view and every active secret. All sessions invalidate (forced re-login) - plan a window.
-
-## Settings reference
-
-Three configuration layers:
-
-1. **Environment variables** (`backend/app/config.py`, via `.env`) - read at **boot**; the only place for secrets + infra. `↻` = also live-tunable on Advanced.
-2. **Admin runtime settings** (`app_settings` kv, `/admin/settings/*`) - applied **live, no restart**.
-3. **Per-user preferences** (`/account`).
-
-### 1. Environment variables (boot)
-
-The annotated source of truth is [`.env.example`](.env.example). `↻` = also live-tunable
-via `/admin/settings/advanced`.
-
-<details>
-<summary>App, database, Redis, auth</summary>
-
-| Variable | Default | What it does |
-|---|---|---|
-| `ENVIRONMENT` | `development` | `production` forces `COOKIE_SECURE=true` and fail-fasts on placeholder secrets / `AV_SKIP=true`. |
-| `LOG_LEVEL` | `INFO` | Python log level. |
-| `APP_URL` | `http://localhost:8080` | Public URL baked into links when no `site.url` is set; WebAuthn/OIDC origin fallback. |
-| `APP_NAME` | `fileHeron` | Brand name. ↻ (`branding.app_name`). Use the `file:Heron` spelling. |
-| `DB_HOST`/`DB_PORT` | `db`/`3306` | MariaDB location. |
-| `DB_NAME`/`DB_USER` | `fileheron`/`fileheron_app` | Database + app user. |
-| `DB_PASSWORD` / `DB_ROOT_PASSWORD` | - (**required**) | App / root passwords. |
-| `DB_POOL_SIZE` / `DB_POOL_MAX_OVERFLOW` / `DB_POOL_TIMEOUT_SEC` | `10`/`20`/`30` | SQLAlchemy pool. |
-| `REDIS_HOST`/`REDIS_PORT` | `redis`/`6379` | ARQ queue, rate limits, quota Lua, SSE pubsub. |
-| `JWT_SECRET` | - (**required**, ≥32) | HS256 + HMAC key. |
-| `JWT_ALGORITHM` | `HS256` | Access-token algorithm. |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | Access-JWT lifetime. ↻ (5-1440). |
-| `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh-cookie lifetime. ↻ (1-365). |
-| `SESSION_MAX_AGE_DAYS` | `30` | Days after sign-in a session can still be refreshed; `0` = no limit. ↻ (0-365). |
-| `COOKIE_SECURE` | `false` | Forced `true` in production. |
-| `MAX_ACTIVE_SESSIONS_PER_USER` | `10` | Per-user session cap. ↻ (1-100). |
-| `ARGON2_TIME_COST` / `ARGON2_MEMORY_COST_KIB` / `ARGON2_PARALLELISM` | `3`/`65536`/`2` | Argon2id cost. |
-| `ADMIN_BOOTSTRAP_EMAIL` / `_PASSWORD` | empty | Bootstrap/promote an admin on boot. |
-| `TEST_ACCOUNT_EMAIL` / `_PASSWORD` / `_DISPLAY_NAME` | empty | Dev seed; refused in production. |
-
-</details>
-
-<details>
-<summary>SMTP, IMAP, rate limits & lockout</summary>
-
-| Variable | Default | What it does |
-|---|---|---|
-| `SMTP_HOST` | empty | **Empty (and none set at `/admin/settings/email`) → email is not sent.** Outside production it is printed to the container log; in production only its recipient and subject are logged. |
-| `SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD` | `587`/empty/empty | Connection + auth (DB overrides via `/admin/settings/email`). |
-| `SMTP_FROM_EMAIL`/`SMTP_FROM_NAME` | `noreply@fileheron.local`/`fileHeron` | Envelope sender. |
-| `SMTP_HELO_HOST` | empty | EHLO/HELO name (empty = container FQDN). |
-| `IMAP_HOST`/`IMAP_PORT`/`IMAP_USER`/`IMAP_PASSWORD` | empty/`993`/empty/empty | Inbound mailbox (DB overrides via `/admin/settings/imap`; off unless enabled). |
-| `IMAP_TLS_MODE`/`IMAP_MAILBOX` | `implicit`/`INBOX` | Inbound fetch tuning; both are overridden by the admin settings page. Poll cadence lives on [Scheduled tasks](#scheduled-tasks-adminscheduled-tasks), not an env var. |
-| `imap.require_known_sender` (admin setting) | `true` | Refuse mail whose sender address matches no enabled account, before anything is stored. **Turn it off if your instance accepts mail from people without accounts.** |
-| `imap.tls_insecure` (admin setting) | `false` | Do not verify the mail server's certificate. Only for an internal server with a private CA - the connection stays encrypted, but an on-path attacker can impersonate the server and read the login. |
-| `RATE_LIMIT_LOGIN` | `10` | Login attempts / IP / window. ↻ |
-| `RATE_LIMIT_REGISTER` | `3` | Register/forgot/verify / IP / window. ↻ |
-| `LOGIN_RATE_WINDOW_SEC` | `900` | Per-IP login window. ↻ |
-| `LOCKOUT_THRESHOLD` / `LOCKOUT_DURATION_MIN` | `5`/`15` | Consecutive-failure lock + duration. ↻ |
-
-</details>
-
-<details>
-<summary>Uploads, antivirus, storage, public links, downloads</summary>
-
-| Variable | Default | What it does |
-|---|---|---|
-| `TUS_HOOK_SECRET` | - (**required**, ≥32) | HMAC for the tusd↔backend hook envelope. |
-| `TUS_HOOK_ALLOWED_IPS` | empty | Optional source-IP allowlist for `/api/internal/tus-hooks`. |
-| `MAX_DIRECT_UPLOAD_BYTES` | `104857600` (100 MB) | Direct-multipart cap; larger → TUS. The edge is no longer the binding constraint: `client_max_body_size` in `docker/frontend/nginx.conf` is `1024m`. If you also front the stack with Traefik, check its `maxRequestBodyBytes` - that one still caps the same request. ↻ |
-| `UPLOAD_STALE_AFTER_HOURS` | `3` | When an `uploading` row is treated as abandoned. ↻ |
-| `STORAGE_ROOT` / `TUS_UPLOAD_DIR` / `QUARANTINE_DIR` | `/data/files` / `/data/uploads` / `/data/quarantine` | **Must share one filesystem.** |
-| `STORAGE_BACKEND` | `local` | `local` or `s3` (+ `S3_*`). |
-| `STORAGE_LOW_THRESHOLD_PERCENT` / `_BYTES` | `5` / `10 GiB` | Low-disk degradation thresholds. ↻ |
-| `CLAMAV_HOST`/`CLAMAV_PORT` | `clamav`/`3310` | clamd endpoint. |
-| `AV_SKIP` | `false` | Skip scanning (CI/dev). **Refuses `production + true`.** |
-| `AV_MAX_SCAN_BYTES` | `2147483645` | clamd's real scan ceiling. Do **not** raise it - see below. |
-
-> **Antivirus coverage stops at ~2 GiB, and no configuration changes that.**
-> clamd clamps `MaxFileSize` to `INT_MAX`, so `MaxFileSize 30G` in
-> `docker/clamav/clamd.conf` really means 2147483645 bytes. Above that, clamd
-> answers "clean" *without reading the file*. fileHeron still serves those
-> uploads - the product supports files far larger than any scanner handles - but
-> records them as `files.av_unscanned`, shows an **unscanned** badge next to them
-> in the UI, and writes a `file_served_unscanned` audit event. Raising
-> `AV_MAX_SCAN_BYTES` does not extend coverage; it only makes fileHeron report a
-> verdict clamd never produced.
-| `PUBLIC_LINK_PASSWORD_RATE_LIMIT` / `_WINDOW_SEC` / `PUBLIC_LINK_LOCKOUT_SEC` | `10`/`900`/`900` | Per-link password brute-force guard. ↻ |
-| `SECRETS_MAX_VIEWS` / `SECRETS_MAX_EXPIRY_DAYS` / `SECRETS_MAX_LIFETIME_DAYS` | `100`/`90`/`90` | Ceilings for a secret: most views, latest expiry, longest life (`0` = no lifetime ceiling). ↻ |
-| `SECRETS_PASSPHRASE_MAX_FAILURES` | `10` | Wrong passphrases before a secret is destroyed for that recipient (when that mode is chosen). ↻ |
-| `SECRETS_PASSPHRASE_RATE_LIMIT` / `_WINDOW_SEC` / `_LOCKOUT_SEC` | `10`/`900`/`900` | Wrong-passphrase throttle per recipient and address, and how long a link is locked. ↻ |
-| `DOWNLOAD_SIGNED_URL_TTL_SEC` | `900` | Signed-download-URL lifetime (30s-1h). ↻ |
-| `DOWNLOAD_RESUME_CREDIT_HOURS` | `24` | How long a logged download lets the same user resume it for free (1-168h). Shorter tightens the download budget; longer suits clients that pause overnight. ↻ |
-
-</details>
-
-<details>
-<summary>Security/2FA, anomaly, error alerting, retention, self-update, metrics</summary>
-
-| Variable | Default | What it does |
-|---|---|---|
-| `REQUIRE_2FA` | `none` | Env fallback (`none`/`admins`/`all`); kv policy overrides. |
-| `HIBP_ENABLED` | `true` | HaveIBeenPwned k-anonymity check. ↻ |
-| `WEBAUTHN_RP_ID` / `WEBAUTHN_RP_NAME` / `WEBAUTHN_ORIGINS` | `localhost` / `fileHeron` / empty | Passkey RP id (= public hostname), name, allowed origins (empty → `APP_URL`). |
-| `ANOMALY_ENABLED` | `true` | Hourly heuristic anomaly scan (alert-only). ↻ |
-| `ANOMALY_MASS_DOWNLOAD_THRESHOLD` / `_MULTI_NETWORK_THRESHOLD` / `_LOGIN_FAILURE_THRESHOLD` | `100`/`4`/`50` | Anomaly thresholds. ↻ |
-| `ERROR_ALERT_COOLDOWN_MINUTES` / `ERROR_ALERT_MAX_PER_HOUR` | `15`/`20` | Error-alert anti-flood. ↻ |
-| `ERROR_LOG_RETENTION_DAYS` | `90` | Error-log prune window (`0` disables). ↻ |
-| `AUDIT_LOG_RETENTION_DAYS` | `365` | `prune_history` audit window (`0` = forever). ↻ |
-| `DOWNLOAD_LOG_RETENTION_DAYS` / `EMAIL_LOG_RETENTION_DAYS` / `LOGIN_ATTEMPT_RETENTION_DAYS` | `90`/`90`/`30` | Log prune windows (`0` disables). ↻ |
-| `WEBHOOK_DELIVERY_RETENTION_DAYS` / `IMAP_MESSAGE_RETENTION_DAYS` | `30`/`90` | Webhook + inbound prune windows. ↻ |
-| `NOTIFICATION_READ_RETENTION_DAYS` | `3` | Read in-app notification cleanup. ↻ |
-| `QUARANTINE_PURGE_AFTER_DAYS` / `ORPHAN_RECLAIM_AFTER_DAYS` / `TUS_UPLOAD_ABANDONED_AFTER_HOURS` | `90`/`7`/`24` | Quarantine purge / orphan reclaim / abandoned-upload windows. ↻ |
-| `REFRESH_TOKEN_RETENTION_DAYS` / `INVITE_RETENTION_DAYS` | `30`/`14` | Token + invite retention. ↻ |
-| `SECRET_RETENTION_DAYS` | `90` | How long the record of an ended secret is kept (its text is gone at once; `0` keeps it). ↻ |
-| `FH_TAG` | `latest` | GHCR image tag (the in-app updater rewrites it). |
-| `UPDATER_HOST_WORKSPACE` / `UPDATER_HOST_STATE` | `${PWD}` / `${PWD}/data/updater` | Host paths the updater shim resolves. |
-| `UPDATES_DRAIN_MAX_WAIT_MIN` | `30` | Max wait for transfers to drain before a postponed update applies. ↻ |
-| `UPDATES_BACKUP_DEFAULT` | `true` | Whether the Update dialog's "Back up database first" box starts checked. ↻ |
-| `UPDATES_BACKUP_ON_DB_CHANGE` | `true` | Back up before updating whenever the release changes the database service, checkbox or not. ↻ |
-| `UPDATES_BACKUP_KEEP` / `UPDATES_BACKUP_MAX_AGE_DAYS` | `3` / `30` | Retention of `backups/pre-update/`, applied on each update (0 = no limit; the newest is always kept). ↻ |
-| `UPDATES_INFRA_SYNC` | `true` | Let an update fast-forward the checkout and recreate changed db/redis/clamav/tusd. ↻ |
-| `UPDATES_AUTO_ENABLED` / `UPDATES_AUTO_SCOPE` / `UPDATES_AUTO_MIN_AGE_HOURS` | `false` / `patch` / `24` | Automatic updates: on/off, which releases (`patch`, `minor`, `any`) and how long a release must be public first. Changed on Status & updates, which asks for the admin password. ↻ |
-| `BACKUP_RESTIC_REPO` / `BACKUP_RESTIC_PASSWORD` | empty | Optional offsite restic push - read by the host `scripts/backup.sh`, not by the app. |
-| `METRICS_BEARER_TOKEN` / `METRICS_ALLOWED_IPS` / `METRICS_CACHE_TTL_SEC` | empty/empty/`60` | `/api/metrics` auth + cache. |
-| `OIDC_ALLOW_INSECURE_HTTP` | `false` | Disables HTTPS enforcement for OIDC discovery, JWKS **and the client-secret-bearing token exchange**. Only for a self-hosted IdP on a trusted private network with no TLS. |
-
-SSO/OIDC providers are configured in the DB via `/admin/settings/sso`;
-`OIDC_ALLOW_INSECURE_HTTP` above is the only OIDC env var, and it is env-only on
-purpose so it cannot be flipped from a compromised admin session.
-
-</details>
-
-### 2. Admin runtime settings (hot - no restart)
-
-Stored in `app_settings`; key list in `backend/app/services/settings.py::Keys`
-(`smtp.password` + `imap.password` Fernet-encrypted). Each `/admin/settings/*` page is
-described under [Policies & settings](#policies--settings). The **Advanced** page is the
-registry overlay for every `↻` env var above.
-
-### 3. Per-user preferences (`/account`)
-
-| Preference | Notes |
-|---|---|
-| UI language | `users.locale` (EN/DE); overrides browser language. |
-| Default landing page | `home` / `outbox` / `inbox` / `new` / `account`. |
-| Storage quota | `users.quota_bytes` (admin-set; NULL = unlimited). |
-| Notification channels | Per category → `off` / `email` / `in_app` / `both`. **22 categories**: `share_created`, `share_files_added`, `share_expiring`, `share_pending_approval`, `share_approved`, `share_rejected`, `public_link_downloaded`, `secret_received`, `secret_viewed`, `secret_ended`, `secret_requested`, `secret_request_update`, `account_created`, `reset_password`*, `login_alert`*, `oidc_linked`, `file_quarantined`, `session_evicted`, plus admin-only `ops_alert`, `release_available`, `inbound_message`, `server_error`. (*locked on - can't be disabled.) |
-| 2FA / recovery codes / passkeys | TOTP, 10 one-time recovery codes, WebAuthn credentials. |
-| SSO connections / API tokens | Link/unlink OIDC; mint/scope/revoke your own tokens (if policy allows). |
-
----
-
-# Developer guide
-
-Detail-level invariants live in `CLAUDE.md` (the cross-cutting rules, the source of
-truth for AI-assisted sessions) and `docs/engineering/<area>.md` (one deep dive per
-subsystem, listed in CLAUDE.md's documentation map); this is the human walkthrough.
-
-## Code layout
-
-```
-backend/app/
-├── main.py            # FastAPI factory + middleware + exception handlers
-├── config.py          # Pydantic Settings - fail-fast on insecure prod defaults
-├── database.py        # SQLAlchemy 2.0 engine + Base + get_db
-├── dependencies.py    # get_current_user/_admin, get_actor, require_scope, require_2fa_complete
-├── middleware/        # errors (envelope + error capture), request_id, security_headers
-├── models/            # SQLAlchemy models, one per domain
-├── schemas/           # Pydantic request/response shapes
-├── routers/           # routers (admin/* is a sub-package); mounted in main.py
-├── services/          # business logic - routers stay thin
-├── workers/           # ARQ worker config + cron functions
-├── templates/email/{en,de}/   # Jinja2 templates + subjects.json
-└── utils/             # crypto, geohash, ua_fingerprint, http_range, timeutil, …
-alembic/versions/      # migrations (idempotent helpers in env.py)
-tests/                 # pytest + pytest-asyncio (SQLite; autouse mocks for Redis/SSE)
-
-frontend/src/
-├── views/             # Vue Router pages
-├── components/        # reusable widgets (NotificationBell, Pager, RichTextEditor, …)
-├── composables/       # useUpload, useApiError, useDebouncedSearch, useSiteDateFormat, …
-├── api/               # axios clients per domain
-├── stores/            # Pinia (auth, ui, notifications)
-├── config/            # adminNav.ts (admin sidebar map)
-├── router/index.ts    # routes + guards (silent refresh, requires-2fa, requires-admin)
-├── i18n/locales/{en,de}.json
-└── styles/            # tokens.css, global.css
-```
-
-## Request flow (typical)
-
-```
-SPA → axios (refresh interceptor + paramsSerializer { indexes: null })
-    → Traefik (host) → FastAPI router (Depends(get_actor): JWT or fh_<id>_<sec> bearer)
-    → service module (logic + audit + notification dispatch)
-    → SQLAlchemy session → MariaDB
-```
-
-Array query params need `paramsSerializer: { indexes: null }` → `?state=active&state=expired`
-(FastAPI `Query(default=[])`), not `?state[]=active`.
-
-## Auth specifics
-
-- Access JWT: HS256, 15 min, `{sub, iat, exp, jti, type:"access"}`. Refresh: 64 random bytes, SHA-256 in DB, 7 d, httpOnly cookie scoped `/api/auth`, `SameSite=Lax`, `Secure` in prod.
-- Rotation on every refresh; reuse of a rotated token revokes the **entire user family** (`refresh_token_reused`). `services/jwt_session.py::create_refresh_token` → `enforce_session_cap` enforces the session cap across all login flows (password / recovery / OIDC / WebAuthn / passkey / register-from-invite).
-- **A session ends `auth.session_max_age_days` (default 30, `0` = never) after its sign-in**, however active it stays: rotation carries the sign-in time forward, refuses to refresh past the cap (`401 INVALID_REFRESH`, audited `session_max_age_reached`, the rest of the user's sessions untouched) and never issues a token that outlives it. The browser and the desktop client then ask to sign in again. Editable on the Sessions settings page.
-- **API-token scopes** are deny-by-default: every `get_actor` route carries `Depends(require_scope(...))`, enforced only for `auth_via == "api_token"` (JWT/session + NULL-scope pass through).
-- **Passkey sign-in** (`auth.passkey_signin`, off by default): `POST /api/auth/passkey/begin` + `/complete` sign in with a passkey alone - no account named in the options, user verification required, every failure one `401 PASSKEY_SIGNIN_FAILED`, and none counts towards the account lockout (limited per IP instead). While it is on, a passkey also counts as 2FA: a password sign-in answers `401 WEBAUTHN_REQUIRED` and finishes through `/api/auth/webauthn/*`, and an SSO sign-in is finished at `POST /api/auth/2fa/passkey/begin` + `/complete`.
-- **Step-up re-authentication.** These routes also require the caller's own current password in the request body (`password`; a form field on the import), even with a valid session or API token: `POST /api/admin/backup/export`, `POST /api/admin/backup/import`, `POST /api/admin/users/{id}/erase`, `POST /api/account/api-tokens`, `POST /api/admin/api-tokens`, `POST /api/account/webauthn/register/begin`, the self-update routes `POST /api/admin/system/update`, `/rollback` and `/update/now`, `PUT /api/admin/settings/auto-update` when it turns automatic updates on or changes them while they are on (turning them off needs no password), and `PUT /api/admin/settings/encryption` whenever it switches encryption at rest on or off. A wrong password answers **`403 INVALID_PASSWORD`** (never 401 - the caller IS authenticated), is rate-limited per user and audited as `step_up_failed`. SSO-only accounts have no password and cannot pass it; the CLI escape hatch is the recovery. The SMTP/IMAP test buttons ask for it only when a stored secret would travel to a host other than the saved one.
-- **Approving a share** (`POST /api/shares/{id}/approve`) requires a `content_fingerprint` - the digest of the files as the approver saw them; a stale one answers `409 CONTENT_CHANGED`.
-- **Self-update only moves forward.** `POST /api/admin/system/update` refuses a tag older than the running version (`409 DOWNGRADE_REFUSED`); go back with Rollback, which also restores the database schema pointer.
-
-## Upload pipeline
-
-```
-client → POST /api/uploads/init (HMAC envelope; files row state=uploading)
-       → POST /uploads/ (TUS; Upload-Metadata = fh_payload + fh_sig)
-         → tusd → pre-create hook → /api/internal/tus-hooks (HMAC verify, Redis Lua quota reserve)
-         → tusd writes ./data/uploads/<tus-id>
-         → post-finish hook → backend finalises (shutil.move → ./data/files/yyyy/mm/<uuid>.bin,
-           state=ready_unscanned) → enqueue av_scan_file → clean | infected
-```
-
-Direct uploads (≤ `MAX_DIRECT_UPLOAD_BYTES`) skip tusd via `POST /api/uploads/direct`.
-Finalize uses `shutil.move` (rename fast path, else copy+unlink) - portable across
-bind mounts; **don't** revert to `os.rename` (cross-device in containers).
-
-## ARQ workers + cron
-
-Config: `backend/app/workers/worker.py::WorkerSettings` (queue `fileheron:default`,
-`max_tries=5` - `send_email_job` registers its own, see `workers/send_email.py` - all idempotent). A minute **dispatcher** (`workers/cron_dispatch.py`)
-reads the per-cron schedule registry (`services/cron_schedule.py` + `cron.<name>.*`
-settings) and enqueues jobs that are due; admins re-time them on
-[Scheduled tasks](#scheduled-tasks-adminscheduled-tasks). Defaults reproduce the
-historical cadence.
-
-<details>
-<summary>Current cron jobs (defaults)</summary>
-
-**Hourly-ish:** `expire_files`, `share_expiring_24h_warning`, `quota_reconcile`,
-`cleanup_stale_uploads`, `cleanup_abandoned_uploads`, `cleanup_expired_tokens`,
-`ops_check` (cron + Redis health → `ops_alert`), `disk_check` (low-storage flag),
-`anomaly_check` (heuristic alerts), `rescan_inbound_attachments`,
-`release_check` (~daily; filters backend `vX.Y.Z` tags, matched in full).
-
-**Every 5 min:** `imap_poll` (self-gated on `imap.enabled`/mode/interval), `expire_secrets` (ends and shreds expired secrets and any nobody can read any more, and closes unanswered secret requests past their time).
-**Every minute:** `drain_pending_update` (applies a postponed update once transfers drain, and reports how a handed-off update ended).
-**Daily 03:30:** `auto_update` (installs a newer release when automatic updates are on).
-
-**Daily ~02:xx:** `analytics_aggregate`, `purge_old_quarantine`, `cleanup_pending_invites`,
-`cleanup_read_notifications`, `prune_history`, `reclaim_orphaned_files`.
-
-`prune_history` prunes `audit_log`, `download_log`, `email_log`, `login_attempts`,
-`webhook_deliveries`, `error_log`, `inbound_messages`, ended secrets and ended secret requests (each window `0` disables).
-
-**Every 10 min:** `encrypt_existing_files` (encryption at rest: encrypts stored files, deletes the copies they replace, releases uploads waiting for encryption; with the switch off it only does the last two).
-
-**Event-driven:** `av_scan_file(file_id)` (quarantines on infection),
-`encrypt_new_files` (encryption at rest: encrypts a scanned upload, then releases it) and
-`send_email_job(...)` (resolves SMTP per job; permanent 5xx → `email_undeliverable` +
-admin alert).
-
-</details>
-
-## Adding things
-
-- **New admin setting:** add a key in `services/settings.py::Keys`; read via `settings_svc.get/get_bool/set_value`; add `GET`/`PUT` under `routers/admin/` (audit on PUT); Pydantic schema; a `frontend/src/views/AdminSettings<Feature>.vue` + route + `adminNav.ts` entry; an i18n key per locale (the parity test catches gaps).
-- **New audit event:** add the string to `AuditEventType`; call `record_audit_event(...)`. The audit view is generic.
-- **New notification category:** add to `NotificationCategory` + `_DEFAULT_CHANNEL`; add `templates/email/{en,de}/<slug>.{txt,html}.j2` + `subjects.json`; call `services/notification.py::dispatch(...)`. **Everything** goes through `dispatch` - never write `notifications` or send email directly.
-
-## Migration discipline
-
-Every revision uses the `_has_table` / `_has_column` / `_has_index` helpers (re-runnable
-after a partial failure). Timestamps are **naive UTC** (`utils/timeutil.py::utc_now`).
-Roll-forward only; restore from backup to roll back. MariaDB reserves `key` - backtick
-reserved identifiers in raw SQL (SQLite tests miss it; the CI alembic-roundtrip against
-real MariaDB catches it).
+The human walkthrough: [Developer guide](docs/developer-guide.md) (code layout, request
+flow, auth, upload pipeline, ARQ workers + cron, adding things, migration discipline).
+The invariants live in `CLAUDE.md` and `docs/engineering/<area>.md`; dev setup and the
+gates to run before pushing in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Running tests
 
 ```bash
+make lint && make test                    # ruff + eslint + prettier + mypy, then pytest + vitest (needs backend .[dev])
+make test-mariadb                         # the real-MariaDB test files, in throwaway containers
 docker compose -f docker-compose.yml -f docker-compose.dev.yml exec backend pytest -q   # backend (dev stack; the prod image ships no test deps)
 cd frontend && npm run build              # vue-tsc type-check + Vite build (the pre-ship gate)
 cd frontend && npx vitest run             # unit + i18n parity
 ```
 
-CI (`.github/workflows/ci.yml`) runs backend tests, a **MariaDB alembic-roundtrip**
-(exercises every migration up + down), frontend type-check/lint/vitest, and a
-dependency audit.
+CI (`.github/workflows/ci.yml`) runs:
+
+- backend tests, Redis tests and a **MariaDB alembic-roundtrip** (every migration up + down)
+- frontend type-check, lint and vitest
+- the desktop-client tests on Ubuntu and Windows
+- infra lint (shellcheck, actionlint, mypy, hadolint, `nginx -t`) and a dependency audit
+
+[CONTRIBUTING.md](CONTRIBUTING.md) has the full gate table.
 
 ## Screenshots and end-to-end tests
 
 The Playwright journeys in `e2e/tests/` run against a real compose stack - always under
 `COMPOSE_PROJECT_NAME=fileheron_e2e`, never the directory's default `fileheron`
 ([CONTRIBUTING.md](CONTRIBUTING.md#end-to-end-playwright-against-a-real-compose-stack)).
-`scripts/e2e.sh` does it start to finish: builds the prod images, starts the stack (with a
-stand-in OIDC provider for the SSO journeys), runs every spec and then the docs tour as a
-render check, and tears it down; `scripts/e2e.sh tests/user/shares.spec.ts` runs just that
-file. What the suite covers, feature by feature, is [`e2e/COVERAGE.md`](e2e/COVERAGE.md).
+
+- **`scripts/e2e.sh`** does it start to finish: builds the prod images, starts the stack (with a stand-in OIDC provider for the SSO journeys), runs every spec, then the docs tour as a render check, and tears it down.
+- **One file:** `scripts/e2e.sh tests/user/shares.spec.ts`.
+- **Coverage**, feature by feature: [`e2e/COVERAGE.md`](e2e/COVERAGE.md).
 
 Every screenshot in the docs comes from the docs tour (`e2e/docs/`), which seeds a demo
 organisation through the API and photographs every screen into
@@ -1472,11 +283,9 @@ scripts/docs-screenshots.sh                    # writes docs/screenshots/*.png
 PORT_BASE=24300 scripts/docs-screenshots.sh ../shots   # another port / output dir
 ```
 
-It runs as compose project `fileheron_docs` on `127.0.0.1:${PORT_BASE:-8080}` (the API on
-`PORT_BASE+3`), and refuses to start in a checkout with a `.env` or a non-empty `data/`:
-like the e2e stack it bind-mounts `./data`, so use a clean clone on a machine that also
-runs an instance. The **Docs screenshots** workflow (Actions, manual) runs the same script
-and returns the PNGs as an artifact.
+- **Stack:** compose project `fileheron_docs` on `127.0.0.1:${PORT_BASE:-8080}` (the API on `PORT_BASE+3`).
+- **Refuses** a checkout with a `.env` or a non-empty `data/`: like the e2e stack it bind-mounts `./data`, so use a clean clone on a machine that also runs an instance.
+- **In CI:** the **Docs screenshots** workflow (Actions, manual) runs the same script and returns the PNGs as an artifact.
 
 ## Coding conventions
 

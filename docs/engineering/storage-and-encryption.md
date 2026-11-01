@@ -22,7 +22,7 @@ the filesystem directly.
 `utils/file_crypto.py` (format), `services/file_encryption.py` (read side, swap
 engine, status), `services/encryption_lanes.py` (release lane + backfill),
 `workers/encrypt_at_rest.py`, admin `/admin/settings/encryption`. Ships OFF
-(`storage.encrypt_at_rest`). → README §Encryption at rest for the operator view.
+(`storage.encrypt_at_rest`). → `docs/operator-guide.md` §Encryption at rest for the operator view.
 
 - **`enc_version` NULL is plaintext and takes EXACTLY the old path** (FileResponse/sendfile, the S3 307, clamd's path scan, ZIP `add_path`); rows of both kinds coexist forever. **Ciphertext must never reach a plaintext reader** - a path scan of ciphertext answers "clean" (AV silently off), a download serves noise - so every byte read goes through `file_encryption.open_plaintext`/`cipher_for_*` or a branch that checked `enc_version` first, pinned over every call site by `test_ciphertext_never_reaches_plaintext_readers.py` (RAW_READERS allowlist). `serve_response(..., cipher=)` is a REQUIRED keyword so mypy makes each caller decide.
 - **Format v1:** 16-byte header, 1 MiB AES-256-GCM chunks, counter nonce, AAD = header + index + final flag (reorder/truncate/extend all fail); a fresh data key per WRITE, wrapped by the instance Fernet with kind AND row id inside (`crypto.wrap_file_key`) - a key copied to another row does not open. `*_encrypted` naming keeps `rotate_jwt_secret.py` covering it.

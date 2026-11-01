@@ -8,7 +8,7 @@ summary and points here. Read this before changing the code listed below.
 ## Background jobs
 
 ARQ worker (`workers/worker.py::WorkerSettings`), queue `fileheron:default`,
-`max_tries=5`. → README §ARQ workers + cron for the full schedule. Cadences are
+`max_tries=5`. → `docs/developer-guide.md` §ARQ workers + cron for the full schedule. Cadences are
 admin-tunable via `services/cron_schedule.py::REGISTRY` + the minute
 `cron_dispatch`; all jobs idempotent.
 

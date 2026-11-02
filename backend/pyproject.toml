@@ -81,14 +81,14 @@ dev = [
     # silently reddens a green main on the next release with zero code change, and
     # drifts from any local copy. Bump deliberately. Local gate must match:
     # `pip install --user --upgrade ruff==<this>` (or run ruff in an ephemeral python container).
-    "ruff==0.17.1",
+    "ruff==0.17.3",
     # Pinned for the same reason ruff is, and the reason was learned here the
     # hard way: this floated at >=1.10 while the exemption list below was
     # measured, and by the time anyone re-measured it the resolver was serving
     # mypy 2.x - a major version, crossed silently, because every error it
     # would have surfaced sat inside an `ignore_errors` module. Bump
     # deliberately; the local gate is `make typecheck`.
-    "mypy==2.4.0",
+    "mypy==2.4.1",
     # Real stubs, not `ignore_missing_imports`. Measured both: the stubs are
     # strictly better - they removed 10 "library stubs not installed" errors AND
     # turned the survivors into genuine findings (reportlab's `list[Flowable]`

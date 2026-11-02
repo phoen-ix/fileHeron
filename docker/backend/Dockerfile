@@ -7,7 +7,7 @@
 # here. The runtime stage below copies only the installed packages: still no
 # compiler in the image that processes untrusted uploads (docker-12). Same
 # Python patch and Debian release in both stages, so the C extensions match.
-FROM python:3.15.2-trixie AS deps
+FROM python:3.16.0a1-trixie AS deps
 WORKDIR /build
 COPY backend/requirements.lock ./
 RUN --mount=type=cache,target=/root/.cache/pip \

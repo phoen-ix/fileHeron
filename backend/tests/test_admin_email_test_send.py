@@ -52,6 +52,7 @@ async def test_test_send_success_path(
 ):
     """Mock aiosmtplib.send to a no-op; expect ok=True back."""
     monkeypatch.setattr("app.config.settings.SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr("app.config.settings.SMTP_FROM_EMAIL", "files@firma.example")
     monkeypatch.setattr("app.config.settings.SMTP_PORT", 587)
 
     async def _fake_send(msg, **kwargs):
@@ -79,6 +80,7 @@ async def test_test_send_surfaces_smtp_exception_class_and_message(
     make_user, db, client, login_as, monkeypatch
 ):
     monkeypatch.setattr("app.config.settings.SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr("app.config.settings.SMTP_FROM_EMAIL", "files@firma.example")
     from aiosmtplib.errors import SMTPAuthenticationError
 
     async def _fake_send(msg, **kwargs):
@@ -104,6 +106,25 @@ async def test_test_send_surfaces_smtp_exception_class_and_message(
     # The actionable hint is surfaced alongside the raw diagnostic.
     assert body["hint"] is not None
     assert "authentication" in body["hint"].lower()
+
+
+@pytest.mark.asyncio
+async def test_test_send_refuses_the_shipped_placeholder_sender(
+    make_user, db, client, login_as, monkeypatch
+):
+    monkeypatch.setattr("app.config.settings.SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr("app.config.settings.SMTP_FROM_EMAIL", "noreply@fileheron.local")
+    make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
+    token, _ = await login_as("admin@test.local", "Pass12345678!")
+
+    resp = await client.post(
+        "/api/admin/settings/email/test",
+        json={"to": "ops@example.com"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    body = resp.json()
+    assert body["ok"] is False
+    assert "noreply@fileheron.local" in body["error_message"] and "placeholder" in body["error_message"]
 
 
 @pytest.mark.asyncio
@@ -134,7 +155,7 @@ async def test_test_send_uses_override_without_persisting(
                 "port": 2525,
                 "user": "ovuser",
                 "password": "ovpass",
-                "from_email": "ov@example",
+                "from_email": "ov@override.example",
                 "from_name": "Override",
                 "tls_mode": "none",
                 "helo_hostname": "relay.override.example",

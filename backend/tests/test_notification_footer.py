@@ -64,16 +64,16 @@ def test_locked_category_has_manage_but_no_unsubscribe(make_user):
 
 
 def test_list_unsubscribe_header_for_optoutable():
-    val = email_svc.list_unsubscribe_header(3, "share_created", "https://fh.example")
+    val = email_svc.list_unsubscribe_header(3, "share_created", "https://fh.example", "fh@fh.example")
     assert val is not None
     assert "/api/notification-subscriptions/" in val
     assert "one-click?category=share_created" in val
 
 
 def test_list_unsubscribe_header_none_for_locked():
-    assert email_svc.list_unsubscribe_header(3, "login_alert", "https://fh.example") is None
+    assert email_svc.list_unsubscribe_header(3, "login_alert", "https://fh.example", "fh@fh.example") is None
     # auth slugs aren't even in the enum -> also None.
-    assert email_svc.list_unsubscribe_header(3, "reset_password", "https://fh.example") is None
+    assert email_svc.list_unsubscribe_header(3, "reset_password", "https://fh.example", "fh@fh.example") is None
 
 
 def test_dispatch_enqueues_list_unsubscribe(make_user, db, monkeypatch):
@@ -91,6 +91,28 @@ def test_dispatch_enqueues_list_unsubscribe(make_user, db, monkeypatch):
     job = next(kw for a, kw in enqueued if a == ("send_email_job",))
     assert job["list_unsubscribe"] is not None
     assert "Manage subscriptions:" in job["text_body"]
+
+
+def test_the_mailto_fallback_is_the_resolved_sender_not_the_env(make_user, db, monkeypatch):
+    """An admin's From override (DB) beats SMTP_FROM_EMAIL (env): the mailto went
+    to the env default, noreply@fileheron.local, which nobody reads."""
+    from app.services import settings as settings_svc
+
+    settings_svc.set_value(db, key=settings_svc.Keys.SMTP_FROM_EMAIL, value="files@firma.example", actor=None)
+    db.commit()
+    user = make_user(email="u@test.local", role=UserRole.client)
+    enqueued = []
+    monkeypatch.setattr(
+        "app.services.notification.job_queue.enqueue",
+        lambda *a, **kw: enqueued.append((a, kw)),
+    )
+    notif_svc.dispatch(
+        db, user=user, category=NotificationCategory.share_created,
+        payload=_share_payload(user), email_to="bob@example.com",
+    )
+    db.commit()
+    job = next(kw for a, kw in enqueued if a == ("send_email_job",))
+    assert "<mailto:files@firma.example?subject=unsubscribe%20share_created>" in job["list_unsubscribe"]
 
 
 def test_effective_channel_overrides_stored_off_for_locked(make_user, db):
@@ -147,7 +169,7 @@ def test_dispatch_still_emails_locked_when_user_opted_off(make_user, db, monkeyp
 
 @pytest.mark.parametrize("category", ["ops_alert", "server_error"])
 def test_an_operational_alert_carries_no_one_click_unsubscribe(category, make_user):
-    val = email_svc.list_unsubscribe_header(3, category, "https://fh.example")
+    val = email_svc.list_unsubscribe_header(3, category, "https://fh.example", "fh@fh.example")
     assert val is None, "a mail client would render a one-tap Unsubscribe"
     assert email_svc._is_unsubscribable(category) is False
 

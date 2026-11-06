@@ -1051,7 +1051,7 @@
     "host_help": "Hostname or IP of the SMTP server.",
     "port_label": "Port",
     "helo_label": "HELO/EHLO hostname (optional)",
-    "helo_help": "The hostname fileHeron announces to the SMTP server during HELO/EHLO. Leave blank to use the container's auto-detected name (unpredictable). Set a stable, valid name your server accepts - some strict mail servers reject sends whose HELO name doesn't match (e.g. 554 5.7.1 … Access denied).",
+    "helo_help": "The hostname fileHeron announces to the SMTP server during HELO/EHLO. Leave blank to use the domain of the From address. Set a stable, valid name your server accepts - some strict mail servers reject sends whose HELO name doesn't match (e.g. 554 5.7.1 … Access denied).",
     "tls_label": "TLS mode",
     "tls": {
       "starttls": "STARTTLS (port 587)",

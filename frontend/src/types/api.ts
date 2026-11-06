@@ -1098,7 +1098,7 @@ export interface EmailSettingsResponse {
   from_email: string
   from_name: string
   tls_mode: SmtpTlsMode
-  /** EHLO/HELO name; '' = the server's auto-detected container FQDN is used. */
+  /** EHLO/HELO name; '' = the domain of from_email is used. */
   helo_hostname: string
   is_configured: boolean
   has_db_overrides: boolean
@@ -1113,7 +1113,7 @@ export interface UpdateEmailSettingsRequest {
   from_email?: string
   from_name?: string
   tls_mode?: SmtpTlsMode
-  /** '' = clear (fall back to env/getfqdn); other = replace. */
+  /** '' = clear (fall back to env, then the From domain); other = replace. */
   helo_hostname?: string
 }
 

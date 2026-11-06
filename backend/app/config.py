@@ -141,12 +141,12 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
-    SMTP_FROM_EMAIL: str = "noreply@fileheron.local"
+    SMTP_FROM_EMAIL: str = "noreply@fileheron.local"  # a placeholder: refused at send time
     SMTP_FROM_NAME: str = "fileHeron"
-    # EHLO/HELO name announced to the MTA. Empty = aiosmtplib uses the
-    # container's socket.getfqdn() (unpredictable). Set to a real,
-    # resolvable hostname when a strict MTA rejects with "Client host
-    # rejected". Admin-overridable via the smtp.helo_hostname kv key.
+    # EHLO/HELO name announced to the MTA. Empty = the From domain (never the
+    # container's socket.getfqdn()). Set to a real, resolvable hostname when a
+    # strict MTA rejects with "Client host rejected". Admin-overridable via
+    # the smtp.helo_hostname kv key.
     SMTP_HELO_HOST: str = ""
 
     # --- IMAP (inbound mailbox, v1.27.0) -------------------------------------

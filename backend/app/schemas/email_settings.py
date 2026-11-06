@@ -23,8 +23,7 @@ class EmailSettingsResponse(APIBaseModel):
     from_email: str
     from_name: str
     tls_mode: TlsMode
-    # EHLO/HELO name announced to the MTA. Empty = the container's
-    # auto-detected FQDN is used.
+    # EHLO/HELO name announced to the MTA. Empty = the From domain is used.
     helo_hostname: str
     # True when at least the host is non-empty - i.e. the live config
     # would attempt a real send. False = logs-fallback in dev.
@@ -46,7 +45,7 @@ class UpdateEmailSettingsRequest(APIBaseModel):
     from_email: str | None = Field(default=None, max_length=255)
     from_name: str | None = Field(default=None, max_length=120)
     tls_mode: TlsMode | None = None
-    # null = leave alone; "" = clear (fall back to env/getfqdn); other = replace.
+    # null = leave alone; "" = clear (fall back to env, then the From domain); other = replace.
     helo_hostname: str | None = Field(default=None, max_length=255)
 
 

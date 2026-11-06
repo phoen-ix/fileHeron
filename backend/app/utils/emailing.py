@@ -41,7 +41,8 @@ class SmtpConfig:
     # 'starttls'  (upgrade after greeting, port 587 convention),
     # 'none'      (plain SMTP - only sane on localhost / private MTA)
     tls_mode: str = "starttls"
-    # EHLO/HELO name. Empty → aiosmtplib falls back to socket.getfqdn().
+    # EHLO/HELO name. Empty → the From domain (aiosmtplib's own fallback,
+    # socket.getfqdn(), is the container id).
     helo_hostname: str = ""
 
     @property
@@ -173,6 +174,14 @@ async def send_email(
         print("=" * 72 + "\n", flush=True)
         return
 
+    domain = cfg.from_email.rpartition("@")[2].strip().lower()
+    if "." not in domain or domain.endswith(".local") or domain in ("example.com", "example.org", "example.net"):
+        # The shipped default noreply@fileheron.local: no mail server takes it.
+        raise ValueError(
+            f"From address {cfg.from_email!r} is a placeholder: set a real one "
+            "under Admin > Settings > Email (or SMTP_FROM_EMAIL)"
+        )
+
     msg = build_message(
         cfg,
         to=to,
@@ -182,8 +191,8 @@ async def send_email(
         list_unsubscribe=list_unsubscribe,
     )
 
-    use_tls = cfg.tls_mode == "implicit"
-    start_tls = cfg.tls_mode == "starttls"
+    use_tls = cfg.tls_mode == "implicit" or cfg.port == 465
+    start_tls = cfg.tls_mode == "starttls" and not use_tls
 
     await aiosmtplib.send(
         msg,
@@ -193,6 +202,6 @@ async def send_email(
         password=cfg.password or None,
         use_tls=use_tls,
         start_tls=start_tls,
-        local_hostname=cfg.helo_hostname or None,
+        local_hostname=cfg.helo_hostname or domain,
         timeout=20,
     )

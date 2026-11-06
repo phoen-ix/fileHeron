@@ -101,3 +101,60 @@ def test_unsubscribe_headers_still_appear_only_when_passed():
     assert plain["List-Unsubscribe"] is None and plain["List-Unsubscribe-Post"] is None
     _raw, listed = _sent(list_unsubscribe="<https://fh.example/api/notification-subscriptions/t/one-click>")
     assert listed["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
+
+
+# ── send_email: what reaches aiosmtplib ──────────────────────────────────────
+
+
+@pytest.fixture
+def sent_kwargs(monkeypatch):
+    import aiosmtplib
+
+    captured: dict = {}
+
+    async def _fake_send(msg, **kwargs):
+        captured.update(kwargs, msg=msg)
+
+    monkeypatch.setattr(aiosmtplib, "send", _fake_send)
+    return captured
+
+
+async def _send(cfg: SmtpConfig) -> None:
+    from app.utils.emailing import send_email
+
+    await send_email(cfg=cfg, to="fh@monumental.at", subject="s", text_body="t")
+
+
+@pytest.mark.asyncio
+async def test_ehlo_name_defaults_to_the_from_domain_not_the_container(sent_kwargs):
+    await _send(_cfg())
+    assert sent_kwargs["local_hostname"] == "monumental.at"
+    # aiosmtplib verifies the certificate unless told otherwise; nothing here tells it.
+    assert "validate_certs" not in sent_kwargs and "tls_context" not in sent_kwargs
+    assert (sent_kwargs["use_tls"], sent_kwargs["start_tls"]) == (False, True)
+
+
+@pytest.mark.asyncio
+async def test_an_explicit_ehlo_name_wins(sent_kwargs):
+    from dataclasses import replace
+
+    await _send(replace(_cfg(), helo_hostname="mx.monumental.at"))
+    assert sent_kwargs["local_hostname"] == "mx.monumental.at"
+
+
+@pytest.mark.asyncio
+async def test_port_465_is_implicit_tls_whatever_the_mode(sent_kwargs):
+    from dataclasses import replace
+
+    await _send(replace(_cfg(), port=465, tls_mode="starttls"))
+    assert (sent_kwargs["use_tls"], sent_kwargs["start_tls"]) == (True, False)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "addr", ["noreply@fileheron.local", "noreply@example.com", "localpart-only", "x@localhost"]
+)
+async def test_a_placeholder_sender_is_refused_at_send_time(sent_kwargs, addr):
+    with pytest.raises(ValueError, match="placeholder"):
+        await _send(_cfg(addr=addr))
+    assert sent_kwargs == {}

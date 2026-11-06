@@ -271,7 +271,8 @@ def dispatch(
                 category=category.value,
             )
             list_unsub = email_svc.list_unsubscribe_header(
-                user.id, category.value, site_url
+                user.id, category.value, site_url,
+                email_svc.resolve_smtp_config(db).from_email,
             )
             eid = mail_log.record_queued(
                 db,

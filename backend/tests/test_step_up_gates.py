@@ -263,6 +263,7 @@ def _persist_smtp(db):
         (s.Keys.SMTP_USER, "postmaster@corp.local"),
         (s.Keys.SMTP_PASSWORD, SMTP_SECRET),
         (s.Keys.SMTP_TLS_MODE, "starttls"),
+        (s.Keys.SMTP_FROM_EMAIL, "files@corp.example"),
     ]:
         s.set_value(db, key=key, value=value, actor=None)
     db.commit()

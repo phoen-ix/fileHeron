@@ -306,10 +306,11 @@ def _subscription_urls(
 
 
 def list_unsubscribe_header(
-    user_id: int, category: str | None, app_url: str | None
+    user_id: int, category: str | None, app_url: str | None, from_email: str
 ) -> str | None:
     """RFC 2369/8058 List-Unsubscribe value for an opt-outable category, else
-    None. Points at the one-click API endpoint plus a mailto fallback."""
+    None. Points at the one-click API endpoint plus a mailto fallback to
+    ``from_email``, the resolved sender (an admin override beats the env)."""
     if not _is_unsubscribable(category):
         return None
     from . import unsubscribe_token
@@ -318,8 +319,8 @@ def list_unsubscribe_header(
     token = unsubscribe_token.issue(user_id)
     one_click = f"{base}/api/notification-subscriptions/{token}/one-click?category={category}"
     parts = [f"<{one_click}>"]
-    if settings.SMTP_FROM_EMAIL:
-        parts.append(f"<mailto:{settings.SMTP_FROM_EMAIL}?subject=unsubscribe%20{category}>")
+    if from_email:
+        parts.append(f"<mailto:{from_email}?subject=unsubscribe%20{category}>")
     return ", ".join(parts)
 
 

@@ -47,8 +47,8 @@ via `/admin/settings/advanced`.
 |---|---|---|
 | `SMTP_HOST` | empty | **Empty (and none set at `/admin/settings/email`) → email is not sent.** Outside production it is printed to the container log; in production only its recipient and subject are logged. |
 | `SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD` | `587`/empty/empty | Connection + auth (DB overrides via `/admin/settings/email`). |
-| `SMTP_FROM_EMAIL`/`SMTP_FROM_NAME` | `noreply@fileheron.local`/`fileHeron` | Envelope sender. |
-| `SMTP_HELO_HOST` | empty | EHLO/HELO name (empty = container FQDN). |
+| `SMTP_FROM_EMAIL`/`SMTP_FROM_NAME` | `noreply@fileheron.local`/`fileHeron` | Envelope sender. The default is a placeholder: with `SMTP_HOST` set, a From at `.local`, `example.com` or a dotless domain is refused at send time. |
+| `SMTP_HELO_HOST` | empty | EHLO/HELO name (empty = the From domain). |
 | `IMAP_HOST`/`IMAP_PORT`/`IMAP_USER`/`IMAP_PASSWORD` | empty/`993`/empty/empty | Inbound mailbox (DB overrides via `/admin/settings/imap`; off unless enabled). |
 | `IMAP_TLS_MODE`/`IMAP_MAILBOX` | `implicit`/`INBOX` | Inbound fetch tuning; both are overridden by the admin settings page. Poll cadence lives on [Scheduled tasks](admin-guide.md#scheduled-tasks-adminscheduled-tasks), not an env var. |
 | `imap.require_known_sender` (admin setting) | `true` | Refuse mail whose sender address matches no enabled account, before anything is stored. **Turn it off if your instance accepts mail from people without accounts.** |

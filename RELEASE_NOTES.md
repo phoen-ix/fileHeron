@@ -1,3 +1,30 @@
+# file:Heron v2.29.3
+
+**Outgoing mail looks less like spam.** Mail servers greet each other with a
+name, and file:Heron used the container's random id when the EHLO name was
+left empty - a sign spam filters score. With the field empty it now uses the
+domain of the From address. An EHLO name set under **Admin → Email &
+notifications → Outgoing mail (SMTP)** is used as before.
+
+**A From address that cannot work is refused.** With a mail server set up, a
+From address at `fileheron.local`, another `.local` domain, `example.com` or a
+name without a dot is refused when mail is sent, with an error that says why
+(the page's test send shows it). Such mail failed the receiving server's
+sender checks anyway.
+
+**Unsubscribe by mail uses the right address.** The `List-Unsubscribe` header
+of notification mails named the From address from the server's `.env` even
+when the admin page set another one; it now names the one actually used.
+
+## On this update
+
+- A patch release: automatic updates install it. No migration, no host step,
+  no default change, no infrastructure change.
+- If mail stops after the update, check the From address on the **Outgoing
+  mail (SMTP)** page: it is the placeholder case above.
+
+---
+
 # file:Heron v2.29.2
 
 **A wrong password that locks an account no longer stalls the server.** The

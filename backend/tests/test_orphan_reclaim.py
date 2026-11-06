@@ -7,6 +7,7 @@ active-only Sent/Received view).
 """
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -36,7 +37,7 @@ def _make_file(db, share_id, owner_id, *, state=FileState.clean, size=1000, name
         original_filename=name,
         mime_type="application/octet-stream",
         size_bytes=size,
-        storage_path="/tmp/fileheron-test/files/does-not-exist.bin",
+        storage_path=f"{os.environ['STORAGE_ROOT']}/does-not-exist.bin",
         state=state,
         uploaded_by_id=owner_id,
     )

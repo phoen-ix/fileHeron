@@ -2,6 +2,7 @@
 (force-expire-now) - post-Phase 10."""
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -39,7 +40,7 @@ def _make_file(db, *, share, uploader, name: str = "a.bin", size: int = 1024):
         uploaded_by_id=uploader.id,
         state=FileState.clean,
         finalized_at=datetime.now(tz=timezone.utc).replace(tzinfo=None),
-        storage_path=f"/tmp/fileheron-test/files/{share.id}-{name}",
+        storage_path=f"{os.environ['STORAGE_ROOT']}/{share.id}-{name}",
     )
     db.add(f)
     db.commit()

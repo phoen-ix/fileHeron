@@ -6,6 +6,8 @@ sees test-friendly values, then build a fresh in-memory SQLite DB per test.
 from __future__ import annotations
 
 import os
+import shutil
+import tempfile
 
 # A handful of settings decide what the suite is even TESTING, so they are
 # FORCED rather than defaulted.
@@ -79,9 +81,13 @@ os.environ.setdefault("MAX_DIRECT_UPLOAD_BYTES", "104857600")
 # `tmp_path`; the ones that resolve the path through `get_storage_backend()`
 # instead (inbound attachments) do not, and cannot be expected to remember.
 # Sandboxing at the root is the only version of this that stays fixed.
-os.environ["STORAGE_ROOT"] = "/tmp/fileheron-test/files"
-os.environ["TUS_UPLOAD_DIR"] = "/tmp/fileheron-test/uploads"
-os.environ["QUARANTINE_DIR"] = "/tmp/fileheron-test/quarantine"
+#
+# One fresh folder per run, removed at the end (`_remove_test_root` below): a fixed
+# /tmp/fileheron-test kept every run's bytes and grew to 4.1 GB of tmpfs (2026-11-06).
+os.environ["FILEHERON_TEST_ROOT"] = tempfile.mkdtemp(prefix="fileheron-test-")
+os.environ["STORAGE_ROOT"] = f"{os.environ['FILEHERON_TEST_ROOT']}/files"
+os.environ["TUS_UPLOAD_DIR"] = f"{os.environ['FILEHERON_TEST_ROOT']}/uploads"
+os.environ["QUARANTINE_DIR"] = f"{os.environ['FILEHERON_TEST_ROOT']}/quarantine"
 # FORCED too: an encryption rewrite refuses to leave less than this free on
 # STORAGE_ROOT (`file_encryption.check_space`), and with the 10 GiB default some
 # 30 encryption tests passed or failed on how full the host's /tmp was.
@@ -101,6 +107,12 @@ from app.dependencies import get_db
 from app.main import app
 from app.models.user import Locale, User, UserRole
 from app.utils.crypto import argon2_hash, normalize_email
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _remove_test_root():
+    yield
+    shutil.rmtree(os.environ["FILEHERON_TEST_ROOT"], ignore_errors=True)
 
 # ---- VARCHAR width guard ---------------------------------------------------
 #

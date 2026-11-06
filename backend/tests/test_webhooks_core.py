@@ -12,6 +12,17 @@ from app.services import webhook as webhook_svc
 from app.utils.crypto import encrypt_setting
 
 
+def _public_dns(monkeypatch):
+    """Resolve every host to a public address, so the SSRF re-check passes whatever
+    the host's resolver does with example.test (a dev box may map it to loopback)."""
+    import socket
+
+    monkeypatch.setattr(
+        "app.utils.net.socket.getaddrinfo",
+        lambda host, port, *a, **kw: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.215.14", port or 443))],
+    )
+
+
 def _mk_webhook(db, *, events, active=True, url="https://example.test/hook", secret="s3cret"):
     wh = Webhook(
         name="wh",
@@ -127,6 +138,7 @@ async def test_webhook_deliver_success(db, monkeypatch):
 
     wh = _mk_webhook(db, events=["share_created"], secret="abc123")
     monkeypatch.setattr(wd.httpx, "AsyncClient", lambda *a, **kw: _FakeClient(code=200))
+    _public_dns(monkeypatch)
 
     res = await wd.webhook_deliver(None, wh.id, "share_created", {"target_id": "x"})
     assert res["status"] == "sent"
@@ -144,6 +156,7 @@ async def test_webhook_deliver_retry_then_fail(db, monkeypatch):
 
     wh = _mk_webhook(db, events=["share_created"])
     monkeypatch.setattr(wd.httpx, "AsyncClient", lambda *a, **kw: _FakeClient(code=500))
+    _public_dns(monkeypatch)
 
     # First attempt → server error → schedules a retry (status pending).
     res = await wd.webhook_deliver(None, wh.id, "share_created", {})

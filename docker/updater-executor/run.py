@@ -378,7 +378,7 @@ def _parse_alembic_revision(text: str) -> str | None:
     lines and alembic's INFO/log preamble."""
     for raw in text.splitlines():
         line = raw.strip()
-        if not line or line.startswith("INFO") or line.startswith("["):
+        if not line or line.startswith(("INFO", "[")):
             continue
         m = _REV_RE.match(line)
         if m:
@@ -799,8 +799,7 @@ def _normalize_image(ref: str) -> str:
         if ref.startswith(prefix):
             ref = ref[len(prefix):]
             break
-    if ref.startswith("library/"):
-        ref = ref[len("library/"):]
+    ref = ref.removeprefix("library/")
     if ref and "@" not in ref and ":" not in ref.rsplit("/", 1)[-1]:
         ref += ":latest"
     return ref

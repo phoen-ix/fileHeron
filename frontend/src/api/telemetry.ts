@@ -1,8 +1,8 @@
-/* Anonymous client telemetry. Standalone axios instance (no auth interceptor,
+/* Anonymous client telemetry. The bare client (no auth interceptor,
  * like api/legal.ts) - the 404 page reports for logged-out visitors too. */
-import axios from 'axios'
+import { createBareClient } from './client'
 
-const telemetryClient = axios.create({ baseURL: '/' })
+const telemetryClient = createBareClient('/')
 
 /** Report a client-side 404 (a page path Vue Router couldn't match). Best-effort. */
 export function reportPage404(path: string) {

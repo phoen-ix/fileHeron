@@ -1,48 +1,21 @@
 <script setup lang="ts">
-  import { onMounted, ref } from 'vue'
+  import { ref } from 'vue'
   import { useI18n } from 'vue-i18n'
 
   import { getUpdatesSettings, updateUpdatesSettings } from '@/api/admin'
-  import { useApiError } from '@/composables/useApiError'
-  import { useUiStore } from '@/stores/ui'
+  import { useSettingsSection } from '@/composables/useSettingsSection'
 
   const { t } = useI18n()
-  const { describe } = useApiError()
-  const ui = useUiStore()
 
-  const loading = ref(true)
-  const saving = ref(false)
-  const errorMsg = ref<string | null>(null)
   const apiUrl = ref('')
-
-  async function load() {
-    loading.value = true
-    errorMsg.value = null
-    try {
-      const { data } = await getUpdatesSettings()
+  const { loading, saving, errorMsg, onSave } = useSettingsSection({
+    load: getUpdatesSettings,
+    save: () => updateUpdatesSettings({ api_url: apiUrl.value.trim() }),
+    apply: (data) => {
       apiUrl.value = data.api_url
-    } catch (err) {
-      errorMsg.value = describe(err)
-    } finally {
-      loading.value = false
-    }
-  }
-
-  async function onSave() {
-    saving.value = true
-    errorMsg.value = null
-    try {
-      const { data } = await updateUpdatesSettings({ api_url: apiUrl.value.trim() })
-      apiUrl.value = data.api_url
-      ui.pushToast(t('admin_updates.saved_toast'), 'success')
-    } catch (err) {
-      errorMsg.value = describe(err)
-    } finally {
-      saving.value = false
-    }
-  }
-
-  onMounted(load)
+    },
+    savedToastKey: 'admin_updates.saved_toast',
+  })
 </script>
 
 <template>

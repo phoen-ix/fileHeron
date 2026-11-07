@@ -1,5 +1,4 @@
-import api from './client'
-import axios from 'axios'
+import api, { createBareClient } from './client'
 import type {
   CreatePublicLinkRequest,
   CreatePublicLinkResponse,
@@ -27,10 +26,8 @@ export function revokePublicLink(shareId: string) {
  * proxy can route SPA-shell requests to nginx and JSON requests to
  * FastAPI. */
 
-const publicClient = axios.create({
-  baseURL: '/',
-  withCredentials: true, // unlock cookie rides on subsequent calls
-})
+// The unlock cookie rides on subsequent calls.
+const publicClient = createBareClient('/', { withCredentials: true })
 
 export function fetchPublicShare(token: string) {
   return publicClient.get<PublicShareResponse>(`/api/public/${token}`)

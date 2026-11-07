@@ -10,7 +10,7 @@ import { Schema, type MarkSpec, type NodeSpec } from 'prosemirror-model'
 import { addListNodes } from 'prosemirror-schema-list'
 import { tableNodes } from 'prosemirror-tables'
 
-export const ALIGNMENTS = ['left', 'center', 'right', 'justify'] as const
+const ALIGNMENTS = ['left', 'center', 'right', 'justify'] as const
 export type Alignment = (typeof ALIGNMENTS)[number]
 
 function alignFromDOM(dom: HTMLElement): Alignment | null {

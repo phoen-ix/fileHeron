@@ -19,26 +19,19 @@ import customtkinter as ctk
 
 from ..formatters import display_timezone, timezone_label
 from ..i18n import t
-from .app import center_window
 from .date_entry import DateEntry
+from .widgets import modal_dialog, ok_cancel_row
 
 
 class ExpiryDialog:
     def __init__(self, parent, current: Optional[datetime] = None) -> None:
-        self._win = ctk.CTkToplevel(parent)
-        self._win.title(t("expiry_dialog.title"))
-        center_window(self._win, 460, 300)
-        self._win.resizable(False, False)
-        self._win.transient(parent)
+        self._win, outer = modal_dialog(parent, t("expiry_dialog.title"), 460, 300)
 
         zone0 = display_timezone()
         default = current if current is not None else (
             (datetime.now(tz=zone0) if zone0 else datetime.now()) + timedelta(days=7)
         )
         self._result: Optional[Tuple[str, Optional[datetime]]] = None
-
-        outer = ctk.CTkFrame(self._win, fg_color="transparent")
-        outer.pack(fill="both", expand=True, padx=18, pady=18)
 
         ctk.CTkLabel(
             outer,
@@ -85,15 +78,7 @@ class ExpiryDialog:
             wraplength=420, justify="left", text_color="gray",
         ).pack(fill="x", pady=(0, 12))
 
-        btn_row = ctk.CTkFrame(outer, fg_color="transparent")
-        btn_row.pack(fill="x")
-        ctk.CTkButton(btn_row, text=t("common.ok"), command=self._on_ok, width=90).pack(side="right")
-        ctk.CTkButton(
-            btn_row, text=t("common.cancel"), command=self._win.destroy, width=90, fg_color="gray",
-        ).pack(side="right", padx=(0, 8))
-
-        self._win.bind("<Return>", lambda _e: self._on_ok())
-        self._win.bind("<Escape>", lambda _e: self._win.destroy())
+        ok_cancel_row(self._win, outer, self._on_ok)
 
         # Apply initial enabled/disabled state.
         self._on_never_toggled()

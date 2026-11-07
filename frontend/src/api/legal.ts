@@ -1,7 +1,7 @@
-/* Anonymous legal-page content (imprint / privacy). Standalone axios instance
+/* Anonymous legal-page content (imprint / privacy). The bare client
  * (no auth interceptor) like api/publicLinks.ts - these pages must render for
  * logged-out visitors. */
-import axios from 'axios'
+import { createBareClient } from './client'
 
 export interface LegalContentResponse {
   enabled: boolean
@@ -9,7 +9,7 @@ export interface LegalContentResponse {
   html_de: string
 }
 
-const legalClient = axios.create({ baseURL: '/' })
+const legalClient = createBareClient('/')
 
 export function getLegal(kind: 'imprint' | 'privacy') {
   return legalClient.get<LegalContentResponse>(`/api/legal/${kind}`)

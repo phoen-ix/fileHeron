@@ -1,55 +1,26 @@
 <script setup lang="ts">
-  import { onMounted, ref } from 'vue'
+  import { ref } from 'vue'
   import { useI18n } from 'vue-i18n'
 
   import { getShareDefaults, updateShareDefaults } from '@/api/admin'
-  import { useApiError } from '@/composables/useApiError'
+  import { useSettingsSection } from '@/composables/useSettingsSection'
   import { useAuthStore } from '@/stores/auth'
-  import { useUiStore } from '@/stores/ui'
 
   const { t } = useI18n()
-  const { describe } = useApiError()
-  const ui = useUiStore()
   const auth = useAuthStore()
 
-  const loading = ref(true)
-  const saving = ref(false)
-  const errorMsg = ref<string | null>(null)
   const notifyDefault = ref(true)
-
-  async function load() {
-    loading.value = true
-    errorMsg.value = null
-    try {
-      const { data } = await getShareDefaults()
+  const { loading, saving, errorMsg, onSave } = useSettingsSection({
+    load: getShareDefaults,
+    save: () => updateShareDefaults({ notify_recipients_default: notifyDefault.value }),
+    apply: (data) => {
       notifyDefault.value = data.notify_recipients_default
-    } catch (err) {
-      errorMsg.value = describe(err)
-    } finally {
-      loading.value = false
-    }
-  }
-
-  async function onSave() {
-    saving.value = true
-    errorMsg.value = null
-    try {
-      const { data } = await updateShareDefaults({
-        notify_recipients_default: notifyDefault.value,
-      })
-      notifyDefault.value = data.notify_recipients_default
-      // Refresh /me so the share-create form picks up the new default
-      // without a manual reload.
-      await auth.refreshMe()
-      ui.pushToast(t('admin_share_defaults.saved_toast'), 'success')
-    } catch (err) {
-      errorMsg.value = describe(err)
-    } finally {
-      saving.value = false
-    }
-  }
-
-  onMounted(load)
+    },
+    // Refresh /me so the share-create form picks up the new default without a
+    // manual reload.
+    afterSave: () => auth.refreshMe(),
+    savedToastKey: 'admin_share_defaults.saved_toast',
+  })
 </script>
 
 <template>

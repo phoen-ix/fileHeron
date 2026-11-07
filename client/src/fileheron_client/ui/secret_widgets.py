@@ -162,9 +162,6 @@ class RevealCard(ctk.CTkFrame):
         self.note_var.set(note)
         self._paint()
 
-    def has_text(self) -> bool:
-        return self._secret_text is not None
-
     def toggle(self) -> None:
         self._shown = not self._shown
         self._paint()

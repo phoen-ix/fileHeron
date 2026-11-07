@@ -72,9 +72,6 @@ class ClientConfig:
     # HTTP Range). 1 disables segmenting (single stream). Clamped 1..8.
     download_connections: int = 4
 
-    def normalised_server_url(self) -> str:
-        return (self.server_url or "").rstrip("/")
-
 
 def load_config() -> ClientConfig:
     p = config_path()

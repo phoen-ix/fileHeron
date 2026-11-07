@@ -15,21 +15,13 @@ from typing import Optional, Tuple
 import customtkinter as ctk
 
 from ..i18n import t
-from .app import center_window
+from .widgets import modal_dialog, ok_cancel_row
 
 
 class LimitDialog:
     def __init__(self, parent, current: Optional[int] = None) -> None:
-        self._win = ctk.CTkToplevel(parent)
-        self._win.title(t("limit_dialog.title"))
-        center_window(self._win, 420, 260)
-        self._win.resizable(False, False)
-        self._win.transient(parent)
-
+        self._win, outer = modal_dialog(parent, t("limit_dialog.title"), 420, 260)
         self._result: Optional[Tuple[str, Optional[int]]] = None
-
-        outer = ctk.CTkFrame(self._win, fg_color="transparent")
-        outer.pack(fill="both", expand=True, padx=18, pady=18)
 
         ctk.CTkLabel(
             outer, text=t("limit_dialog.intro"),
@@ -62,16 +54,7 @@ class LimitDialog:
             wraplength=380, justify="left", text_color="gray",
         ).pack(fill="x", pady=(0, 12))
 
-        btn_row = ctk.CTkFrame(outer, fg_color="transparent")
-        btn_row.pack(fill="x")
-        ctk.CTkButton(btn_row, text=t("common.ok"), command=self._on_ok, width=90).pack(side="right")
-        ctk.CTkButton(
-            btn_row, text=t("common.cancel"), command=self._win.destroy,
-            width=90, fg_color="gray",
-        ).pack(side="right", padx=(0, 8))
-
-        self._win.bind("<Return>", lambda _e: self._on_ok())
-        self._win.bind("<Escape>", lambda _e: self._win.destroy())
+        ok_cancel_row(self._win, outer, self._on_ok)
 
         self._on_unlimited_toggled()
 

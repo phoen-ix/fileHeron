@@ -1,6 +1,4 @@
-import axios from 'axios'
-
-import api from './client'
+import api, { createBareClient } from './client'
 import type {
   AdminSecretRequestListResponse,
   AnswerSecretRequestResponse,
@@ -54,7 +52,7 @@ export function getSecretRequestLinks(id: string) {
  * travels in a POST body - never a path or query string, where proxies and
  * access logs keep it. */
 
-const publicClient = axios.create({ baseURL: '/' })
+const publicClient = createBareClient('/')
 
 export function peekSecretRequest(token: string) {
   return publicClient.post<PublicSecretRequestPeekResponse>('/api/public/secret-requests/peek', {

@@ -203,3 +203,32 @@ def human_size(n: int) -> str:
     if m < 1024:
         return f"{m:.1f} MB"
     return f"{m / 1024:.2f} GB"
+
+
+def modal_dialog(parent, title: str, width: int, height: int) -> tuple[ctk.CTkToplevel, ctk.CTkFrame]:
+    """A fixed-size transient dialog window with its padded content frame -
+    the chrome the expiry and limit dialogs each built by hand."""
+    from .app import center_window
+
+    win = ctk.CTkToplevel(parent)
+    win.title(title)
+    center_window(win, width, height)
+    win.resizable(False, False)
+    win.transient(parent)
+    outer = ctk.CTkFrame(win, fg_color="transparent")
+    outer.pack(fill="both", expand=True, padx=18, pady=18)
+    return win, outer
+
+
+def ok_cancel_row(win: ctk.CTkToplevel, outer: ctk.CTkFrame, on_ok: Callable[[], None]) -> None:
+    """OK / Cancel buttons, right-aligned, with Return and Escape bound to them."""
+    from ..i18n import t
+
+    btn_row = ctk.CTkFrame(outer, fg_color="transparent")
+    btn_row.pack(fill="x")
+    ctk.CTkButton(btn_row, text=t("common.ok"), command=on_ok, width=90).pack(side="right")
+    ctk.CTkButton(
+        btn_row, text=t("common.cancel"), command=win.destroy, width=90, fg_color="gray",
+    ).pack(side="right", padx=(0, 8))
+    win.bind("<Return>", lambda _e: on_ok())
+    win.bind("<Escape>", lambda _e: win.destroy())

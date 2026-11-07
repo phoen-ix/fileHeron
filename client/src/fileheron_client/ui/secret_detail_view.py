@@ -26,12 +26,11 @@ from ..models import MeResponse, SecretRecipientStatus, SecretResponse
 from ..secret_format import from_text, label_or_placeholder, secret_state, view_limit_text
 from . import _messagebox as mb
 from ._async import run_in_background
+from ._detail_base import DetailViewBase
 from .secret_widgets import (
     ERROR,
     MUTED,
-    LinkRow,
     RevealCard,
-    back_button,
     danger_button,
     heading,
     help_label,
@@ -39,7 +38,7 @@ from .secret_widgets import (
 from .widgets import PillLabel, alive
 
 
-class SecretDetailView(ctk.CTkFrame):
+class SecretDetailView(DetailViewBase):
     def __init__(
         self,
         master,
@@ -52,13 +51,9 @@ class SecretDetailView(ctk.CTkFrame):
         on_back: Callable[[], None],
         back_text: Optional[str] = None,
     ) -> None:
-        super().__init__(master, fg_color="transparent")
+        super().__init__(master, root, api, me, nav=nav)
         self._back_text = back_text or t("secrets.detail.back")
-        self._app_root = root
-        self._api = api
-        self._me = me
         self._secret_id = secret_id
-        self._nav = nav
         self._on_back = on_back
         self._secret: Optional[SecretResponse] = None
         # Set once THIS view revealed the text: keeps the card mounted after
@@ -86,19 +81,10 @@ class SecretDetailView(ctk.CTkFrame):
         self._card.clear()
         self._on_back()
 
-    def _toast(self, text: str, kind: str = "info") -> None:
-        self._nav.toast(text, kind=kind)
-
     # ---- skeleton ------------------------------------------------------------
 
     def _build(self) -> None:
-        header = ctk.CTkFrame(self, fg_color="transparent")
-        header.pack(fill="x", padx=16, pady=(12, 0))
-        back_button(header, self._back_text, self._leave).pack(side="left")
-
-        self._body = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        self._body.pack(fill="both", expand=True, padx=16, pady=(8, 12))
-        self._body.grid_columnconfigure(0, weight=1)
+        self._build_skeleton(self._back_text, self._leave)
         # Fixed slots in a fixed order; an empty slot is grid_remove'd so it
         # takes no space.
         self._head_box = self._slot(0)
@@ -121,24 +107,6 @@ class SecretDetailView(ctk.CTkFrame):
             font=ctk.CTkFont(size=16, weight="bold"),
         ).pack(fill="x")
         self._head_box.grid()
-
-    def _slot(self, row: int) -> ctk.CTkFrame:
-        frame = ctk.CTkFrame(self._body, fg_color="transparent")
-        frame.grid(row=row, column=0, sticky="ew", pady=(0, 10))
-        frame.grid_remove()
-        return frame
-
-    @staticmethod
-    def _clear(box: ctk.CTkFrame) -> None:
-        for child in box.winfo_children():
-            child.destroy()
-
-    @staticmethod
-    def _show(box: ctk.CTkFrame, visible: bool) -> None:
-        if visible:
-            box.grid()
-        else:
-            box.grid_remove()
 
     # ---- load + render -----------------------------------------------------------
 
@@ -394,33 +362,9 @@ class SecretDetailView(ctk.CTkFrame):
         return ""
 
     def _show_links(self) -> None:
-        host = self._links_host
-
-        def _fetch():
-            return api_pkg.get_secret_links(self._api, self._secret_id)
-
-        def _done(resp):
-            if not alive(self) or not alive(host):
-                return
-            self._clear(host)
-            if not resp.items:
-                help_label(host, t("secrets.detail.no_links")).pack(fill="x")
-            for item in resp.items:
-                caption = item.email or t("secrets.detail.the_link")
-                if item.url:
-                    LinkRow(host, item.url, caption=caption,
-                            on_copy_failed=lambda: self._toast(t("secrets.copy_failed"), kind="error"),
-                            ).pack(fill="x", pady=(0, 6))
-                else:
-                    help_label(host, f"{caption}: {t('secrets.detail.link_unavailable')}").pack(fill="x")
-            help_label(host, t("secrets.detail.links_recorded")).pack(fill="x", pady=(2, 0))
-
-        def _failed(exc):
-            if alive(self):
-                msg = exc.localized() if hasattr(exc, "localized") else str(exc)
-                self._toast(msg, kind="error")
-
-        run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
+        self._render_links(
+            self._links_host, lambda: api_pkg.get_secret_links(self._api, self._secret_id)
+        )
 
     # ---- actions -------------------------------------------------------------
 
@@ -511,12 +455,7 @@ class SecretDetailView(ctk.CTkFrame):
             self._toast(t("secrets.detail.burned_toast"), kind="success")
             self._render()
 
-        def _failed(exc):
-            if alive(self):
-                msg = exc.localized() if hasattr(exc, "localized") else str(exc)
-                self._toast(msg, kind="error")
-
-        run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
+        run_in_background(self._app_root, _fetch, on_done=_done, on_failed=self._toast_failure)
 
     def destroy(self) -> None:
         # The card drops the text in its own destroy; clearing first also

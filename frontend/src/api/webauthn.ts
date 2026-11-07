@@ -1,5 +1,4 @@
-import api from './client'
-import axios from 'axios'
+import api, { createBareClient } from './client'
 
 export interface WebAuthnCredentialItem {
   id: number
@@ -42,9 +41,9 @@ export function deleteCredential(id: number) {
   return api.delete(`/account/webauthn/${id}`)
 }
 
-/* The login flow is anonymous-until-completion, so we use a bare
- * axios that doesn't attach the (non-existent) bearer token. */
-const anonClient = axios.create({ baseURL: '/api' })
+/* The login flow is anonymous-until-completion, so it uses the bare client
+ * that attaches no (non-existent) bearer token and runs no refresh. */
+const anonClient = createBareClient('/api')
 
 export function authBegin(email: string, password: string) {
   return anonClient.post<{

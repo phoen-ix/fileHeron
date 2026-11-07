@@ -1,8 +1,8 @@
 /* Anonymous, token-authed subscription management (the email "Manage
  * subscriptions" / "Unsubscribe" links). Mirrors api/publicLinks.ts: a
- * standalone axios instance with NO auth interceptor, so a logged-out
+ * bare client with NO auth interceptor, so a logged-out
  * recipient isn't bounced to /login. The signed token in the URL is the auth. */
-import axios from 'axios'
+import { createBareClient } from './client'
 
 import type {
   NotificationChannel,
@@ -10,10 +10,7 @@ import type {
   UnsubscribeResponse,
 } from '@/types/api'
 
-const subClient = axios.create({
-  baseURL: '/',
-  withCredentials: true,
-})
+const subClient = createBareClient('/', { withCredentials: true })
 
 export function fetchSubscriptions(token: string) {
   return subClient.get<SubscriptionContextResponse>(`/api/notification-subscriptions/${token}`)

@@ -22,13 +22,12 @@ from ..secret_format import answer_terms_text, request_state
 from ..secret_rules import answer_blockers, generate_password
 from . import _messagebox as mb
 from ._async import run_in_background
+from ._detail_base import DetailViewBase
 from .secret_widgets import (
     ERROR,
     MUTED,
     BlockerBox,
-    LinkRow,
     PassphrasePair,
-    back_button,
     danger_button,
     heading,
     help_label,
@@ -49,7 +48,7 @@ _KIND_KEYS = {
 }
 
 
-class SecretRequestDetailView(ctk.CTkFrame):
+class SecretRequestDetailView(DetailViewBase):
     def __init__(
         self,
         master,
@@ -60,12 +59,8 @@ class SecretRequestDetailView(ctk.CTkFrame):
         *,
         nav,
     ) -> None:
-        super().__init__(master, fg_color="transparent")
-        self._app_root = root
-        self._api = api
-        self._me = me
+        super().__init__(master, root, api, me, nav=nav)
         self._request_id = request_id
-        self._nav = nav
         self._req: Optional[SecretRequestResponse] = None
         self._answered_here: Optional[str] = None
         self._sending = False
@@ -74,41 +69,15 @@ class SecretRequestDetailView(ctk.CTkFrame):
         self._build()
         self._load()
 
-    def _toast(self, text: str, kind: str = "info") -> None:
-        self._nav.toast(text, kind=kind)
-
     # ---- skeleton ------------------------------------------------------------
 
     def _build(self) -> None:
-        header = ctk.CTkFrame(self, fg_color="transparent")
-        header.pack(fill="x", padx=16, pady=(12, 0))
-        back_button(header, t("secrets.request.back"), self._nav.back_to_list).pack(side="left")
-        self._body = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        self._body.pack(fill="both", expand=True, padx=16, pady=(8, 12))
-        self._body.grid_columnconfigure(0, weight=1)
+        self._build_skeleton(t("secrets.request.back"), self._nav.back_to_list)
         self._head_box = self._slot(0)
         self._status_box = self._slot(1)
         self._owner_box = self._slot(2)
         self._answer_box = self._slot(3)
         self._actions_box = self._slot(4)
-
-    def _slot(self, row: int) -> ctk.CTkFrame:
-        frame = ctk.CTkFrame(self._body, fg_color="transparent")
-        frame.grid(row=row, column=0, sticky="ew", pady=(0, 10))
-        frame.grid_remove()
-        return frame
-
-    @staticmethod
-    def _clear(box: ctk.CTkFrame) -> None:
-        for child in box.winfo_children():
-            child.destroy()
-
-    @staticmethod
-    def _show(box: ctk.CTkFrame, visible: bool) -> None:
-        if visible:
-            box.grid()
-        else:
-            box.grid_remove()
 
     # ---- load + render -------------------------------------------------------
 
@@ -248,33 +217,9 @@ class SecretRequestDetailView(ctk.CTkFrame):
         return t("secrets.detail.the_link")
 
     def _show_links(self) -> None:
-        host = self._links_host
-
-        def _fetch():
-            return api_pkg.get_secret_request_links(self._api, self._request_id)
-
-        def _done(resp):
-            if not alive(self) or not alive(host):
-                return
-            self._clear(host)
-            if not resp.items:
-                help_label(host, t("secrets.detail.no_links")).pack(fill="x")
-            for item in resp.items:
-                caption = item.email or t("secrets.detail.the_link")
-                if item.url:
-                    LinkRow(host, item.url, caption=caption,
-                            on_copy_failed=lambda: self._toast(t("secrets.copy_failed"), kind="error"),
-                            ).pack(fill="x", pady=(0, 6))
-                else:
-                    help_label(host, f"{caption}: {t('secrets.detail.link_unavailable')}").pack(fill="x")
-            help_label(host, t("secrets.detail.links_recorded")).pack(fill="x", pady=(2, 0))
-
-        def _failed(exc):
-            if alive(self):
-                msg = exc.localized() if hasattr(exc, "localized") else str(exc)
-                self._toast(msg, kind="error")
-
-        run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
+        self._render_links(
+            self._links_host, lambda: api_pkg.get_secret_request_links(self._api, self._request_id)
+        )
 
     # ---- the answer form (someone asked) -------------------------------------------
 
@@ -419,9 +364,4 @@ class SecretRequestDetailView(ctk.CTkFrame):
             self._toast(t("secrets.request.cancelled_toast"), kind="success")
             self._render()
 
-        def _failed(exc):
-            if alive(self):
-                msg = exc.localized() if hasattr(exc, "localized") else str(exc)
-                self._toast(msg, kind="error")
-
-        run_in_background(self._app_root, _fetch, on_done=_done, on_failed=_failed)
+        run_in_background(self._app_root, _fetch, on_done=_done, on_failed=self._toast_failure)

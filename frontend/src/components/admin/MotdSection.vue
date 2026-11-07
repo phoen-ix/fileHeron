@@ -1,56 +1,26 @@
 <script setup lang="ts">
-  import { onMounted, ref } from 'vue'
+  import { ref } from 'vue'
   import { useI18n } from 'vue-i18n'
 
   import { getMotdSettings, updateMotdSettings } from '@/api/admin'
-  import { useApiError } from '@/composables/useApiError'
-  import { useUiStore } from '@/stores/ui'
+  import { useSettingsSection } from '@/composables/useSettingsSection'
 
   const { t } = useI18n()
-  const { describe } = useApiError()
-  const ui = useUiStore()
 
-  const loading = ref(true)
-  const saving = ref(false)
-  const errorMsg = ref<string | null>(null)
   const enabled = ref(false)
   const text = ref('')
 
   const MAX_LEN = 500
 
-  async function load() {
-    loading.value = true
-    errorMsg.value = null
-    try {
-      const { data } = await getMotdSettings()
+  const { loading, saving, errorMsg, onSave } = useSettingsSection({
+    load: getMotdSettings,
+    save: () => updateMotdSettings({ enabled: enabled.value, text: text.value }),
+    apply: (data) => {
       enabled.value = data.enabled
       text.value = data.text
-    } catch (err) {
-      errorMsg.value = describe(err)
-    } finally {
-      loading.value = false
-    }
-  }
-
-  async function onSave() {
-    saving.value = true
-    errorMsg.value = null
-    try {
-      const { data } = await updateMotdSettings({
-        enabled: enabled.value,
-        text: text.value,
-      })
-      enabled.value = data.enabled
-      text.value = data.text
-      ui.pushToast(t('admin_motd.saved_toast'), 'success')
-    } catch (err) {
-      errorMsg.value = describe(err)
-    } finally {
-      saving.value = false
-    }
-  }
-
-  onMounted(load)
+    },
+    savedToastKey: 'admin_motd.saved_toast',
+  })
 </script>
 
 <template>

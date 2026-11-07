@@ -51,6 +51,22 @@ const api = axios.create({
   paramsSerializer: { indexes: null },
 })
 
+/** A bare axios for the anonymous routes: the public share, secret and
+ *  notification-subscription pages, the passkey ceremonies, telemetry, the
+ *  legal pages. No interceptor - a 401 there is a wrong secret or a missing
+ *  cookie, never an expired session - but the SAME request timeout and array
+ *  serialisation as the main instance. Seven files each had their own
+ *  `axios.create({ baseURL })` with no timeout at all, so a stalled passkey
+ *  `begin` or public-share call hung the page indefinitely (audit 2026-11-07). */
+export function createBareClient(baseURL: string, opts: { withCredentials?: boolean } = {}) {
+  return axios.create({
+    baseURL,
+    timeout: REQUEST_TIMEOUT_MS,
+    paramsSerializer: { indexes: null },
+    ...opts,
+  })
+}
+
 // Set by the auth store on login + refresh; cleared on logout.
 let accessToken: string | null = null
 

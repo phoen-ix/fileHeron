@@ -25,14 +25,6 @@ def test_save_then_load_roundtrip(tmp_config_dir):
     assert loaded.auth_kind == "api_token"
     assert loaded.last_landing == "outbox"
 
-
-def test_normalised_server_url_strips_trailing_slash():
-    assert (
-        config.ClientConfig(server_url="https://x.example.com/").normalised_server_url()
-        == "https://x.example.com"
-    )
-
-
 def test_secret_roundtrip_per_server(tmp_keyring):
     config.set_secret("refresh", "https://a.example.com", "tok-a")
     config.set_secret("refresh", "https://b.example.com", "tok-b")

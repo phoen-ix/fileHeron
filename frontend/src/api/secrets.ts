@@ -1,6 +1,4 @@
-import axios from 'axios'
-
-import api from './client'
+import api, { createBareClient } from './client'
 import type {
   AdminSecretListResponse,
   CreateSecretRequest,
@@ -71,7 +69,7 @@ export function removeSecretLink(id: string) {
  * mail gateway that prefetches the link costs nothing, only an explicit
  * reveal uses a view. */
 
-const publicClient = axios.create({ baseURL: '/' })
+const publicClient = createBareClient('/')
 
 export function peekSecret(token: string) {
   return publicClient.post<PublicSecretPeekResponse>('/api/public/secrets/peek', { token })

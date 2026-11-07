@@ -1,3 +1,20 @@
+# Desktop client 1.6.2
+
+**Housekeeping, no behaviour change.**
+
+Requires server **v2.6.1 or newer** (unchanged).
+
+---
+
+- Unused code removed (a never-called `normalised_server_url` helper and a
+  `has_text` method nothing read) together with 21 texts in both languages
+  that no screen used any more - leftovers of an older two-line toast.
+- The two secret detail screens share one skeleton (header, back button,
+  scrollable slots, the links section and the error toast after a background
+  call), and the expiry and download-limit dialogs share one window frame.
+  What each screen shows is unchanged.
+- Released beside server v2.29.4.
+
 # Desktop client 1.6.1
 
 **Security and bug-fix updates to what the app carries inside it.**

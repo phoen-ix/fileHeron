@@ -1,3 +1,62 @@
+# file:Heron v2.29.4
+
+**Scheduled tasks no longer hide a failed run.** Eleven background tasks caught
+their own errors, logged them to the container and reported the run as a
+success - so a task could be broken for weeks while **Admin → Scheduled tasks**
+stayed green and no alert went out. Each now reports the run as failed, with
+what failed in the row, when part of its work did not happen: the quota
+reconcile with Redis unreachable, an expiry warning that could not be sent, an
+orphaned or quarantined file that could not be removed, a stuck upload whose
+bytes could not be deleted, an anomaly detector that raised, an inbound
+attachment that could not be scanned, an abandoned upload that could not be
+swept, an attachment blob the history prune could not delete, and the ops
+check's own alert when it could not be delivered. A failed run writes the
+`cron_failed` audit row and alerts admins as every other failure does.
+
+**A password change or "sign out other sessions" is no longer counted as a
+sign-in.** Both re-mint the current session; they used to leave a sign-in
+record, which showed on the admin **Sign-in** page and counted for the anomaly
+check's "this address also signed in successfully" rule.
+
+**Smaller fixes.**
+
+- An account already at its storage quota is refused a direct upload up front
+  instead of streaming the whole file (up to the direct-upload cap) first.
+- A passkey sign-in that is refused because the account is disabled, locked or
+  unverified now leaves the same sign-in record as a refused password sign-in.
+- The public share, secret, subscription, passkey and legal pages give up on a
+  stalled request after 30 seconds instead of waiting indefinitely.
+- The settings reference (`docs/configuration.md`) now lists every environment
+  variable, including the scan-guard, retention, object-storage and
+  `SETUP_TOKEN` knobs it was missing.
+
+**Under the hood**, from a full audit of the code: unused code and parameters
+removed, duplicated logic folded into one place (the refresh-cookie policy,
+the "alert every admin" fan-out, the IP allowlist parser, the policy-gate
+checks, the file-state gates, the signed-token primitive, the admin settings
+sections, the desktop client's detail views), every stored-text clip derived
+from its column, and new tests that pin each of these so they stay that way.
+
+**Dependencies.** The updater shim moves to Alpine 3.24.4; the web app takes
+the minor and patch updates of its libraries (axios 1.21, ProseMirror,
+ESLint 10.14, vue-tsc 3.3.14).
+
+## On this update
+
+- A patch release: automatic updates install it. No migration, no default
+  change, no infrastructure change.
+- `docker-compose.yml` no longer falls back to `latest` when `FH_TAG` is
+  missing from `.env`: `docker compose` refuses to start and says so, instead
+  of silently pulling the newest image. The in-app updater and `install.sh`
+  write the line, so an instance set up or updated either way already has it.
+  A hand-maintained `.env` without it needs `FH_TAG=v2.29.4` (or `latest`)
+  added once.
+- A scheduled task may now show **failed** where it showed green before. That
+  is a failure that was already happening; its row says what failed and the
+  Errors & alerts page has the detail.
+- The desktop client 1.6.2 ships beside it (housekeeping only, no behaviour
+  change; the 1.6.1 build keeps working).
+
 # file:Heron v2.29.3
 
 **Outgoing mail looks less like spam.** Mail servers greet each other with a

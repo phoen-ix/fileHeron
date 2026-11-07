@@ -7,7 +7,18 @@ summary and points here. Read this before changing the code listed below.
 
 ## Current state
 
-Backend **`v2.29.3`** is the newest tag (2026-11-06): mail only - the EHLO name defaults
+Backend **`v2.29.4`** is the newest tag (2026-11-07): the full audit - eleven tracked crons
+report the failures they swallowed (`cron_tracker.mark_failed`, pinned generically by
+`tests/test_cron_failure_reporting.py`; `services/admin_alerts.notify_admins` is the one admin
+fan-out), change-password and sign-out-others re-mint through `jwt_session.remint_session` and
+write no login forensics, `auth.assert_account_may_sign_in` is the one account gate after a
+verified credential, `utils/client_ip.get_client_ip` the one reading of the caller's address,
+every clip on a String column derived from the column, every `Settings` field documented;
+`docker-compose.yml` gives `FH_TAG` no default any more - a `.env` without the line makes
+`docker compose` refuse instead of pulling `:latest` (`install.sh`, `.env.example` and the
+updater executor write it); the updater shim is on alpine 3.24.4. No migration, no default
+move. Desktop **`client-v1.6.2`** is tagged beside it: housekeeping only (one detail-view base,
+one dialog chrome, dead keys removed). **`v2.29.3`** (2026-11-06): mail only - the EHLO name defaults
 to the From domain (`utils/emailing.py`; was `getfqdn()`, the container id), a placeholder
 From (`.local`, `example.com`, dotless) raises at send time when SMTP is configured, and
 the `List-Unsubscribe` mailto uses the resolved `cfg.from_email`. No migration, no host
@@ -188,6 +199,7 @@ record.
 | v2.29.1 | - | - (a patch: automatic updates install it. The executor recreates any infra container whose running `CapDrop`/`CapAdd`/`ReadonlyRootfs`/`SecurityOpt` differs from the release - nothing on an install that updated to v2.29.0 normally; tusd where the checkout was already at v2.29.0 before that update) | - (the backend `:latest` is now the signed manifest itself; app-image pulls run `docker pull -q`; pyasn1 0.6.4 → 0.6.5 in the backend image) |
 | v2.29.2 | - | - (a patch: automatic updates install it. The executor recreates redis alone - its pin moved to `8.10.3-alpine3.23` - with the app stopped and no forced backup; where infra sync skips, redis stays on 8.10.2 until `docker compose up -d --no-deps redis` after the ff) | - (images on python 3.15.2 and node 26.13.0. Desktop `client-v1.6.1` tagged beside it: Python 3.15.2 and setuptools 84.2.1 in the .exe) |
 | v2.29.3 | - | - (a patch: automatic updates install it; no infra change) | - (mail: EHLO defaults to the From domain; a placeholder From is refused at send time) |
+| v2.29.4 | - | `.env` must carry `FH_TAG` - compose has no `latest` default from this tag on; the in-app updater and `install.sh` write the line, a hand-kept `.env` without it makes `docker compose` refuse until `FH_TAG=v2.29.4` (or `latest`) is added (otherwise a patch: automatic updates install it; no infra change) | - (the 2026-11-07 audit: tracked crons report swallowed failures through `cron_tracker.mark_failed`, session re-mints are not recorded as logins, one account gate / cookie policy / IP helper / admin fan-out; a Scheduled-tasks row may turn red where a failure was hidden. Desktop `client-v1.6.2` beside it: housekeeping only) |
 
 Per-release admin-facing notes for v2.13.0 and newer are in `RELEASE_NOTES.md`,
 one `# file:Heron vX.Y.Z` section each, newest first; older releases live in

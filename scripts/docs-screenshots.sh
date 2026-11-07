@@ -49,6 +49,8 @@ export APP_URL=https://files.heron-demo.example
 export DB_ROOT_PASSWORD=docs-root-not-a-secret DB_PASSWORD=docs-db-not-a-secret
 export JWT_SECRET=docs-jwt-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 export TUS_HOOK_SECRET=docs-tus-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+# The updater shim is the one image pulled from GHCR.
+export FH_TAG=latest
 # The admin overview shows the version; the newest release tag, not 0.0.0-dev.
 DOCS_FH_VERSION="$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null || echo 0.0.0-dev)"
 export DOCS_FH_VERSION

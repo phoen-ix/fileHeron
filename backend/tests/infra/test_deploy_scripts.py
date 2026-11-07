@@ -331,15 +331,15 @@ def test_a_caller_tag_that_differs_from_dotenv_is_called_out(harness) -> None:
     assert ".env resolves to" in out, f"no drift warning:\n{out}"
 
 
-def test_no_drift_warning_when_dotenv_resolves_to_the_same_tag(harness, tmp_path) -> None:
-    """Every image line in docker-compose.yml is `${FH_TAG:-latest}`, so a .env
-    with no FH_TAG resolves to `latest` - deploying `latest` there reverts to
-    nothing and must not warn. Comparing raw values instead of compose-resolved
-    ones made this fire on a perfectly consistent host."""
+def test_a_dotenv_without_fh_tag_is_called_out(harness) -> None:
+    """docker-compose.yml has no FH_TAG default, so a .env without one leaves
+    every later `docker compose` call refusing to run. That is the note, not
+    the revert warning: nothing would revert."""
     rc, out, _ = harness(
         "deploy.sh", FH_TAG="latest", FAKE_PRESENT=_images("latest"), FAKE_NO_FH_TAG="1"
     )
     assert rc == 0, out
+    assert ".env sets no FH_TAG" in out, f"no missing-FH_TAG note:\n{out}"
     assert "NOTE: deploying" not in out, f"false drift warning:\n{out}"
 
 

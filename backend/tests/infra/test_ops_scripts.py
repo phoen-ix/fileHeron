@@ -369,9 +369,9 @@ def test_the_drill_still_takes_dotenv_when_the_caller_says_nothing(tmp_path: Pat
     assert "CHILD_SEES=v2.17.2" in out, out
 
 
-def test_the_drill_defaults_like_compose(tmp_path: Path) -> None:
-    """No tag anywhere, or an exported-but-empty one, resolves to `latest` -
-    what compose's `${FH_TAG:-latest}` would run."""
+def test_the_drill_defaults_to_latest(tmp_path: Path) -> None:
+    """No tag anywhere, or an exported-but-empty one, resolves to `latest`, as
+    in deploy.sh (compose itself has no default)."""
     assert "CHILD_SEES=latest" in _run_drill_env(tmp_path, "DB_ROOT_PASSWORD=x\n", {})
     assert "CHILD_SEES=latest" in _run_drill_env(tmp_path, _DOTENV, {"FH_TAG": ""})
 

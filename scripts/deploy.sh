@@ -39,6 +39,7 @@ cd "$ROOT"
 # so the script disagreed with both its own documentation and the tool it drives.
 FH_TAG_FROM_CALLER="${FH_TAG-}"
 FH_TAG_CALLER_SET="${FH_TAG+set}"
+unset FH_TAG # so FH_TAG_FROM_DOTENV below is .env's own value, not the caller's
 
 if [ -f .env ]; then
     set -o allexport
@@ -49,8 +50,7 @@ fi
 
 # `+set` not `-n`: an exported-but-EMPTY FH_TAG is a caller value too (it comes
 # out of `FH_TAG="$(some_lookup)"` returning nothing), and collapsing it into
-# "unset" silently fell through to .env. Compose resolves an empty one to the
-# default, so match that.
+# "unset" silently fell through to .env. Empty or unset deploys `latest`.
 # Capture what .env said BEFORE the override, or the drift check below compares
 # the caller's value against itself and can never fire.
 FH_TAG_FROM_DOTENV="${FH_TAG:-}"
@@ -66,14 +66,13 @@ export FH_TAG
 # a failed in-app update would roll to a version this host was never running.
 # Persisting it here would be a surprising side effect of a deploy, so say so
 # instead and let the operator decide.
-# Compare against what COMPOSE would resolve from .env alone - every image line
-# in docker-compose.yml is `${FH_TAG:-latest}`, so an absent FH_TAG means
-# `latest`, not "nothing". Comparing against the raw value instead would print
-# this warning on every `latest` deploy of a host that simply has no FH_TAG
-# line, where nothing would revert at all.
-DOTENV_EFFECTIVE_TAG="${FH_TAG_FROM_DOTENV:-latest}"
-if [ -f .env ] && [ "$FH_TAG" != "$DOTENV_EFFECTIVE_TAG" ]; then
-    echo "[deploy] NOTE: deploying :$FH_TAG but .env resolves to :$DOTENV_EFFECTIVE_TAG"
+# docker-compose.yml has no FH_TAG default, so a .env without one makes every
+# later `docker compose` call refuse to run.
+if [ -f .env ] && [ -z "$FH_TAG_FROM_DOTENV" ]; then
+    echo "[deploy] NOTE: .env sets no FH_TAG, and docker compose refuses to run"
+    echo "[deploy] without one. Add FH_TAG=$FH_TAG to .env."
+elif [ -f .env ] && [ "$FH_TAG" != "$FH_TAG_FROM_DOTENV" ]; then
+    echo "[deploy] NOTE: deploying :$FH_TAG but .env resolves to :$FH_TAG_FROM_DOTENV"
     echo "[deploy] A later 'docker compose up -d' would revert to that, and the"
     echo "[deploy] in-app updater reads it as the rollback anchor. Update .env"
     echo "[deploy] if this deploy is meant to stick."

@@ -113,7 +113,7 @@ via `/admin/settings/advanced`.
 | `QUARANTINE_PURGE_AFTER_DAYS` / `ORPHAN_RECLAIM_AFTER_DAYS` / `TUS_UPLOAD_ABANDONED_AFTER_HOURS` | `90`/`7`/`24` | Quarantine purge / orphan reclaim / abandoned-upload windows. ↻ |
 | `REFRESH_TOKEN_RETENTION_DAYS` / `INVITE_RETENTION_DAYS` | `30`/`14` | Token + invite retention. ↻ |
 | `SECRET_RETENTION_DAYS` | `90` | How long the record of an ended secret is kept (its text is gone at once; `0` keeps it). ↻ |
-| `FH_TAG` | `latest` | GHCR image tag (the in-app updater rewrites it). |
+| `FH_TAG` | required | GHCR image tag: a release (`v2.29.3`) or `latest`, which `.env.example` and `install.sh` write (the in-app updater rewrites it). Compose refuses to start without it. |
 | `UPDATER_HOST_WORKSPACE` / `UPDATER_HOST_STATE` | `${PWD}` / `${PWD}/data/updater` | Host paths the updater shim resolves. |
 | `UPDATES_DRAIN_MAX_WAIT_MIN` | `30` | Max wait for transfers to drain before a postponed update applies. ↻ |
 | `UPDATES_BACKUP_DEFAULT` | `true` | Whether the Update dialog's "Back up database first" box starts checked. ↻ |

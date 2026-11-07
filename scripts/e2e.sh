@@ -51,6 +51,8 @@ export APP_URL="http://localhost:$PORT_BASE"
 export DB_ROOT_PASSWORD=e2e-root-not-a-secret DB_PASSWORD=e2e-db-not-a-secret
 export JWT_SECRET=e2e-jwt-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 export TUS_HOOK_SECRET=e2e-tus-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+# The updater shim is the one image pulled from GHCR.
+export FH_TAG=latest
 # Image tags per project, so two checkouts' stacks never run each other's build.
 export E2E_IMAGE_TAG="${COMPOSE_PROJECT_NAME,,}"
 

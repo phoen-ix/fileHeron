@@ -111,10 +111,11 @@ services:
   backend:
     # Production deploys pull a SemVer-tagged image from GHCR (published by
     # the `server-release.yml` workflow on every `v*` tag). `FH_TAG` lives
-    # in `.env`; default `latest` always tracks the most recent release.
+    # in `.env` and has no default: a release tag pins, `latest` (set
+    # explicitly) tracks the most recent release.
     # The dev override (`docker-compose.dev.yml`) reinstates `build:` so
     # the source tree drives local containers without touching GHCR.
-    image: ghcr.io/phoen-ix/fileheron-backend:${FH_TAG:-latest}
+    image: ghcr.io/phoen-ix/fileheron-backend:${FH_TAG:?set FH_TAG in .env (vX.Y.Z or latest)}
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-backend
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)
@@ -185,7 +186,7 @@ services:
       TUS_HOOK_SECRET: ${TUS_HOOK_SECRET:?TUS_HOOK_SECRET is required}
       # Surfaced so backend can show "running on vX.Y.Z" on /admin/system
       # (the new release_apply.get_version reads this directly).
-      FH_TAG: ${FH_TAG:-latest}
+      FH_TAG: ${FH_TAG:?set FH_TAG in .env (vX.Y.Z or latest)}
       MAX_DIRECT_UPLOAD_BYTES: ${MAX_DIRECT_UPLOAD_BYTES:-104857600}
       CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
       CLAMAV_PORT: ${CLAMAV_PORT:-3310}
@@ -289,7 +290,7 @@ services:
         max-file: "3"
 
   worker:
-    image: ghcr.io/phoen-ix/fileheron-worker:${FH_TAG:-latest}
+    image: ghcr.io/phoen-ix/fileheron-worker:${FH_TAG:?set FH_TAG in .env (vX.Y.Z or latest)}
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-worker
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)
@@ -437,7 +438,7 @@ services:
         max-file: "3"
 
   frontend:
-    image: ghcr.io/phoen-ix/fileheron-frontend:${FH_TAG:-latest}
+    image: ghcr.io/phoen-ix/fileheron-frontend:${FH_TAG:?set FH_TAG in .env (vX.Y.Z or latest)}
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-frontend
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)
@@ -483,7 +484,7 @@ services:
     # itself - ~50 lines of bash. Reachable only from the internal
     # network (no Traefik, no published port). Trust to backend is
     # filesystem-membership via the shared /state bind mount.
-    image: ghcr.io/phoen-ix/fileheron-updater-shim:${FH_TAG:-latest}
+    image: ghcr.io/phoen-ix/fileheron-updater-shim:${FH_TAG:?set FH_TAG in .env (vX.Y.Z or latest)}
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-updater-shim
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)

@@ -94,8 +94,8 @@ jobs:
           npm ci --no-audit --no-fund
           npx playwright install --with-deps chromium
 
-      # The suite as locally: scripts/e2e.sh starts the stack (SPA on 8080,
-      # API 8083, the stand-in OIDC IdP 8084) and runs this shard's specs;
+      # The suite as locally: scripts/e2e.sh starts the stack (SPA on 24300,
+      # API 24303, the stand-in OIDC IdP 24304) and runs this shard's specs;
       # shard 2 then runs the docs tour as a render check - every page the
       # README shows, mounted in a real browser against this stack, failing on
       # an uncaught page error or a missing element (v2.17.1 shipped an admin

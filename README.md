@@ -280,10 +280,10 @@ starts a throwaway stack, runs the tour and tears the stack down again:
 ```bash
 cd e2e && npm ci && npx playwright install chromium && cd ..
 scripts/docs-screenshots.sh                    # writes docs/screenshots/*.png
-PORT_BASE=24300 scripts/docs-screenshots.sh ../shots   # another port / output dir
+PORT_BASE=8080 scripts/docs-screenshots.sh ../shots   # another port / output dir
 ```
 
-- **Stack:** compose project `fileheron_docs` on `127.0.0.1:${PORT_BASE:-8080}` (the API on `PORT_BASE+3`).
+- **Stack:** compose project `fileheron_docs` on `127.0.0.1:${PORT_BASE:-24300}` (the API on `PORT_BASE+3`).
 - **Refuses** a checkout with a `.env` or a non-empty `data/`: like the e2e stack it bind-mounts `./data`, so use a clean clone on a machine that also runs an instance.
 - **In CI:** the **Docs screenshots** workflow (Actions, manual) runs the same script and returns the PNGs as an artifact.
 

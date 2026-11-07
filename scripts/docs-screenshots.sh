@@ -5,10 +5,11 @@
 #
 #   scripts/docs-screenshots.sh [outdir]      # default: docs/screenshots
 #
-# PORT_BASE (default 8080): the SPA on 127.0.0.1:PORT_BASE, the API on +3.
-# COMPOSE_PROJECT_NAME (default fileheron_docs): never `fileheron`, which is
-# what compose calls a checkout's live stack. ARTIFACTS: where Playwright's
-# test results go (default: a temp dir).
+# PORT_BASE (default 24300, fileHeron's block on the fleet's VM): the SPA on
+# 127.0.0.1:PORT_BASE, the API on +3.
+# COMPOSE_PROJECT_NAME (default fileheron_docs): must end in _e2e or _docs, never
+# `fileheron` (what compose calls a checkout's live stack). ARTIFACTS: where
+# Playwright's test results go (default: a temp dir).
 #
 # Like the e2e stack it bind-mounts this checkout's data/, so it refuses to
 # start on top of a data/ that holds anything (a local instance) and empties
@@ -21,12 +22,13 @@ OUT="$(mkdir -p "$OUT" && cd "$OUT" && pwd)"
 cd "$ROOT"
 ARTIFACTS="${ARTIFACTS:-$(mktemp -d)}"
 mkdir -p "$ARTIFACTS"
-PORT_BASE="${PORT_BASE:-8080}"
+PORT_BASE="${PORT_BASE:-24300}"
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-fileheron_docs}"
 
 case "${COMPOSE_PROJECT_NAME,,}" in
-  fileheron | phytotron | phytotron-dev | vib | keyb-dev)
-    echo "docs-screenshots: refusing the live project name '$COMPOSE_PROJECT_NAME'" >&2
+  *_e2e | *_docs) ;;
+  *)
+    echo "docs-screenshots: refusing the project name '$COMPOSE_PROJECT_NAME' (must end in _e2e or _docs)" >&2
     exit 1 ;;
 esac
 if [ -e .env ]; then

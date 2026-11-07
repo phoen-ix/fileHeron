@@ -32,8 +32,8 @@ Backend **`v2.29.3`** is the newest tag (mail: EHLO from the From domain, placeh
 ## Commands
 
 - Fast gates: `make lint && make test` (`make lint` includes `make typecheck`); migrations + MariaDB semantics: `make test-mariadb`. CONTRIBUTING §Before you push owns the gate table.
-- E2E: `scripts/e2e.sh [playwright args]` (stack up → specs → docs render check → `down -v`; project `fileheron_e2e`, `PORT_BASE` default 8080, API +3, stand-in OIDC IdP `e2e/oidc/` +4); coverage map `e2e/COVERAGE.md`. By hand: CONTRIBUTING §End-to-end - always under `COMPOSE_PROJECT_NAME=fileheron_e2e` (§Testing + CI gates).
-- Docs screenshots: `scripts/docs-screenshots.sh [outdir]` (default `docs/screenshots/`) builds the prod images, runs the docs tour on a fresh `fileheron_docs` stack bound to `127.0.0.1:${PORT_BASE:-8080}` (API on `PORT_BASE+3`) and tears it down with `down -v`. It refuses the project name `fileheron`, a checkout with a `.env`, and a non-empty `data/` (it bind-mounts `./data` and empties it afterwards). The gallery is `docs/screenshots/README.md`.
+- E2E: `scripts/e2e.sh [playwright args]` (stack up → specs → docs render check → `down -v`; project `fileheron_e2e`, `PORT_BASE` default 24300, API +3, stand-in OIDC IdP `e2e/oidc/` +4); coverage map `e2e/COVERAGE.md`. By hand: CONTRIBUTING §End-to-end - always under `COMPOSE_PROJECT_NAME=fileheron_e2e` (§Testing + CI gates).
+- Docs screenshots: `scripts/docs-screenshots.sh [outdir]` (default `docs/screenshots/`) builds the prod images, runs the docs tour on a fresh `fileheron_docs` stack bound to `127.0.0.1:${PORT_BASE:-24300}` (API on `PORT_BASE+3`) and tears it down with `down -v`. It refuses a project name not ending in `_e2e`/`_docs`, a checkout with a `.env`, and a non-empty `data/` (it bind-mounts `./data` and empties it afterwards). The gallery is `docs/screenshots/README.md`.
 
 ## Invariants
 

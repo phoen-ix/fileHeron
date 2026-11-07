@@ -6,11 +6,11 @@
 #   scripts/e2e.sh tests/user/x.spec.ts # only these Playwright args (no render check,
 #                                       # unless E2E_DOCS_TOUR=1 - CI's shards use that)
 #
-# PORT_BASE (default 8080): the SPA on 127.0.0.1:PORT_BASE, the API on +3, the
-# stand-in OIDC provider (e2e/oidc/) on +4.
-# COMPOSE_PROJECT_NAME (default fileheron_e2e): never `fileheron`, which is
-# what compose calls a checkout's live stack. ARTIFACTS: Playwright's report,
-# results and the stack log on failure (default: a temp dir).
+# PORT_BASE (default 24300, fileHeron's block on the fleet's VM): the SPA on
+# 127.0.0.1:PORT_BASE, the API on +3, the stand-in OIDC provider (e2e/oidc/) on +4.
+# COMPOSE_PROJECT_NAME (default fileheron_e2e): must end in _e2e or _docs, never
+# `fileheron` (what compose calls a checkout's live stack). ARTIFACTS: Playwright's
+# report, results and the stack log on failure (default: a temp dir).
 #
 # Like the docs tour it bind-mounts this checkout's data/, so it refuses to
 # start on top of a data/ that holds anything and empties what it wrote on the
@@ -23,12 +23,13 @@ cd "$ROOT"
 ARTIFACTS="${ARTIFACTS:-$(mktemp -d)}"
 mkdir -p "$ARTIFACTS"
 ARTIFACTS="$(cd "$ARTIFACTS" && pwd)"
-PORT_BASE="${PORT_BASE:-8080}"
+PORT_BASE="${PORT_BASE:-24300}"
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-fileheron_e2e}"
 
 case "${COMPOSE_PROJECT_NAME,,}" in
-  fileheron | phytotron | phytotron-dev | vib | keyb-dev)
-    echo "e2e: refusing the live project name '$COMPOSE_PROJECT_NAME'" >&2
+  *_e2e | *_docs) ;;
+  *)
+    echo "e2e: refusing the project name '$COMPOSE_PROJECT_NAME' (must end in _e2e or _docs)" >&2
     exit 1 ;;
 esac
 if [ -e .env ]; then

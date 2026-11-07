@@ -46,11 +46,11 @@ published credentials. It is also what makes the teardown safe to run.
 ```bash
 cd e2e && npm ci && npx playwright install chromium && cd ..
 scripts/e2e.sh                                  # stack up, every spec, docs render check, stack down
-PORT_BASE=24300 scripts/e2e.sh tests/user/auth.spec.ts   # another port, one file
+PORT_BASE=8080 scripts/e2e.sh tests/user/auth.spec.ts   # another port, one file
 ```
 
-`scripts/e2e.sh` sets `COMPOSE_PROJECT_NAME=fileheron_e2e` itself (and refuses `fileheron`),
-binds `127.0.0.1:${PORT_BASE:-8080}` (API `+3`, the stand-in OIDC provider `+4`), refuses a
+`scripts/e2e.sh` sets `COMPOSE_PROJECT_NAME=fileheron_e2e` itself (and refuses a name not ending in `_e2e`/`_docs`),
+binds `127.0.0.1:${PORT_BASE:-24300}` (API `+3`, the stand-in OIDC provider `+4`), refuses a
 checkout with a `.env` or a non-empty `data/`, and tears down with `down -v` in a trap. By hand:
 
 ```bash
@@ -71,7 +71,7 @@ The screenshots in the docs (`docs/screenshots/*.png`, gallery in
 `e2e/docs/`: it seeds a demo organisation through the API and takes one screenshot per
 screen. `scripts/docs-screenshots.sh [outdir]` is the one entry point: it builds the prod
 images, starts a throwaway stack under `COMPOSE_PROJECT_NAME=fileheron_docs` (the e2e and
-docs overlays) on `127.0.0.1:${PORT_BASE:-8080}`, runs the tour and tears the stack down
+docs overlays) on `127.0.0.1:${PORT_BASE:-24300}`, runs the tour and tears the stack down
 with `down -v`.
 
 ```bash

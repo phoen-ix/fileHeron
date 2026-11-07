@@ -20,7 +20,7 @@ class InboundPollError(RuntimeError):
 
 @track_cron("imap_poll")
 async def imap_poll(_ctx) -> dict:
-    result = await asyncio.to_thread(imap_poll_svc.run_poll, manual=False)
+    result = await asyncio.to_thread(imap_poll_svc.run_poll)
     # run_poll never raises - it catches everything and reports {"ok": False}.
     # @track_cron only marks a run failed when the job raises, so a mailbox that
     # had been unreachable (or misconfigured) for weeks was recorded as a clean

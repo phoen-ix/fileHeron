@@ -16,7 +16,7 @@ oidc-7              `build_authorize_url` percent-encoded nothing:
                     `httpx.QueryParams({k: v})[k]` returns the value DECODED,
                     so a redirect_uri or state containing & or = would split
                     the query.
-oidc-5              the JSON parses in `_discovery` and `_exchange_code` sat
+oidc-5              the JSON parses in `discovery` and `_exchange_code` sat
                     OUTSIDE their try blocks, so an IdP answering 200 with a
                     non-JSON body raised a bare JSONDecodeError and surfaced as
                     an unhandled 500 rather than the OIDC_UNAVAILABLE the
@@ -172,7 +172,7 @@ def test_the_service_uses_the_encoding_form():
 # --- oidc-5 -----------------------------------------------------------------
 
 
-@pytest.mark.parametrize("fn", ["_discovery", "_exchange_code"])
+@pytest.mark.parametrize("fn", ["discovery", "_exchange_code"])
 def test_json_parsing_is_inside_the_failure_contract(fn):
     """A 200 with a non-JSON body - captive portal, HTML error page, truncated
     response - must produce the documented AppError, not a bare

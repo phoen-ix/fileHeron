@@ -14,7 +14,7 @@ the next slug gets missed. The repo has been bitten by that twice already
 (frontend/tests/i18n/notif-categories.test.ts, and the NotificationCategory drift).
 
 Templates are addressed by their FULL locale path, never through render_email alone.
-`_render` falls back to `en/<slug>.<kind>.j2` when the locale's own file is missing,
+`render` falls back to `en/<slug>.<kind>.j2` when the locale's own file is missing,
 so a German template that does not exist renders the English one and `render_email`
 reports success - the failure is invisible from the outside.
 """
@@ -41,12 +41,12 @@ _TZ = "Europe/Vienna"
 
 SLUGS: list[str] = sorted(json.loads((_ROOT / "en" / "subjects.json").read_text("utf-8")))
 
-# Names _render and the layout inject, so a template may use them without the
+# Names render and the layout inject, so a template may use them without the
 # caller's ctx carrying them.
 _INJECTED = {
     "app_name", "app_url", "locale", "site_timezone", "self", "ui",
     "manage_subscriptions_url", "unsubscribe_url", "brand_logo_url",
-    "app_version",  # services/email.py::_render passes it to every template
+    "app_version",  # services/email.py::render passes it to every template
 }
 
 # The five slugs that are NOT admin-editable and so are absent from
@@ -162,7 +162,7 @@ def test_no_template_file_is_orphaned():
 def test_both_parts_exist_in_both_locales(locale, slug, kind):
     """The check that eleven slugs failed for the product's whole life.
 
-    By FULL PATH, because _render falls back to `en/` when the locale's file is
+    By FULL PATH, because render falls back to `en/` when the locale's file is
     missing: going through render_email would let an absent de/ template pass while
     German recipients receive an English HTML part beside a German text part."""
     assert _path(locale, slug, kind).is_file(), f"missing {locale}/{slug}.{kind}.j2"
@@ -171,7 +171,7 @@ def test_both_parts_exist_in_both_locales(locale, slug, kind):
 @pytest.mark.parametrize("locale, slug", _ALL, ids=_IDS)
 @pytest.mark.parametrize("kind", _KINDS)
 def test_every_template_compiles_in_its_own_locale(locale, slug, kind):
-    """get_template COMPILES. _render's fallback used to catch bare Exception, so a
+    """get_template COMPILES. render's fallback used to catch bare Exception, so a
     TemplateSyntaxError in a de/ file was swallowed and the EN template rendered in
     its place - plausible wrong-language content that no reviewer would flag. Compile
     each file directly, where nothing can catch it."""
@@ -281,13 +281,13 @@ def test_every_slug_renders_both_parts_in_every_locale(locale, slug):
 
     assert subject.strip(), f"{locale}/{slug}: empty subject"
     assert "{" not in subject and "}" not in subject, (
-        f"{locale}/{slug}: unsubstituted subject {subject!r}. _resolve_subject "
+        f"{locale}/{slug}: unsubstituted subject {subject!r}. resolve_subject "
         f"renders a field the payload lacks as empty; braces surviving means that "
         f"fallback is gone and a missing key ships to the recipient verbatim."
     )
     assert not subject.rstrip().endswith(":"), (
         f"{locale}/{slug}: subject {subject!r} ends in a dangling colon - the reason "
-        f"it introduces rendered empty and _resolve_subject did not trim it"
+        f"it introduces rendered empty and resolve_subject did not trim it"
     )
     assert text.strip(), f"{locale}/{slug}: empty text part"
     assert html is not None, (
@@ -327,7 +327,7 @@ def test_the_locales_render_from_their_own_files(slug):
     }
     assert len(set(outs.values())) == len(_LOCALES), (
         f"{slug}: the locales render identical HTML - the de/ template is a copy of "
-        f"the English one, or _render fell back to en/"
+        f"the English one, or render fell back to en/"
     )
 
 

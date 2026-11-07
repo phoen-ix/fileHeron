@@ -127,7 +127,7 @@ async def preview_import(
     file: UploadFile = File(...),
     passphrase: str | None = Form(None),
     db: Session = Depends(get_db),
-    admin: User = Depends(get_current_admin),
+    _admin: User = Depends(get_current_admin),
 ) -> BackupImportSummaryResponse:
     # These handlers must be `async def` to await the upload, but everything
     # after that is blocking: an scrypt KDF, a json.loads of up to 50 MB, and a

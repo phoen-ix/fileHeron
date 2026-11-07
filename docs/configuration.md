@@ -70,7 +70,12 @@ via `/admin/settings/advanced`.
 | `MAX_DIRECT_UPLOAD_BYTES` | `104857600` (100 MB) | Direct-multipart cap; larger → TUS. The edge is no longer the binding constraint: `client_max_body_size` in `docker/frontend/nginx.conf` is `1024m`. If you also front the stack with Traefik, check its `maxRequestBodyBytes` - that one still caps the same request. ↻ |
 | `UPLOAD_STALE_AFTER_HOURS` | `3` | When an `uploading` row is treated as abandoned. ↻ |
 | `STORAGE_ROOT` / `TUS_UPLOAD_DIR` / `QUARANTINE_DIR` | `/data/files` / `/data/uploads` / `/data/quarantine` | **Must share one filesystem.** |
-| `STORAGE_BACKEND` | `local` | `local` or `s3` (+ `S3_*`). |
+| `STORAGE_BACKEND` | `local` | `local` or `s3` (+ the `S3_*` variables below). |
+| `S3_BUCKET` / `S3_REGION` | empty / `us-east-1` | Object store for `STORAGE_BACKEND=s3`. |
+| `S3_ENDPOINT_URL` | empty | Blank = AWS; set for MinIO, localstack or any S3-compatible store. |
+| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | empty | Blank = boto3's default credential chain (instance role, env, profile). |
+| `S3_KEY_PREFIX` | empty | Optional key namespace inside the bucket. |
+| `TUS_PUBLIC_BASE` | `/uploads/` | The path the browser reaches tusd at (nginx proxies it); the trailing slash matters for tusd's `-base-path`. |
 | `STORAGE_LOW_THRESHOLD_PERCENT` / `_BYTES` | `5` / `10 GiB` | Low-disk degradation thresholds. ↻ |
 | `CLAMAV_HOST`/`CLAMAV_PORT` | `clamav`/`3310` | clamd endpoint. |
 | `AV_SKIP` | `false` | Skip scanning (CI/dev). **Refuses `production + true`.** |
@@ -86,6 +91,8 @@ via `/admin/settings/advanced`.
 > `AV_MAX_SCAN_BYTES` does not extend coverage; it only makes fileHeron report a
 > verdict clamd never produced.
 | `PUBLIC_LINK_PASSWORD_RATE_LIMIT` / `_WINDOW_SEC` / `PUBLIC_LINK_LOCKOUT_SEC` | `10`/`900`/`900` | Per-link password brute-force guard. ↻ |
+| `PUBLIC_LINK_ATTEMPT_RETENTION_DAYS` | `90` | How long unlock attempts (they carry client IPs) are kept before `prune_history` removes them. |
+| `PUBLIC_LINK_BASE_PATH` / `SECRET_LINK_BASE_PATH` / `REQUEST_LINK_BASE_PATH` | `/d` / `/s` / `/r` | The SPA routes a public link, a secret link and a secret-request link open. Code constants, not settings: the SPA's routes are fixed, so any other value would only produce dead links. |
 | `SECRETS_MAX_VIEWS` / `SECRETS_MAX_EXPIRY_DAYS` / `SECRETS_MAX_LIFETIME_DAYS` | `100`/`90`/`90` | Ceilings for a secret: most views, latest expiry, longest life (`0` = no lifetime ceiling). ↻ |
 | `SECRETS_PASSPHRASE_MAX_FAILURES` | `10` | Wrong passphrases before a secret is destroyed for that recipient (when that mode is chosen). ↻ |
 | `SECRETS_PASSPHRASE_RATE_LIMIT` / `_WINDOW_SEC` / `_LOCKOUT_SEC` | `10`/`900`/`900` | Wrong-passphrase throttle per recipient and address, and how long a link is locked. ↻ |
@@ -103,7 +110,16 @@ via `/admin/settings/advanced`.
 | `HIBP_ENABLED` | `true` | HaveIBeenPwned k-anonymity check. ↻ |
 | `WEBAUTHN_RP_ID` / `WEBAUTHN_RP_NAME` / `WEBAUTHN_ORIGINS` | `localhost` / `fileHeron` / empty | Passkey RP id (= public hostname), name, allowed origins (empty → `APP_URL`). |
 | `ANOMALY_ENABLED` | `true` | Hourly heuristic anomaly scan (alert-only). ↻ |
-| `ANOMALY_MASS_DOWNLOAD_THRESHOLD` / `_MULTI_NETWORK_THRESHOLD` / `_LOGIN_FAILURE_THRESHOLD` | `100`/`4`/`50` | Anomaly thresholds. ↻ |
+| `ANOMALY_MASS_DOWNLOAD_THRESHOLD` / `ANOMALY_MULTI_NETWORK_THRESHOLD` / `ANOMALY_LOGIN_FAILURE_THRESHOLD` | `100`/`4`/`50` | Anomaly thresholds: downloads per user per 15 min, distinct networks per user per 30 min, failed logins per address per 15 min. ↻ |
+| `SCAN_GUARD_THRESHOLD` / `SCAN_GUARD_WINDOW_SEC` | `3` / `3600` | Scanner offences (probe-path or API 404 hits, see [scan guard](admin-guide.md#scan-guard)) from one address before it is blocked, and the window they are counted in. |
+| `SCAN_GUARD_MIN_DISTINCT_PATHS` | `15` | An address must have hit this many distinct paths before it can be blocked; a monitor or broken bookmark repeating one path never qualifies. |
+| `SCAN_GUARD_AUTH_THRESHOLD` | `15` | Wrong-secret auth failures from one address before a block (the auth signal is off by default). |
+| `SCAN_GUARD_BLOCK_MINUTES` / `SCAN_GUARD_MAX_BLOCK_MINUTES` | `60` / `1440` | First block length, doubling per strike up to the ceiling; there is no permanent block. |
+| `SCAN_GUARD_NETWORK_THRESHOLD` / `SCAN_GUARD_NETWORK_LOOKBACK_HOURS` / `SCAN_GUARD_NETWORK_PREFIX_V6` | `3` / `168` / `64` | Distinct blocked addresses in one /24 (IPv6: one /`PREFIX_V6`) within the lookback before the whole network is blocked. |
+| `SCAN_GUARD_MAX_NEW_BLOCKS_PER_MIN` | `60` | Ceiling on new blocks per minute; bounds what a flood of forged `X-Forwarded-For` values could do. |
+| `IP_BLOCK_RETENTION_DAYS` | `90` | How long expired scan-guard blocks (they carry client IPs) are kept before `prune_history` removes them. |
+| `ERROR_LOG_SCAN_CAPTURE_PER_MIN` | `300` | Cap on scanner-noise rows the error log captures per minute (mirrors the edge `limit_req`); raise for fuller scan visibility. |
+| `SETUP_TOKEN` | empty | Gates the anonymous `/setup` wizard while no admin exists; `install.sh` generates it and prints the `/setup?token=…` link. Empty = the old open wizard. |
 | `ERROR_ALERT_COOLDOWN_MINUTES` / `ERROR_ALERT_MAX_PER_HOUR` | `15`/`20` | Error-alert anti-flood. ↻ |
 | `ERROR_LOG_RETENTION_DAYS` | `90` | Error-log prune window (`0` disables). ↻ |
 | `AUDIT_LOG_RETENTION_DAYS` | `365` | `prune_history` audit window (`0` = forever). ↻ |

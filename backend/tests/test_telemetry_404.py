@@ -17,7 +17,7 @@ def _enable_capture(db):
     settings_svc.set_value(db, key=K.ERROR_LOG_CAPTURE_4XX, value="true", actor=None)
     settings_svc.set_value(db, key=K.ERROR_LOG_4XX_CODES, value="404", actor=None)
     db.commit()
-    error_log._reset_cache()
+    error_log.reset_cache()
 
 
 @pytest.mark.asyncio
@@ -42,7 +42,7 @@ async def test_beacon_enqueues_spa_event_when_capture_on(db, client, monkeypatch
 @pytest.mark.asyncio
 async def test_beacon_noop_when_capture_off(db, client, monkeypatch):
     # capture_4xx defaults off -> cached gate returns False -> no enqueue.
-    error_log._reset_cache()
+    error_log.reset_cache()
     calls: list = []
     from app.services import job_queue
     monkeypatch.setattr(job_queue, "enqueue", lambda name, **kw: calls.append((name, kw)))

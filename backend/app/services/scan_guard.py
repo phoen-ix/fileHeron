@@ -462,7 +462,7 @@ def _ensure_fresh() -> None:
                 _refresh_cache()
 
 
-def _reset_cache() -> None:
+def reset_cache() -> None:
     """Test hook / post-write invalidation, so a block or a settings change is
     effective on the very next request instead of up to _CACHE_TTL_SEC later."""
     global _cache_expires
@@ -543,7 +543,7 @@ def classify(
         if path.startswith(prefix):
             return None
 
-    is_api = path.startswith("/api/") or path.startswith("/uploads/")
+    is_api = path.startswith(("/api/", "/uploads/"))
     if snap.get("signal_probe_path"):
         # Admin-added prefixes count as bait wherever they live, so an operator
         # who sees a novel probe in their own log can act on it without waiting
@@ -823,7 +823,7 @@ def note_offence(ip: str, signal: str, path: str) -> None:
             db.commit()
         finally:
             db.close()
-        _reset_cache()
+        reset_cache()
     except Exception:
         logger.warning("scan_guard: note_offence failed", exc_info=True)
 
@@ -911,7 +911,7 @@ def _duration_minutes(strikes: int, snap: dict) -> int:
 
 # The column is String(512) and the value is an attacker-controlled URI. An
 # over-long path raised DataError under MariaDB strict mode, and note_offence's
-# blanket `except` swallowed it - so NO block row was written and _reset_cache()
+# blanket `except` swallowed it - so NO block row was written and reset_cache()
 # never ran. A scanner with long URLs therefore disabled the guard built to stop
 # it, silently. SQLite ignores VARCHAR widths, so no behavioural test can catch
 # this; test_gate_wiring_coverage asserts the clip structurally instead.
@@ -1870,5 +1870,5 @@ def update_settings(
     result = get_settings(db)
     # The writing process must see its own change immediately, or an admin who
     # disables the guard watches it keep blocking for another cache TTL.
-    _reset_cache()
+    reset_cache()
     return result

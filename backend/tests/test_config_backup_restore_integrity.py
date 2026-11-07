@@ -151,7 +151,7 @@ def test_purge_user_unlinks_file_bytes(fk_db, tmp_path):
     ))
     fk_db.commit()
 
-    outcome = cb._purge_user(fk_db, victim, actor=admin, request=None)
+    outcome = cb._purge_user(fk_db, victim, actor=admin)
     fk_db.commit()
 
     assert outcome == "deleted"

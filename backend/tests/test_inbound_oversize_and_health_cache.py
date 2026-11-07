@@ -75,7 +75,7 @@ def test_oversize_message_is_never_fetched(db, imap_enabled):
     session = _FakeSession({1: huge, 2: len(GOOD)}, {1: b"", 2: GOOD})
 
     result = imap_poll_svc.run_poll(
-        manual=False, db=db, session_opener=lambda _c: session
+        db=db, session_opener=lambda _c: session
     )
 
     assert 1 not in session.fetched, "the oversize message was downloaded anyway"
@@ -90,7 +90,7 @@ def test_highwater_advances_past_an_oversize_message(db, imap_enabled):
     session = _FakeSession({5: huge}, {5: b""})
 
     result = imap_poll_svc.run_poll(
-        manual=False, db=db, session_opener=lambda _c: session
+        db=db, session_opener=lambda _c: session
     )
 
     assert result["ok"] is True
@@ -104,7 +104,7 @@ def test_server_under_reporting_size_is_still_caught(db, imap_enabled):
     session = _FakeSession({7: 10}, {7: body})  # claims 10 bytes, sends 64 MB+
 
     result = imap_poll_svc.run_poll(
-        manual=False, db=db, session_opener=lambda _c: session
+        db=db, session_opener=lambda _c: session
     )
 
     assert result["skipped_messages"] == 1
@@ -116,7 +116,7 @@ def test_normal_messages_are_unaffected(db, imap_enabled):
     """Control: the guard must not start dropping ordinary mail."""
     session = _FakeSession({3: len(GOOD)}, {3: GOOD})
     result = imap_poll_svc.run_poll(
-        manual=False, db=db, session_opener=lambda _c: session
+        db=db, session_opener=lambda _c: session
     )
     assert result["skipped_messages"] == 0
     assert result["ingested"] == 1
@@ -209,7 +209,7 @@ def test_a_many_part_message_under_the_byte_cap_is_skipped(db, imap_enabled, mon
     )
 
     sess = _FakeSession({7: len(raw)}, {7: raw})
-    out = imap_poll.run_poll(manual=False, db=db, session_opener=lambda _cfg: sess)
+    out = imap_poll.run_poll(db=db, session_opener=lambda _cfg: sess)
     assert parsed_with == [], (
         "a message with more parts than the cap was handed to the parser; "
         "that is the allocation that OOM-kills the worker"
@@ -239,7 +239,7 @@ def test_the_highwater_advances_before_the_parse(db, imap_enabled, monkeypatch):
 
     sess = _FakeSession({42: len(raw)}, {42: raw})
     with pytest.raises(_Boom):
-        imap_poll.run_poll(manual=False, db=db, session_opener=lambda _cfg: sess)
+        imap_poll.run_poll(db=db, session_opener=lambda _cfg: sess)
 
     saved = settings_svc.get(db, settings_svc.Keys.IMAP_LAST_UID)
     assert saved is not None and int(saved) >= 42, (

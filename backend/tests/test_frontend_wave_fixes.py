@@ -159,8 +159,10 @@ def test_a_password_change_keeps_this_device_signed_in():
         / "app" / "routers" / "account.py"
     ).read_text()
     body = backend.split("async def change_password(")[1].split("\n@router")[0]
-    assert "finalize_successful_login" in body
-    assert "fh_refresh" in body
+    # Re-minted through jwt_session (not recorded as a login), and the new
+    # refresh cookie set through the one cookie policy.
+    assert "remint_session" in body
+    assert "set_refresh_cookie" in body
     spa = _read("views/Account.vue")
     assert "setAccessToken(res.data.access_token)" in spa
 

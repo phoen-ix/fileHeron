@@ -20,12 +20,25 @@ from sqlalchemy.orm import Session
 
 from ..models.inbound_attachment import AttachmentAVState, InboundAttachment
 from ..models.inbound_message import InboundMessage, MessageClass
-from ..models.user import User, UserRole
+from ..utils.columns import declared_width
 from . import av_scan, file_encryption, imap_config, user_lookup
 from . import storage_backend as storage_svc
 from .inbound_parse import ParsedAttachment, ParsedMessage
 
 logger = logging.getLogger("fileheron.inbound")
+
+# Every String column an inbound message writes, clipped at ingest to the width
+# the column declares - never a literal that can drift from the migration.
+_ATT = InboundAttachment.__table__.c
+_MSG = InboundMessage.__table__.c
+_ATT_FILENAME_MAX = declared_width(_ATT.filename)
+_ATT_CONTENT_TYPE_MAX = declared_width(_ATT.content_type)
+_SENDER_EMAIL_MAX = declared_width(_MSG.sender_email)
+_SENDER_NAME_MAX = declared_width(_MSG.sender_name)
+_TO_ADDR_MAX = declared_width(_MSG.to_addr)
+_SUBJECT_MAX = declared_width(_MSG.subject)
+_MESSAGE_ID_MAX = declared_width(_MSG.message_id)
+_IN_REPLY_TO_MAX = declared_width(_MSG.in_reply_to)
 
 # Skip storing absurdly large attachments (defensive; configurable later).
 _MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
@@ -34,7 +47,7 @@ _MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
 MAX_ATTACHMENTS_PER_MESSAGE = 50
 
 
-def _already_ingested(db: Session, *, uidvalidity: int, uid: int, message_id: str | None) -> bool:
+def _already_ingested(db: Session, *, uidvalidity: int, uid: int) -> bool:
     """Whether this mailbox slot has already been ingested.
 
     Keyed on `(uidvalidity, imap_uid)` ONLY. That pair is assigned by the IMAP
@@ -165,8 +178,8 @@ def _store_attachment(db: Session, message_id_pk: int, att: ParsedAttachment) ->
         av_state = AttachmentAVState.infected
     row = InboundAttachment(
         message_id=message_id_pk,
-        filename=att.filename[:255],
-        content_type=(att.content_type or None) and att.content_type[:127],
+        filename=att.filename[:_ATT_FILENAME_MAX],
+        content_type=(att.content_type or None) and att.content_type[:_ATT_CONTENT_TYPE_MAX],
         size_bytes=len(att.content),
         storage_key=locator,
         av_state=av_state,
@@ -243,7 +256,7 @@ def _notify_admins(db: Session, msg: InboundMessage) -> None:
     if mode == "human" and msg.classification != MessageClass.normal:
         return
     from ..models.notification import NotificationCategory
-    from . import notification as notif_svc
+    from . import admin_alerts
     from . import site as site_svc
 
     base = site_svc.get_site_url(db)
@@ -253,20 +266,9 @@ def _notify_admins(db: Session, msg: InboundMessage) -> None:
         "classification": msg.classification.value,
     }
     link = f"{base}/admin/inbox/{msg.id}"
-    admins = (
-        db.query(User)
-        .filter(User.role == UserRole.admin, User.is_disabled.is_(False))
-        .all()
+    admin_alerts.notify_admins(
+        db, payload=payload, link_url=link, category=NotificationCategory.inbound_message
     )
-    for admin in admins:
-        notif_svc.dispatch(
-            db,
-            user=admin,
-            category=NotificationCategory.inbound_message,
-            payload=payload,
-            link_url=link,
-            email_to=admin.email,
-        )
 
 
 def ingest(
@@ -293,7 +295,7 @@ def ingest(
             "it does not decide whether mail is dropped.",
             uid, uidvalidity, parsed.message_id,
         )
-    if _already_ingested(db, uidvalidity=uidvalidity, uid=uid, message_id=parsed.message_id):
+    if _already_ingested(db, uidvalidity=uidvalidity, uid=uid):
         return None
 
     sender_user_id = None
@@ -321,13 +323,13 @@ def ingest(
     # the same message re-wedges every subsequent poll.
     msg = InboundMessage(
         received_at=parsed.received_at,
-        sender_email=(parsed.sender_email or "unknown")[:320],
-        sender_name=(parsed.sender_name or None) and parsed.sender_name[:255],
+        sender_email=(parsed.sender_email or "unknown")[:_SENDER_EMAIL_MAX],
+        sender_name=(parsed.sender_name or None) and parsed.sender_name[:_SENDER_NAME_MAX],
         sender_user_id=sender_user_id,
-        to_addr=(parsed.to_addr or None) and parsed.to_addr[:320],
-        subject=parsed.subject[:512],
-        message_id=(parsed.message_id or None) and parsed.message_id[:320],
-        in_reply_to=(parsed.in_reply_to or None) and parsed.in_reply_to[:320],
+        to_addr=(parsed.to_addr or None) and parsed.to_addr[:_TO_ADDR_MAX],
+        subject=parsed.subject[:_SUBJECT_MAX],
+        message_id=(parsed.message_id or None) and parsed.message_id[:_MESSAGE_ID_MAX],
+        in_reply_to=(parsed.in_reply_to or None) and parsed.in_reply_to[:_IN_REPLY_TO_MAX],
         imap_uid=uid,
         uidvalidity=uidvalidity,
         classification=parsed.classification,
@@ -353,7 +355,7 @@ def ingest(
             stored += 1
         else:
             dropped.append(f"{att.filename} (could not be stored)")
-            msg._fh_incomplete = True
+            msg._fh_incomplete = True  # noqa: SLF001 - a request-scoped marker, not a column
     if len(parsed.attachments) > MAX_ATTACHMENTS_PER_MESSAGE:
         # A 16 MB mail can declare ~171,000 minimal parts; one file, one clamd
         # session and one row each would run for hours and exhaust the volume's
@@ -361,7 +363,7 @@ def ingest(
         # single byte (audit #2).
         extra = len(parsed.attachments) - MAX_ATTACHMENTS_PER_MESSAGE
         dropped.append(f"{extra} further attachments (over the per-message limit)")
-        msg._fh_incomplete = True
+        msg._fh_incomplete = True  # noqa: SLF001 - see above
         logger.warning(
             "inbound uid=%s declares %d attachments; stored the first %d",
             uid, len(parsed.attachments), MAX_ATTACHMENTS_PER_MESSAGE,

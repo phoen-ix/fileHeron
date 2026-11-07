@@ -71,37 +71,26 @@ def _local_allow(key: str, limit: int, window_sec: int) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _ip_key(ip: str) -> str:
-    return f"fh:rl:login:ip:{sha256_hex(ip)[:16]}"
-
-
 def check_login_ip_allowed(
     ip: str, limit: int | None = None, window_sec: int | None = None
 ) -> bool:
-    """Returns True if this attempt is allowed (under the per-IP rate limit
-    for the current window). Also INCR-s the counter atomically.
+    """The per-IP login window: `check_ip_allowed` on the ``login`` bucket, with
+    the env defaults filled in. Also INCR-s the counter atomically.
 
     `limit`/`window_sec` let the caller pass admin-tunable values resolved
     from the settings registry (it has the db); both fall back to the env
     defaults when omitted.
-    """
-    if not ip:
-        return True
-    eff_limit = settings.RATE_LIMIT_LOGIN if limit is None else limit
-    eff_window = _LOGIN_RATE_WINDOW_S if window_sec is None else window_sec
-    try:
-        redis = get_redis()
-        key = _ip_key(ip)
-        # Atomic INCR; set TTL on first hit.
-        count = sync(redis.incr(key))
-        if count == 1:
-            redis.expire(key, eff_window)
-        return count <= eff_limit
-    except Exception:
-        # Redis unreachable → fall back to the in-process limiter rather
-        # than failing fully open (account-level lockout still applies too).
-        logger.warning("login IP rate-limit: Redis unavailable, using in-process fallback")
-        return _local_allow(_ip_key(ip), eff_limit, eff_window)
+
+    This was a second copy of `check_ip_allowed` with the same Redis key
+    (``fh:rl:login:ip:<hash>``) and one difference: no ``limit <= 0`` short
+    circuit, so a limit of 0 refused every login instead of disabling the
+    window. The registry floor of 1 is what kept that from biting."""
+    return check_ip_allowed(
+        "login",
+        ip,
+        settings.RATE_LIMIT_LOGIN if limit is None else limit,
+        _LOGIN_RATE_WINDOW_S if window_sec is None else window_sec,
+    )
 
 
 # ---------------------------------------------------------------------------

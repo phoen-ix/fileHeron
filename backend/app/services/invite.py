@@ -329,7 +329,7 @@ def activate_invite_as_admin(
     if locale is None:
         locale = actor.locale
     placeholder_password = random_token(32)
-    user = _create_user_from_invite(
+    return _create_user_from_invite(
         db,
         invite=invite,
         password=placeholder_password,
@@ -338,4 +338,3 @@ def activate_invite_as_admin(
         via="admin_direct",
         request=request,
     )
-    return user

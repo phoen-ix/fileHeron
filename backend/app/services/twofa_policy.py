@@ -74,7 +74,7 @@ def _parse_role_list(raw: str | None) -> set[str]:
     return {r for r in parsed if isinstance(r, str) and r in ALLOWED_ROLES}
 
 
-def _resolve_policy(db: Session) -> tuple[set[str], list[int], bool]:
+def resolve_policy(db: Session) -> tuple[set[str], list[int], bool]:
     """Returns (required_roles, required_group_ids, is_kv_overridden).
 
     `is_kv_overridden` is True iff at least one of the two kv keys is
@@ -131,7 +131,7 @@ def is_2fa_required(db: Session, user: User) -> bool:
 
 
 def _policy_covers(db: Session, user: User) -> bool:
-    roles, group_ids, _ = _resolve_policy(db)
+    roles, group_ids, _ = resolve_policy(db)
     if user.role.value in roles:
         return True
     if group_ids:
@@ -159,7 +159,7 @@ def is_2fa_required_bulk(db: Session, users: list[User]) -> dict[int, bool]:
     """
     if not users:
         return {}
-    roles, group_ids, _ = _resolve_policy(db)
+    roles, group_ids, _ = resolve_policy(db)
     member_ids: set[int] = set()
     if group_ids:
         rows = (

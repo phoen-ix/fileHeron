@@ -31,7 +31,7 @@ from ..models.share import Share, ShareState
 from ..services import file as file_svc
 from ..services import upload_liveness
 from ..services.audit import record_audit_event
-from ..services.cron_tracker import track_cron
+from ..services.cron_tracker import exc_summary, mark_failed, track_cron
 from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.expire_files")
@@ -49,6 +49,7 @@ async def expire_files(_ctx) -> dict:
     expired_shares = 0
     deleted_files = 0
     failed_shares = 0
+    first_error: str | None = None
     try:
         now = utc_now()
         live_upload = exists().where(
@@ -92,9 +93,10 @@ async def expire_files(_ctx) -> dict:
             )
             try:
                 db.commit()
-            except Exception:
+            except Exception as exc:
                 db.rollback()
                 failed_shares += 1
+                first_error = first_error or exc_summary(exc)
                 logger.exception(
                     "expire_files: commit failed for share=%s", share.id
                 )
@@ -108,10 +110,13 @@ async def expire_files(_ctx) -> dict:
                 "expire_files: expired %d shares (%d failed), deleted %d files",
                 expired_shares, failed_shares, deleted_files,
             )
-        return {
+        out = {
             "expired_shares": expired_shares,
             "deleted_files": deleted_files,
             "failed_shares": failed_shares,
         }
+        if failed_shares:
+            return mark_failed(out, f"{failed_shares} share(s) not expired: {first_error}")
+        return out
     finally:
         db.close()

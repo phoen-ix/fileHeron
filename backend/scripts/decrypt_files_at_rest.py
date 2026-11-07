@@ -97,7 +97,7 @@ def main(argv: list[str]) -> int:
             print("Encryption at rest is now off.")
 
         # The backfill re-reads the switch per file, but one may be mid-file.
-        lease = encryption_lanes.RedisLease(encryption_lanes._BACKFILL_LOCK)
+        lease = encryption_lanes.RedisLease(encryption_lanes.BACKFILL_LOCK)
         if not lease.acquire():
             print("The encrypt_existing_files task is running; try again in a minute.", file=sys.stderr)
             return 3

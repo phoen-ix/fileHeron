@@ -71,18 +71,15 @@ def update_legal_settings(
     for doc, enabled_key, en_key, de_key in plan:
         settings_svc.set_value(
             db, key=enabled_key, value="true" if doc.enabled else "false",
-            actor=admin, request=request,
-        )
+            actor=admin, )
         # Authored as HTML by the editor; sanitise to the safe allowlist on the
         # way in so stored content is never trusted raw.
         settings_svc.set_value(
             db, key=en_key, value=(richtext.sanitize_html(doc.en) or None),
-            actor=admin, request=request,
-        )
+            actor=admin, )
         settings_svc.set_value(
             db, key=de_key, value=(richtext.sanitize_html(doc.de) or None),
-            actor=admin, request=request,
-        )
+            actor=admin, )
     record_audit_event(
         db,
         event_type=AuditEventType.legal_changed,

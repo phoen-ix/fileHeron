@@ -97,7 +97,7 @@ async def test_sso_discovery_refuses_an_oversized_document(make_provider, monkey
     monkeypatch.setattr(oidc_svc, "assert_public_http_url", lambda *a, **k: None)
     serve(monkeypatch, _too_big)
     with pytest.raises(AppError) as exc:
-        await oidc_svc._discovery(make_provider())
+        await oidc_svc.discovery(make_provider())
     assert exc.value.code == "OIDC_DISCOVERY_TOO_LARGE"
 
 
@@ -110,7 +110,7 @@ async def test_sso_discovery_survives_a_non_numeric_content_length(make_provider
     monkeypatch.setattr(oidc_svc, "assert_public_http_url", lambda *a, **k: None)
     body = json.dumps(doc).encode()
     serve(monkeypatch, lambda _r: httpx.Response(200, headers={"content-length": "x"}, content=body))
-    assert (await oidc_svc._discovery(p))["token_endpoint"] == "https://idp.example.com/t"
+    assert (await oidc_svc.discovery(p))["token_endpoint"] == "https://idp.example.com/t"
 
 
 @pytest.mark.asyncio

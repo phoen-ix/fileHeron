@@ -415,9 +415,9 @@ def set_value(
     key: str,
     value: str | None,
     actor: User | None,
-    request=None,
 ) -> None:
-    """Upsert (or delete if `value` is None). Caller commits."""
+    """Upsert (or delete if `value` is None). Caller commits. The change is
+    audited by `audit_settings_change`, which is what carries the request."""
     row = db.query(AppSetting).filter(AppSetting.key == key).one_or_none()
     if value is None:
         if row is not None:

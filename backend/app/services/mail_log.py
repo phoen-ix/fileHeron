@@ -24,8 +24,13 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models.email_log import EmailLog, EmailStatus, EmailVia
+from ..utils.columns import declared_width
 
 logger = logging.getLogger("fileheron.mail_log")
+
+_SUBJECT_MAX = declared_width(EmailLog.__table__.c.subject)
+_ERROR_CLASS_MAX = declared_width(EmailLog.__table__.c.error_class)
+_ERROR_MESSAGE_MAX = declared_width(EmailLog.__table__.c.error_message)
 
 # Token segment of the one-time auth links built in services/email.py:
 #   {site}/reset-password/{token}, /verify-email/{token}, /register/{token},
@@ -166,7 +171,7 @@ def record_queued(
             template_slug=template_slug,
             via=EmailVia.queued,
             status=EmailStatus.queued,
-            subject=subject[:512],
+            subject=subject[:_SUBJECT_MAX],
             body_text=t,
             body_html=h,
             masked=masked,
@@ -206,9 +211,9 @@ def finalize(
         if smtp_code is not None:
             row.smtp_code = smtp_code
         if error_class is not None:
-            row.error_class = error_class[:64]
+            row.error_class = error_class[:_ERROR_CLASS_MAX]
         if error_message is not None:
-            row.error_message = error_message[:500]
+            row.error_message = error_message[:_ERROR_MESSAGE_MAX]
         db.flush()
     except Exception:
         logger.exception("mail_log.finalize failed for row %s", email_log_id)
@@ -241,14 +246,14 @@ def record_direct(
             template_slug=template_slug,
             via=via,
             status=status,
-            subject=subject[:512],
+            subject=subject[:_SUBJECT_MAX],
             body_text=t,
             body_html=h,
             masked=masked,
             attempts=0 if via == EmailVia.dev_fallback else 1,
             smtp_code=smtp_code,
-            error_class=error_class[:64] if error_class else None,
-            error_message=error_message[:500] if error_message else None,
+            error_class=error_class[:_ERROR_CLASS_MAX] if error_class else None,
+            error_message=error_message[:_ERROR_MESSAGE_MAX] if error_message else None,
         )
         db.add(row)
         db.flush()

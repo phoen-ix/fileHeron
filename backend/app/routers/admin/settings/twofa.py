@@ -32,7 +32,7 @@ router = APIRouter()
 
 
 def _twofa_policy_response(db: Session) -> TwofaPolicyResponse:
-    roles, group_ids, is_kv_overridden = twofa_policy_svc._resolve_policy(db)
+    roles, group_ids, is_kv_overridden = twofa_policy_svc.resolve_policy(db)
     groups = (
         db.query(Group).filter(Group.id.in_(group_ids)).all() if group_ids else []
     )

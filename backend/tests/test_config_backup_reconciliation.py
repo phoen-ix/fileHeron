@@ -141,7 +141,7 @@ def test_a_guard_with_a_signal_is_left_enabled():
 def test_the_scan_guard_cache_is_reset():
     """The process cache holds the PRE-import snapshot for up to
     _CACHE_TTL_SEC; everything above reads through it."""
-    sg._reset_cache()
+    sg.reset_cache()
     db, _b, _s = _import_with("56")
     assert sg._cache_expires == 0.0 or sg._snapshot is None, (
         "the import left the pre-import snapshot cached"

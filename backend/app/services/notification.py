@@ -148,7 +148,7 @@ _PENDING_EMAIL_JOBS_KEY = "_fh_pending_email_jobs"
 _PENDING_SSE_EVENTS_KEY = "_fh_pending_sse_events"
 
 
-def _queue_email_job(db: Session, kwargs: dict) -> None:
+def queue_email_job(db: Session, kwargs: dict) -> None:
     """Hold a `send_email_job` until this session commits, and push the whole
     batch over ONE Redis connection when it does.
 
@@ -289,7 +289,7 @@ def dispatch(
             # the email with it, and the worker must not pick up the job before
             # the row is durable (audit M8). Deferred via the session's
             # after-commit hook; dropped on rollback.
-            _queue_email_job(
+            queue_email_job(
                 db,
                 {
                     "to": email_to,

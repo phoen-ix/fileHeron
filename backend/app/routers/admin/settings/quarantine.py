@@ -50,8 +50,7 @@ def update_quarantine_settings(
         key=settings_svc.Keys.QUARANTINE_NOTIFY_ADMINS,
         value="true" if payload.notify_admins else "false",
         actor=admin,
-        request=request,
-    )
+        )
     record_audit_event(
         db,
         event_type=AuditEventType.quarantine_policy_changed,

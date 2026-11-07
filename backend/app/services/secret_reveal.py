@@ -239,7 +239,7 @@ def _claimed(db: Session, stmt: Any) -> bool:
 
 
 def _unwrap(
-    db: Session, secret: Secret, passphrase: str | None, request_passphrase: str | None = None
+    secret: Secret, passphrase: str | None, request_passphrase: str | None = None
 ) -> bytes:
     if not secret.key_encrypted or not secret.ciphertext:
         # Ended between the state check and here - cannot happen under the row
@@ -415,7 +415,7 @@ def reveal_for_user(
         if _failures_since(db, secret, since, user_id=user.id) >= lim.passphrase_rate_limit:
             raise _throttled()
     try:
-        data_key = _unwrap(db, secret, passphrase, request_passphrase)
+        data_key = _unwrap(secret, passphrase, request_passphrase)
     except SecretRequestPassphraseError:
         _user_wrong_passphrase(db, secret, state, reach, ip=ip, request=request, layer="request")
     except SecretPassphraseError:
@@ -616,7 +616,7 @@ def reveal_by_token(
         ):
             raise _throttled()
     try:
-        data_key = _unwrap(db, secret, passphrase)
+        data_key = _unwrap(secret, passphrase)
     except SecretPassphraseError:
         _token_wrong_passphrase(db, secret, rec, lim, ip=ip, request=request)
     except SecretRequestPassphraseError:

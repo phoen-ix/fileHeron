@@ -61,8 +61,7 @@ def update_site_settings(
             key=settings_svc.Keys.SITE_URL,
             value=payload.site_url,  # None clears the kv override
             actor=admin,
-            request=request,
-        )
+            )
         db.flush()
         new_url = site_svc.get_site_url(db)
         if new_url != previous_url:
@@ -85,8 +84,7 @@ def update_site_settings(
             key=settings_svc.Keys.SITE_TIMEZONE,
             value=write_value,
             actor=admin,
-            request=request,
-        )
+            )
         db.flush()
         new_tz = site_svc.get_site_timezone(db)
         if new_tz != previous_tz:

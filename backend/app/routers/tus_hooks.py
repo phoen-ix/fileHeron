@@ -28,7 +28,6 @@ Behaviour by hook event:
 """
 from __future__ import annotations
 
-import ipaddress
 import logging
 
 from fastapi import APIRouter, Body, Depends, Header, Request
@@ -39,6 +38,8 @@ from ..dependencies import get_db
 from ..middleware.errors import AppError
 from ..schemas.upload import TusHookResponse
 from ..services import tus_hooks as hooks_svc
+from ..utils.client_ip import get_client_ip
+from ..utils.net import ip_in_allowlist
 
 logger = logging.getLogger("fileheron.tus_hooks")
 
@@ -66,25 +67,7 @@ def _ip_allowed(client_ip: str | None) -> bool:
     raw = (getattr(settings, "TUS_HOOK_ALLOWED_IPS", "") or "").strip()
     if not raw:
         return True  # not configured = no enforcement (HMAC still required)
-    if not client_ip:
-        return False
-    try:
-        addr = ipaddress.ip_address(client_ip)
-    except ValueError:
-        return False
-    for part in raw.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        try:
-            if "/" in part:
-                if addr in ipaddress.ip_network(part, strict=False):
-                    return True
-            elif addr == ipaddress.ip_address(part):
-                return True
-        except ValueError:
-            continue
-    return False
+    return ip_in_allowlist(client_ip, raw)
 
 
 @router.post("/api/internal/tus-hooks", response_model=TusHookResponse, status_code=200)
@@ -100,7 +83,7 @@ def tus_hooks(
     We accept both.
     """
     if _allowlist_configured():
-        client_ip = request.client.host if request.client else ""
+        client_ip = get_client_ip(request) or ""
         if not _ip_allowed(client_ip):
             logger.warning(
                 "tus hook rejected: source ip %s not in TUS_HOOK_ALLOWED_IPS",

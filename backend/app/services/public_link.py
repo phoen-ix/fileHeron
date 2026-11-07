@@ -573,7 +573,7 @@ def _policy_keys() -> dict[str, str]:
     }
 
 
-def _resolve_policy(db: Session) -> tuple[str, list[int], list[int]]:
+def resolve_policy(db: Session) -> tuple[str, list[int], list[int]]:
     from . import policy_gate
 
     return policy_gate.resolve_policy(db, **_policy_keys())

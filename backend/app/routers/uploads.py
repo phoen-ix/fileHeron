@@ -7,7 +7,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -114,7 +114,6 @@ def _absorb(sha, out, chunk: bytes) -> None:
     "/direct", response_model=DirectUploadResponse, status_code=status.HTTP_201_CREATED
 )
 async def direct_upload(
-    request: Request,
     share_id: str = Form(...),
     file: UploadFile = File(...),
     relative_dir: str | None = Form(default=None, max_length=4096),
@@ -134,6 +133,19 @@ async def direct_upload(
     from ..services import maintenance as maintenance_svc
     maintenance_svc.refuse_if_maintenance(db, kind="upload")
     _refuse_if_storage_critical(db)
+
+    # Pre-flight, as /init does. The real reservation has to wait for the read
+    # (the size is only known then), but a user already AT their quota used to
+    # stream the whole body - up to the admin cap - to be told no. Zero is the
+    # only size usable here: Content-Length over-reports a multipart body.
+    quota_limit = user.quota_bytes if user.quota_bytes is not None else 0
+    if quota_limit > 0 and quota_svc.used_bytes(user_id=user.id) >= quota_limit:
+        raise AppError(
+            413,
+            "QUOTA_EXCEEDED",
+            "This upload would exceed your storage quota.",
+            details={"quota_bytes": user.quota_bytes},
+        )
 
     # Stream-check size as we read.
     import hashlib

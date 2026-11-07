@@ -25,9 +25,9 @@ PUBLIC_IP = "45.148.10.67"
 
 @pytest.fixture(autouse=True)
 def _fresh_cache():
-    sg._reset_cache()
+    sg.reset_cache()
     yield
-    sg._reset_cache()
+    sg.reset_cache()
 
 
 def _snap(**over):
@@ -512,12 +512,12 @@ def test_is_blocked_honours_expiry_release_and_allowlist(db, make_user):
     )
     row = sg.apply_block(db, subject=PUBLIC_IP, reason="probe_path", snap=_snap())
     db.commit()
-    sg._reset_cache()
+    sg.reset_cache()
     assert sg.is_blocked(PUBLIC_IP) is True
 
     row.expires_at = utc_now() - timedelta(minutes=1)
     db.commit()
-    sg._reset_cache()
+    sg.reset_cache()
     assert sg.is_blocked(PUBLIC_IP) is False, "an expired block must lapse on its own"
 
 
@@ -591,7 +591,7 @@ def test_is_blocked_refuses_to_act_on_a_non_global_address(db):
         is_network=True, snap=_snap(), minutes=60,
     )
     db.commit()
-    sg._reset_cache()
+    sg.reset_cache()
     assert row.is_network
     assert sg.is_blocked("10.0.0.5") is False
     assert sg.is_blocked("127.0.0.1") is False

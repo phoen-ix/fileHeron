@@ -230,7 +230,10 @@ def test_an_unscanned_file_is_not_rendered_inline(db):
     from app.routers import public as public_router
 
     assert "FILE_NOT_SCANNED" in inspect.getsource(files_router._assert_previewable_state)
-    assert "FILE_NOT_SCANNED" in inspect.getsource(public_router.public_preview)
+    # The public route applies the SAME gate (services/file.py), rather than
+    # its own ladder - which is where the refusal used to be missed.
+    assert "assert_state_previewable(" in inspect.getsource(public_router.public_preview)
+    assert files_router._assert_previewable_state is public_router.file_svc.assert_state_previewable
 
 
 def test_the_download_path_still_serves_an_unscanned_file():

@@ -68,7 +68,7 @@ def _seed_ctx(slug: str) -> dict:
 
 
 def _default_subject(slug: str, locale: str) -> str:
-    return email_svc._resolve_subject(locale, slug, _seed_ctx(slug), app_name="[APP_NAME]")
+    return email_svc.resolve_subject(locale, slug, _seed_ctx(slug), app_name="[APP_NAME]")
 
 
 def _default_body(slug: str, locale: str) -> str:
@@ -77,7 +77,7 @@ def _default_body(slug: str, locale: str) -> str:
     built-in .html.j2 extends the email layout, so it can't seed the editor;
     the plain text gives clean paragraphs the admin can then format.)"""
     try:
-        text = email_svc._render(
+        text = email_svc.render(
             locale, slug, "txt", _seed_ctx(slug),
             app_url="[APP_URL]", app_name="[APP_NAME]",
         ).strip()
@@ -313,11 +313,11 @@ async def test_send_email_template(
             sent_to=None,
         )
     try:
-        await email_svc._send_resolved(
+        await email_svc.send_resolved(
             to=admin.email, subject=rendered_subject,
             text_body=text, html_body=html, category=slug,
         )
     except Exception as exc:  # noqa: BLE001 - surface the SMTP error to the admin
-        payload_out = email_svc._smtp_error_payload(exc)
+        payload_out = email_svc.smtp_error_payload(exc)
         return TestSendEmailTemplateResponse(**payload_out, sent_to=admin.email)
     return TestSendEmailTemplateResponse(ok=True, sent_to=admin.email)

@@ -50,8 +50,7 @@ def update_file_preview_settings(
         key=settings_svc.Keys.FILE_PREVIEW_ENABLED,
         value="true" if payload.enabled else "false",
         actor=admin,
-        request=request,
-    )
+        )
     record_audit_event(
         db,
         event_type=AuditEventType.file_preview_toggled,

@@ -122,10 +122,10 @@ def _enable(db):
 def test_run_poll_reports_whether_a_failure_is_transient(db, connect_failure):
     _enable(db)
     unreachable = connect_failure(OSError(errno.ENETUNREACH, "Network is unreachable"))
-    out = svc.run_poll(manual=False, db=db, session_opener=_opener_raising(unreachable))
+    out = svc.run_poll(db=db, session_opener=_opener_raising(unreachable))
     assert out["ok"] is False and out["transient"] is True
     login = imaplib.IMAP4.error("[AUTHENTICATIONFAILED] Authentication failed.")
-    out = svc.run_poll(manual=False, db=db, session_opener=_opener_raising(login))
+    out = svc.run_poll(db=db, session_opener=_opener_raising(login))
     assert out["ok"] is False and out["transient"] is False
 
 

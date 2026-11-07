@@ -28,7 +28,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 
 import jwt
-from fastapi import Request
+from fastapi import Request, Response
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
@@ -316,7 +316,7 @@ def reclamp_refresh_expiry(
     return {"clamped": clamped, "revoked": revoked}
 
 
-def create_refresh_token(db: Session, user: User, request: Request | None, settings) -> tuple[RefreshToken, str]:
+def create_refresh_token(db: Session, user: User, request: Request | None) -> tuple[RefreshToken, str]:
     # Cap-enforcement chokepoint - every auth flow (password, recovery,
     # OIDC, WebAuthn, register-from-invite) ends here, so this gate
     # covers them all. The eviction is non-security-relevant
@@ -360,6 +360,55 @@ def create_refresh_token(db: Session, user: User, request: Request | None, setti
     db.add(record)
     db.flush()
     return record, plaintext
+
+
+REFRESH_COOKIE = "fh_refresh"
+# Path-scoped so the refresh token never rides a download, an upload or any
+# other API call - only /api/auth/* ever sees it.
+REFRESH_COOKIE_PATH = "/api/auth"
+
+
+def set_refresh_cookie(response: Response, refresh_plain: str, db: Session) -> None:
+    """The ONE refresh-cookie policy: httpOnly, SameSite=Lax, `Secure` in
+    production, path-scoped to /api/auth, and a max-age that matches the
+    server-side refresh TTL (admin-tunable, so the two cannot drift). Five
+    routers carried their own copy of these attributes (audit 2026-11-07)."""
+    from ..config import settings
+    from . import settings_registry
+
+    days = settings_registry.effective(db, settings_registry.K.REFRESH_TOKEN_EXPIRE_DAYS)
+    response.set_cookie(
+        key=REFRESH_COOKIE,
+        value=refresh_plain,
+        max_age=days * 24 * 3600,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+        path=REFRESH_COOKIE_PATH,
+    )
+
+
+def clear_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(REFRESH_COOKIE, path=REFRESH_COOKIE_PATH)
+
+
+def remint_session(
+    db: Session, *, user: User, request: Request | None, settings
+) -> tuple[str, int, str]:
+    """A fresh access + refresh pair for a user who is ALREADY signed in and
+    whose refresh chain this request just revoked (change-password,
+    sign-out-others). Returns ``(access_token, expires_in_seconds,
+    refresh_token_plain)``; caller commits.
+
+    Not a login, so none of the login forensics: those two routes used to call
+    `auth.finalize_successful_login`, which writes a `login_attempts` success
+    row, a `login_success` audit event and a known-device upsert - so the
+    admin Sign-in page listed a password change as a sign-in, and the anomaly
+    job's "this source also logged in successfully" exemption counted it. The
+    action's own audit (`password_changed`, the revoked rows) is the caller's."""
+    access, expires_in = create_access_token(user.id, settings, db)
+    _, refresh_plain = create_refresh_token(db, user, request)
+    return access, expires_in, refresh_plain
 
 
 def revoke_all_user_refresh_tokens(db: Session, user_id: int) -> int:
@@ -484,7 +533,7 @@ def rotate_refresh(
     if user is None or user.is_disabled:
         raise AppError(403, "ACCOUNT_DISABLED", "Account unavailable.")
 
-    new_record, new_plain = create_refresh_token(db, user, request, settings)
+    new_record, new_plain = create_refresh_token(db, user, request)
     # Carry the original sign-in time forward across the rotation chain so
     # `created_at` keeps meaning "session start"; `last_used_at` tracks this
     # latest activity (admins sort by it to spot stale/hanging sessions).

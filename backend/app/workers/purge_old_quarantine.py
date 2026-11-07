@@ -24,7 +24,7 @@ from ..database import SessionLocal
 from ..models.audit_log import AuditEventType, AuditLog
 from ..models.file import File, FileState
 from ..services.audit import record_audit_event
-from ..services.cron_tracker import track_cron
+from ..services.cron_tracker import exc_summary, mark_failed, track_cron
 from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.purge_old_quarantine")
@@ -36,6 +36,7 @@ logger = logging.getLogger("fileheron.workers.purge_old_quarantine")
 async def purge_old_quarantine(_ctx) -> dict:
     purged = 0
     failed = 0
+    first_error: str | None = None
     db = SessionLocal()
     try:
         from ..services import settings_registry
@@ -102,9 +103,10 @@ async def purge_old_quarantine(_ctx) -> dict:
             except Exception as e:
                 db.rollback()
                 failed += 1
+                first_error = first_error or exc_summary(e)
                 logger.exception(
-                    "purge_old_quarantine: failed file=%s path=%s: %s",
-                    f.id, f.storage_path, e,
+                    "purge_old_quarantine: failed file=%s path=%s",
+                    f.id, f.storage_path,
                 )
 
         if purged or failed:
@@ -112,6 +114,9 @@ async def purge_old_quarantine(_ctx) -> dict:
                 "purge_old_quarantine: purged=%d failed=%d (cutoff=%dd)",
                 purged, failed, days,
             )
-        return {"purged": purged, "failed": failed, "cutoff_days": days}
+        out = {"purged": purged, "failed": failed, "cutoff_days": days}
+        if failed:
+            return mark_failed(out, f"{failed} quarantined file(s) not purged: {first_error}")
+        return out
     finally:
         db.close()

@@ -11,7 +11,7 @@ from .common import APIBaseModel
 
 def _validate_url(v: str) -> str:
     v = v.strip()
-    if not (v.startswith("https://") or v.startswith("http://")):
+    if not v.startswith(("https://", "http://")):
         raise ValueError("url must start with http:// or https://")
     if len(v) > 2048:
         raise ValueError("url too long")

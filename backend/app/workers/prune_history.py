@@ -33,7 +33,7 @@ from ..models.public_link_attempt import PublicLinkAttempt
 from ..models.share import Share, ShareState
 from ..models.share_external_recipient import ShareExternalRecipient
 from ..models.webhook import WebhookDelivery
-from ..services.cron_tracker import track_cron
+from ..services.cron_tracker import exc_summary, mark_failed, track_cron
 from ..utils.dbresult import updated_rows
 from ..utils.timeutil import utc_now
 
@@ -150,11 +150,11 @@ async def prune_history(_ctx) -> dict:
         IpBlock,
         keep=IpBlock.expires_at < utc_now(),
     )
-    inbound_pruned = await _prune_inbound(inbound_days)
+    inbound_pruned, undeleted_blobs = await _prune_inbound(inbound_days)
     external_pruned = _prune_ended_external_recipients()
     secrets_pruned = _prune_ended_secrets(secret_days)
     requests_pruned = _prune_ended_secret_requests(secret_days)
-    return {
+    out = {
         "public_link_password_attempts": link_attempt_pruned,
         "audit_log": audit_pruned,
         "download_log": download_pruned,
@@ -168,6 +168,11 @@ async def prune_history(_ctx) -> dict:
         "secrets": secrets_pruned,
         "secret_requests": requests_pruned,
     }
+    if undeleted_blobs:
+        return mark_failed(
+            out, f"{len(undeleted_blobs)} inbound attachment blob(s) not deleted: {undeleted_blobs[0]}"
+        )
+    return out
 
 
 # A share in one of these states can never send its link again: the bytes are
@@ -253,11 +258,13 @@ def _prune_ended_secret_requests(days: int) -> int:
     return total
 
 
-async def _prune_inbound(days: int) -> int:
+async def _prune_inbound(days: int) -> tuple[int, list[str]]:
     """Prune inbound messages older than ``days`` - deleting their attachment
-    blobs from the storage backend first (the DB cascade only removes rows)."""
+    blobs from the storage backend first (the DB cascade only removes rows).
+    Returns ``(rows pruned, blobs that could not be deleted)``: the rows go
+    either way, so an undeleted blob is orphaned and only this report says so."""
     if days <= 0:
-        return 0
+        return 0, []
     from ..models.inbound_attachment import InboundAttachment
     from ..models.inbound_message import InboundMessage
     from ..services import storage_backend as storage_svc
@@ -274,13 +281,16 @@ async def _prune_inbound(days: int) -> int:
         ]
     finally:
         db.close()
+    undeleted: list[str] = []
     if keys:
         backend = storage_svc.get_storage_backend()
         for k in keys:
             try:
                 backend.delete(k)
-            except Exception:
+            except Exception as exc:
+                undeleted.append(f"{k}: {exc_summary(exc)}")
                 logger.warning("prune_history: failed to delete inbound blob %s", k)
-    return await _prune_table(
+    pruned = await _prune_table(
         "inbound_messages", days, InboundMessage.created_at, InboundMessage
     )
+    return pruned, undeleted

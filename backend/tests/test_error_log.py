@@ -165,26 +165,26 @@ def test_alerted_flag_set_on_send(db, make_user, monkeypatch):
 
 
 def test_capture_4xx_cached_reflects_setting(db):
-    error_log._reset_cache()
+    error_log.reset_cache()
     assert error_log.capture_4xx_enabled_cached() is False
     settings_svc.set_value(db, key=K.ERROR_LOG_CAPTURE_4XX, value="true", actor=None)
     settings_svc.set_value(db, key=K.ERROR_LOG_4XX_CODES, value="429", actor=None)
     db.commit()
-    error_log._reset_cache()
+    error_log.reset_cache()
     assert error_log.capture_4xx_enabled_cached() is True
     # Capture on but empty allowlist -> still nothing to enqueue.
     settings_svc.set_value(db, key=K.ERROR_LOG_4XX_CODES, value="", actor=None)
     db.commit()
-    error_log._reset_cache()
+    error_log.reset_cache()
     assert error_log.capture_4xx_enabled_cached() is False
 
 
 def test_capture_rate_per_min_cached_reflects_setting(db):
-    error_log._reset_cache()
+    error_log.reset_cache()
     assert error_log.capture_rate_per_min_cached() == 300  # env default
     settings_svc.set_value(db, key=K.ERROR_LOG_SCAN_CAPTURE_PER_MIN, value="900", actor=None)
     db.commit()
-    error_log._reset_cache()
+    error_log.reset_cache()
     assert error_log.capture_rate_per_min_cached() == 900
 
 

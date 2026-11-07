@@ -67,7 +67,7 @@ def test_dynamic_values_are_escaped_in_html_not_text(db):
 
 def test_sanitize_html_strips_script_and_handlers():
     # nh3 is the defense-in-depth gate on generated HTML.
-    out = email_svc._sanitize_html(
+    out = email_svc.sanitize_html(
         '<p onclick="x()">hi</p><script>bad()</script>'
         '<a href="javascript:alert(1)">x</a>'
     )

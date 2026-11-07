@@ -168,7 +168,7 @@ def capture_rate_per_min_cached() -> int:
     return _rate_per_min
 
 
-def _reset_cache() -> None:
+def reset_cache() -> None:
     """Test hook: drop the cached capture flag/rate."""
     global _cache_expires
     _cache_expires = 0.0

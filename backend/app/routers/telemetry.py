@@ -27,11 +27,18 @@ from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, Field
 
 from ..middleware.errors import _redact_path
+from ..models.error_log import ErrorLog
 from ..services import error_log, job_queue, rate_limit
 from ..utils.client_ip import get_client_ip
+from ..utils.columns import declared_width
 from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.telemetry")
+
+# Client-asserted values are bounded here to the error_log columns they land
+# in (record() clips again, but these also ride the alert job's payload).
+_PATH_MAX = declared_width(ErrorLog.__table__.c.path)
+_MESSAGE_MAX = declared_width(ErrorLog.__table__.c.message)
 
 router = APIRouter(prefix="/api/telemetry", tags=["telemetry"])
 
@@ -73,10 +80,10 @@ def _redact_uri(uri: str) -> str:
         return ""
     base = uri.split("?", 1)[0]
     if "://" not in base:
-        return _redact_path(base)[:512]
+        return _redact_path(base)[:_PATH_MAX]
     scheme, rest = base.split("://", 1)
     host, _, path = rest.partition("/")
-    return f"{scheme}://{host}{_redact_path('/' + path) if path else ''}"[:512]
+    return f"{scheme}://{host}{_redact_path('/' + path) if path else ''}"[:_PATH_MAX]
 
 
 @router.post("/page-404", status_code=204)
@@ -106,7 +113,7 @@ def report_page_404(body: Page404Request, request: Request) -> Response:
         # any token segment, then truncate. The path is client-asserted, and
         # the SPA's own token routes are exactly the ones a user mistypes into
         # a 404 (audit #2).
-        path = _redact_path((body.path or "").split("?", 1)[0])[:512]
+        path = _redact_path((body.path or "").split("?", 1)[0])[:_PATH_MAX]
         event = {
             "source": "spa",
             "exception_type": "ClientNavigation",
@@ -213,9 +220,9 @@ async def report_csp_violation(request: Request) -> Response:
             # The blocked URI is browser-supplied and can be a same-origin
             # URL - so it gets the same token collapsing as the document URI.
             "message": f"CSP would block {directive or 'a resource'}: "
-                       f"{_redact_uri(report.blocked_uri) or '(inline)'}"[:500],
+                       f"{_redact_uri(report.blocked_uri) or '(inline)'}"[:_MESSAGE_MAX],
             "method": "POST",
-            "path": doc[:512],
+            "path": doc[:_PATH_MAX],
             "status_code": 0,
             "code": "CSP_VIOLATION",
             "ip": ip or None,

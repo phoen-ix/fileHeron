@@ -36,19 +36,18 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal
 from ..models.audit_log import AuditEventType
 from ..models.cron_run import CronRun, CronRunStatus
-from ..models.notification import NotificationCategory
-from ..models.user import User, UserRole
 from ..utils.timeutil import utc_now
 from . import alert_dedup
 from . import sse as sse_svc
 from .audit import record_audit_event
-from .notification import dispatch
 
 logger = logging.getLogger("fileheron.cron_tracker")
 
 _PRUNE_AFTER_DAYS = 30
 _KEEP_PER_JOB = 200
 _RESULT_SUMMARY_MAX_BYTES = 4096
+# `cron_runs.error_msg` is Text; this caps a traceback, it is not a width.
+_ERROR_MSG_MAX = 2000
 
 # Dedup window for admin notification on a single cron name's failures.
 # Redis key: fh:ops:alert:cron_failed:<job_name>. TTL = this many seconds.
@@ -64,6 +63,22 @@ _DEDUP_TTL_SEC = 3600
 # audit rows and five `notify_admin_error` enqueues. A job that never sets this
 # key is unaffected.
 CRON_FAILED_KEY = "cron_failed"
+
+
+def exc_summary(exc: BaseException) -> str:
+    """`TypeName: message` - the one-line form every failure report uses."""
+    return f"{type(exc).__name__}: {exc}"
+
+
+def mark_failed(result: dict[str, Any], error: str) -> dict[str, Any]:
+    """Return `result` flagged as a FAILED run - how a cron that caught its own
+    errors says so (CRON_FAILED_KEY). `error` is what the Scheduled-tasks page,
+    the `cron_failed` audit row and the ops alert show. A cron that swallows an
+    exception and does not go through here is recorded as a success, which is
+    the defect `tests/test_cron_failure_reporting.py` pins against."""
+    result[CRON_FAILED_KEY] = True
+    result["error"] = error[:500]
+    return result
 
 
 
@@ -171,12 +186,9 @@ def _maybe_alert_admins(db: Session, job_name: str, error_msg: str) -> None:
     if alert_dedup.seen_recently(f"fh:ops:alert:cron_failed:{job_name}", _DEDUP_TTL_SEC):
         return
 
-    admins = (
-        db.query(User)
-        .filter(User.role == UserRole.admin, User.is_disabled.is_(False))
-        .all()
-    )
-    if not admins:
+    from . import admin_alerts, error_alert
+
+    if not admin_alerts.enabled_admins(db):
         return
     payload = {
         "reason": "cron_failed",
@@ -184,28 +196,20 @@ def _maybe_alert_admins(db: Session, job_name: str, error_msg: str) -> None:
         "error": error_msg[:500],
         "at": utc_now().isoformat(),
     }
-    from . import error_alert
 
     # The same failure also goes through the error-alert pipeline (the
     # notify_admin_error enqueue in _record_failure). Where that will mail an
     # admin, this ops alert stays in the bell, so the failure reaches their
     # inbox once, not twice.
     error_event = {"source": "worker", "job_name": job_name}
-    for admin in admins:
-        try:
-            mailed_elsewhere = error_alert.mails_admin_for(db, error_event, admin)
-            dispatch(
-                db,
-                user=admin,
-                category=NotificationCategory.ops_alert,
-                payload=payload,
-                link_url="/admin/system",
-                email_to=None if mailed_elsewhere else admin.email,
-            )
-        except Exception:
-            logger.exception(
-                "ops_alert dispatch to admin=%d failed", admin.id
-            )
+    admin_alerts.notify_admins(
+        db,
+        payload=payload,
+        link_url="/admin/system",
+        email_for=lambda admin: (
+            None if error_alert.mails_admin_for(db, error_event, admin) else admin.email
+        ),
+    )
 
     from . import webhook as webhook_svc
     emit_payload = {"target_type": "ops", "target_id": "cron_failed", "metadata": payload}
@@ -237,7 +241,7 @@ def _record_failure(
                 live.status = CronRunStatus.failure
                 live.completed_at = utc_now()
                 live.duration_ms = duration_ms
-                live.error_msg = (traceback_text or error_msg)[:2000]
+                live.error_msg = (traceback_text or error_msg)[:_ERROR_MSG_MAX]
         record_audit_event(
             db,
             event_type=AuditEventType.cron_failed,

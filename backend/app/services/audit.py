@@ -10,6 +10,7 @@ from fastapi import Request
 from sqlalchemy.orm import Session
 
 from ..models.audit_log import AuditEventType, AuditLog
+from ..utils.client_ip import get_client_ip
 from ..utils.columns import declared_width
 
 # Widths derived from the columns, never literals: a clip to the WRONG width is
@@ -44,8 +45,9 @@ def record_audit_event(
         request_id = getattr(request.state, "request_id", None)
         if isinstance(request_id, str):
             request_id = request_id[:_REQUEST_ID_MAX]
-        if request.client:
-            ip = request.client.host[:_IP_MAX]
+        host = get_client_ip(request)
+        if host:
+            ip = host[:_IP_MAX]
 
     row = AuditLog(
         actor_user_id=actor_user_id,

@@ -9,7 +9,7 @@ throttle, shredding and expiry are the secrets code, unchanged.
 Rules that hold here:
 
 - Who may ask, and whom, is exactly who may SEND a secret to them
-  (`secret.may_send`, `secret.may_send_external`, `secret._validate_recipients`):
+  (`secret.may_send`, `secret.may_send_external`, `secret.validate_recipients`):
   a client asks only connected employees, and never an address or a link.
 - The answer path locks the request row, checks it is open and not expired
   ITSELF (never leaving expiry to the sweep), and claims it with ONE conditional
@@ -254,7 +254,7 @@ def create_request(
 
     lim = secret_svc.limits(db)
     now = utc_now()
-    expires = secret_svc._normalise_expiry(expires_at)
+    expires = secret_svc.normalise_expiry(expires_at)
     if expires is None or expires <= now:
         raise AppError(400, "EXPIRY_IN_PAST", "Expiry must be in the future.")
     if expires > now + timedelta(days=lim.max_expiry_days, minutes=1):
@@ -289,7 +289,7 @@ def create_request(
         raise AppError(
             400, "SECRET_NO_RECIPIENTS", "Ask at least one person, or create a link."
         )
-    users, groups = secret_svc._validate_recipients(db, requester, user_ids, group_ids)
+    users, groups = secret_svc.validate_recipients(db, requester, user_ids, group_ids)
 
     keys = request_keypair(passphrase) if passphrase else None
     req = SecretRequest(
@@ -321,7 +321,7 @@ def create_request(
         )
         db.add(target)
         db.flush()
-        for uid in secret_svc._member_ids(db, g.id):
+        for uid in secret_svc.member_ids(db, g.id):
             if uid == requester.id:
                 continue
             db.add(SecretRequestGroupMember(target_id=target.id, user_id=uid))
@@ -437,7 +437,7 @@ def _mail_addresses(
             html_body=html,
         )
         target.notified_at = now
-        notif_svc._queue_email_job(
+        notif_svc.queue_email_job(
             db,
             {
                 "to": target.email,
@@ -651,7 +651,7 @@ def _notify_requester(
         return
     from . import notification as notif_svc
 
-    url = secret_svc._detail_url(db, secret) if secret is not None else detail_url(db, req)
+    url = secret_svc.detail_url(db, secret) if secret is not None else detail_url(db, req)
     notif_svc.dispatch(
         db,
         user=requester,

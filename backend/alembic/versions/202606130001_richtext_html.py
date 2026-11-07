@@ -62,7 +62,7 @@ def _renderer():
     from markdown_it import MarkdownIt
 
     md = MarkdownIt("commonmark", {"html": False, "breaks": True})
-    md.validateLink = lambda url: True
+    md.validateLink = lambda _url: True
     md.normalizeLink = lambda url: url
     return md
 

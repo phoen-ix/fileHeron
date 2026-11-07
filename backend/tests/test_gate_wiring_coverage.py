@@ -326,9 +326,11 @@ def test_every_string_column_the_ingest_writes_is_clipped():
     for col in ("sender_email", "sender_name", "to_addr", "subject",
                 "message_id", "in_reply_to"):
         width = widths[col]
-        assert re.search(rf"{col}=.*\[:{width}\]", body), (
-            f"{col} is written without a [:{width}] clip"
-        )
+        # The clip is a module constant DERIVED from the column (declared_width),
+        # never a literal - and it must equal the column's width.
+        m = re.search(rf"{col}=.*\[:(_[A-Z_]+_MAX)\]", body)
+        assert m, f"{col} is written without a clip derived from its column"
+        assert getattr(inbound_mail, m.group(1)) == width, (col, m.group(1))
 
 
 def test_the_clips_match_the_declared_column_widths():
@@ -344,9 +346,12 @@ def test_the_clips_match_the_declared_column_widths():
         if getattr(c.type, "length", None)
     }
     src = inspect.getsource(inbound_mail)
-    for col, clip in re.findall(r"(\w+)=\(?[^\n]*?\[:(\d+)\]", src):
+    found = re.findall(r"(\w+)=\(?[^\n]*?\[:(_[A-Z_]+_MAX)\]", src)
+    assert found, "the ingest mapping no longer clips anything"
+    for col, name in found:
         if col in widths:
-            assert int(clip) <= widths[col], (
+            clip = getattr(inbound_mail, name)
+            assert clip <= widths[col], (
                 f"{col} is clipped to {clip} but the column holds {widths[col]}"
             )
 

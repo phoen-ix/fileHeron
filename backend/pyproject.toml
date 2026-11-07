@@ -111,7 +111,13 @@ line-length = 120
 target-version = "py315"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "N", "UP", "B", "S", "ASYNC", "C4", "SIM"]
+select = [
+    "E", "F", "W", "I", "N", "UP", "B", "S", "ASYNC", "C4", "SIM",
+    # Added 2026-11-07 after the audit found ~60 findings they would have caught:
+    # unused arguments, cross-module private access, redundant list building,
+    # ternaries that are `or`, and the two logging shapes that lose the traceback.
+    "ARG", "SLF", "FURB", "PERF", "PIE", "RET", "PLR1714", "TRY004", "TRY401", "G201",
+]
 ignore = [
     "S101",   # assert used (tests + defensive invariants)
     "S104",   # bind to all interfaces (containerised; bound to 127.0.0.1 by compose)
@@ -133,7 +139,10 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # Security lints that are noise in test code: hardcoded creds/keys in fixtures,
 # /tmp paths, the migration test's literal SQL, and randomness for test data.
-"tests/**/*.py" = ["S105", "S106", "S107", "S108", "S311", "S608"]
+"tests/**/*.py" = ["S105", "S106", "S107", "S108", "S311", "S608", "ARG", "SLF", "FURB", "PERF", "PIE", "RET"]
+# The interface methods a backend ignores (the local one needs no signed URL, the
+# S3 one no local path) keep the parameter names the callers pass by keyword.
+"app/services/storage_backend.py" = ["ARG002"]
 
 [tool.mypy]
 python_version = "3.15"

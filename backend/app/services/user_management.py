@@ -14,11 +14,14 @@ from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.refresh_token import RefreshToken
 from ..models.user import User, UserRole
+from ..utils.columns import declared_width
 from ..utils.like import LIKE_ESCAPE, contains
 from ..utils.timeutil import utc_now
 from .audit import record_audit_event
 
 logger = logging.getLogger("fileheron.user_management")
+
+_DISPLAY_NAME_MAX = declared_width(User.__table__.c.display_name)
 
 
 def list_users(
@@ -328,7 +331,7 @@ async def create_user_as_admin(
     user = User(
         email=em,
         password_hash=argon2_hash(password),
-        display_name=display_name.strip()[:120],
+        display_name=display_name.strip()[:_DISPLAY_NAME_MAX],
         role=target_role,
         locale=actor.locale,
         email_verified=True,

@@ -13,9 +13,13 @@ from email.header import decode_header, make_header
 from email.message import Message
 from email.utils import parseaddr, parsedate_to_datetime
 
-from ..models.inbound_message import MessageClass
-from . import email as email_svc  # reuse the nh3 _sanitize_html helper
+from ..models.inbound_message import InboundMessage, MessageClass
+from ..utils.columns import declared_width
+from . import email as email_svc  # reuse the nh3 sanitize_html helper
 from . import inbound_classify
+
+# The subject is clipped to the column it lands in, never to a literal.
+_SUBJECT_MAX = declared_width(InboundMessage.__table__.c.subject)
 
 _MAX_BODY = 1_000_000  # 1 MB cap per body part (defensive)
 # ...and a TOTAL cap across parts. Per-part alone was not a bound: a 20 MB mail
@@ -164,7 +168,7 @@ def parse(raw: bytes) -> ParsedMessage:
 
     body_text = _join_capped(text_parts)
     raw_html = _join_capped(html_parts)
-    body_html = email_svc._sanitize_html(raw_html) if raw_html else None
+    body_html = email_svc.sanitize_html(raw_html) if raw_html else None
 
     # Re-cap AFTER sanitising, and across BOTH bodies against one budget.
     #
@@ -184,7 +188,7 @@ def parse(raw: bytes) -> ParsedMessage:
         # dangling, so the stored HTML is still well-formed. Re-sanitising can
         # itself grow the string (a cut through `&amp;` leaves `&am`, which is
         # escaped again), so clamp once more afterwards without sanitising.
-        body_html = email_svc._sanitize_html(
+        body_html = email_svc.sanitize_html(
             _truncate_to_bytes(body_html, _MAX_BODY_TOTAL - marker) + _TRUNCATED
         )
         if _encoded_len(body_html) > _MAX_BODY_TOTAL:
@@ -202,7 +206,7 @@ def parse(raw: bytes) -> ParsedMessage:
         sender_email=(addr or "").lower(),
         sender_name=_decode(name) or None,
         to_addr=_decode(msg.get("To")) or None,
-        subject=subject[:512],
+        subject=subject[:_SUBJECT_MAX],
         # str() before .strip(): with a raw 8-bit byte in the header, the email
         # package hands back a Header instance rather than a str, and Header has
         # no .strip() - AttributeError, which aborts the poll before the UID

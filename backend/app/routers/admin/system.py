@@ -63,7 +63,7 @@ _KNOWN_CRONS = list(cron_schedule.REGISTRY)
 
 
 
-def _live_checks(db: Session) -> dict:
+def _live_checks() -> dict:
     """Mirror /api/health's probes - DB, Redis, AV. Probes run fresh on every
     call; `checked_at` records when, so the UI can show 'checked <time>'."""
     out: dict = {"checked_at": utc_now().isoformat()}
@@ -158,7 +158,7 @@ def system_status(
     update_available = release_check_svc.is_newer(latest, VERSION)
 
     return {
-        "live": _live_checks(db),
+        "live": _live_checks(),
         "crons": crons,
         "recent_failures": recent_failures,
         "email_undeliverable_24h": email_undeliverable_24h,
@@ -180,7 +180,6 @@ def system_status(
 
 @stream_router.get("/system/stream")
 async def system_stream(
-    request: Request,
     db: Session = Depends(get_db),
     token: str | None = None,
     authorization: str | None = Header(default=None),
@@ -282,13 +281,12 @@ def cron_runs(
 
 @router.get("/system/live", response_model=LiveChecksResponse)
 def live_checks_now(
-    db: Session = Depends(get_db),
     _admin: User = Depends(get_current_admin),
 ) -> dict:
     """On-demand re-run of the liveness probes (DB / Redis / AV). Lightweight
     sibling of /system/status that skips the cron + version queries - backs
     the 'Re-run' button on the Live checks card."""
-    return {"live": _live_checks(db)}
+    return {"live": _live_checks()}
 
 
 @router.post("/system/crons/{job_name}/run", response_model=RunCronNowResponse)
@@ -405,30 +403,10 @@ def _refuse_downgrade(target_tag: str) -> None:
 def _dispatch_ops_to_admins(db: Session, payload: dict, link_url: str) -> None:
     """Fan out an `ops_alert` notification to every non-disabled admin so
     every admin sees the in-app bell + email about a triggered update,
-    not just the admin who clicked. Mirrors cron_tracker._maybe_alert_admins."""
-    from ...models.notification import NotificationCategory
-    from ...services.notification import dispatch
-    # The mail renders `at` as "when"; without it an update alert carried no
-    # time at all.
-    payload = {**payload, "at": payload.get("at") or utc_now().isoformat()}
-    admins = (
-        db.query(User)
-        .filter(User.role == UserRole.admin, User.is_disabled.is_(False))
-        .all()
-    )
-    for a in admins:
-        try:
-            dispatch(
-                db,
-                user=a,
-                category=NotificationCategory.ops_alert,
-                payload=payload,
-                link_url=link_url,
-                email_to=a.email,
-            )
-        except Exception:
-            # Notification dispatch must never block the update.
-            pass
+    not just the admin who clicked. Dispatch never blocks the update."""
+    from ...services import admin_alerts
+
+    admin_alerts.notify_admins(db, payload=payload, link_url=link_url)
 
 
 @router.get("/system/update-status", response_model=UpdaterStatus)

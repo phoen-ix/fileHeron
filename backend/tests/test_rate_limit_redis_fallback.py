@@ -19,6 +19,9 @@ def _redis_down(monkeypatch):
         raise ConnectionError("redis down")
 
     monkeypatch.setattr(rate_limit, "get_redis", _boom)
+    # The login check is now a wrapper over the generic bucket, which the
+    # conftest stub replaces too - put the real one back for this file.
+    monkeypatch.setattr(rate_limit, "check_ip_allowed", _REAL_CHECK_IP)
     # Clear any residue from other tests.
     with rate_limit._local_lock:
         rate_limit._local_windows.clear()

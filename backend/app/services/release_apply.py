@@ -213,7 +213,7 @@ def _normalize_state(s: str) -> str:
     rolled_back | failed. We map the internal `pending`/`claiming` to
     `queued`; the self-heal states (`rolling_back` in-flight, `rolled_back`
     terminal) pass through unchanged."""
-    if s == "pending" or s == "claiming":
+    if s in ("pending", "claiming"):
         return "queued"
     return s
 

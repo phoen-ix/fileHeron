@@ -164,7 +164,7 @@ def _record(stats: RotationStats, status: str) -> None:
         stats.errors += 1
 
 
-def rotate_table(db, label: str, rows, get_field, set_field, is_bytes: bool, old: Fernet, new: Fernet) -> RotationStats:
+def rotate_table(label: str, rows, get_field, set_field, is_bytes: bool, old: Fernet, new: Fernet) -> RotationStats:
     stats = RotationStats()
     for row in rows:
         v = get_field(row)
@@ -212,7 +212,7 @@ def main() -> int:
     try:
         # 1. TOTP secrets (bytes column).
         s = rotate_table(
-            db, "user_totp.secret_encrypted",
+            "user_totp.secret_encrypted",
             db.query(UserTOTP).all(),
             lambda r: r.secret_encrypted,
             lambda r, v: setattr(r, "secret_encrypted", v),
@@ -222,7 +222,7 @@ def main() -> int:
 
         # 2. OIDC client secrets (str column).
         s = rotate_table(
-            db, "oidc_providers.client_secret_encrypted",
+            "oidc_providers.client_secret_encrypted",
             db.query(OIDCProvider).all(),
             lambda r: r.client_secret_encrypted,
             lambda r, v: setattr(r, "client_secret_encrypted", v),
@@ -232,7 +232,7 @@ def main() -> int:
 
         # 3. Public-link token_encrypted (str column, NULL for legacy rows).
         s = rotate_table(
-            db, "public_links.token_encrypted",
+            "public_links.token_encrypted",
             db.query(PublicLink).all(),
             lambda r: r.token_encrypted,
             lambda r, v: setattr(r, "token_encrypted", v),
@@ -242,7 +242,7 @@ def main() -> int:
 
         # 4. app_settings (only rows with is_encrypted=True).
         s = rotate_table(
-            db, "app_settings (encrypted rows)",
+            "app_settings (encrypted rows)",
             db.query(AppSetting).filter(AppSetting.is_encrypted.is_(True)).all(),
             lambda r: r.value,
             lambda r, v: setattr(r, "value", v),
@@ -253,7 +253,7 @@ def main() -> int:
         # 5. Webhook signing secrets (str column). Missing this stranded every
         # webhook's HMAC secret after a rotation -> all deliveries failed to sign.
         s = rotate_table(
-            db, "webhooks.secret_encrypted",
+            "webhooks.secret_encrypted",
             db.query(Webhook).all(),
             lambda r: r.secret_encrypted,
             lambda r, v: setattr(r, "secret_encrypted", v),
@@ -264,7 +264,7 @@ def main() -> int:
         # 6. Secrets: the wrapped content key (str column, NULL once a secret
         # has ended - shredded). Outer layer only; see the module docstring.
         s = rotate_table(
-            db, "secrets.key_encrypted",
+            "secrets.key_encrypted",
             db.query(Secret).all(),
             lambda r: r.key_encrypted,
             lambda r, v: setattr(r, "key_encrypted", v),
@@ -275,7 +275,7 @@ def main() -> int:
         # 7. Secret links, kept so the sender can copy them again (str column,
         # NULL for account recipients and once a secret has ended).
         s = rotate_table(
-            db, "secret_recipients.token_encrypted",
+            "secret_recipients.token_encrypted",
             db.query(SecretRecipient).all(),
             lambda r: r.token_encrypted,
             lambda r, v: setattr(r, "token_encrypted", v),
@@ -286,7 +286,7 @@ def main() -> int:
         # 8. Secret request links, kept so the requester can copy them again
         # (str column, NULL for account targets and once a request has closed).
         s = rotate_table(
-            db, "secret_request_targets.token_encrypted",
+            "secret_request_targets.token_encrypted",
             db.query(SecretRequestTarget).all(),
             lambda r: r.token_encrypted,
             lambda r, v: setattr(r, "token_encrypted", v),
@@ -298,7 +298,7 @@ def main() -> int:
         # plaintext file). Re-wrapping is all rotation needs: the key inside is
         # unchanged, so no file byte is rewritten.
         s = rotate_table(
-            db, "files.key_encrypted",
+            "files.key_encrypted",
             db.query(File).filter(File.key_encrypted.isnot(None)).all(),
             lambda r: r.key_encrypted,
             lambda r, v: setattr(r, "key_encrypted", v),
@@ -306,7 +306,7 @@ def main() -> int:
         )
         total_errors += s.errors
         s = rotate_table(
-            db, "inbound_attachments.key_encrypted",
+            "inbound_attachments.key_encrypted",
             db.query(InboundAttachment).filter(InboundAttachment.key_encrypted.isnot(None)).all(),
             lambda r: r.key_encrypted,
             lambda r, v: setattr(r, "key_encrypted", v),

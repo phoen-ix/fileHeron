@@ -28,12 +28,9 @@ from sqlalchemy import func
 from ..database import SessionLocal
 from ..models.audit_log import AuditEventType, AuditLog
 from ..models.cron_run import CronRun, CronRunStatus
-from ..models.notification import NotificationCategory
-from ..models.user import User, UserRole
 from ..redis_client import get_redis
-from ..services import alert_dedup
-from ..services.cron_tracker import track_cron
-from ..services.notification import dispatch
+from ..services import admin_alerts, alert_dedup
+from ..services.cron_tracker import mark_failed, track_cron
 from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.ops_check")
@@ -57,34 +54,16 @@ def _dedup_seen(reason: str) -> bool:
     return alert_dedup.seen_recently(f"fh:ops:alert:{reason}", _DEDUP_TTL_SEC)
 
 
-def _alert_admins(db, *, reason: str, detail: str) -> int:
+def _alert_admins(db, *, reason: str, detail: str) -> admin_alerts.FanOut:
     if _dedup_seen(reason):
-        return 0
-    admins = (
-        db.query(User)
-        .filter(User.role == UserRole.admin, User.is_disabled.is_(False))
-        .all()
-    )
+        return admin_alerts.FanOut()
     payload = {"reason": reason, "detail": detail[:500], "at": utc_now().isoformat()}
-    n = 0
-    for admin in admins:
-        try:
-            dispatch(
-                db,
-                user=admin,
-                category=NotificationCategory.ops_alert,
-                payload=payload,
-                link_url="/admin/system",
-                email_to=admin.email,
-            )
-            n += 1
-        except Exception:
-            logger.exception("ops_alert dispatch failed admin=%d", admin.id)
+    out = admin_alerts.notify_admins(db, payload=payload, link_url="/admin/system")
 
     from ..services import webhook as webhook_svc
     emit_payload = {"target_type": "ops", "target_id": reason, "metadata": payload}
     webhook_svc.emit_after_commit(db, webhook_svc.OPS_ALERT_EVENT, emit_payload)
-    return n
+    return out
 
 
 # One failed ping is not an outage. clamd stops answering for several seconds
@@ -98,7 +77,7 @@ _AV_PING_ATTEMPTS = 3
 _AV_PING_RETRY_DELAY_SEC = 10.0
 
 
-async def _check_av(db) -> str | None:
+async def _check_av() -> str | None:
     """Return None if AV is healthy, an error string otherwise. The ping runs in
     a thread (it is blocking socket I/O) and the waits are asyncio sleeps, so a
     real outage does not freeze the worker's event loop for half a minute."""
@@ -186,30 +165,31 @@ def _check_smtp(db) -> str | None:
 @track_cron("ops_check")
 async def ops_check(_ctx) -> dict:
     db = SessionLocal()
-    dispatched = 0
+    dispatched = failed = 0
+    first_error: str | None = None
     summary = {"av": "ok", "redis": "ok", "smtp": "ok", "crons": "ok"}
     try:
-        av_err = await _check_av(db)
-        if av_err:
-            summary["av"] = av_err
-            dispatched += _alert_admins(db, reason="av_unhealthy", detail=av_err)
-
-        redis_err = _check_redis()
-        if redis_err:
-            summary["redis"] = redis_err
-            dispatched += _alert_admins(db, reason="redis_unhealthy", detail=redis_err)
-
-        smtp_err = _check_smtp(db)
-        if smtp_err:
-            summary["smtp"] = smtp_err
-            dispatched += _alert_admins(db, reason="smtp_failing", detail=smtp_err)
-
-        cron_err = _check_failing_crons(db)
-        if cron_err:
-            summary["crons"] = cron_err
-            dispatched += _alert_admins(db, reason="cron_failing", detail=cron_err)
+        checks = (
+            ("av", "av_unhealthy", await _check_av()),
+            ("redis", "redis_unhealthy", _check_redis()),
+            ("smtp", "smtp_failing", _check_smtp(db)),
+            ("crons", "cron_failing", _check_failing_crons(db)),
+        )
+        for key, reason, err in checks:
+            if not err:
+                continue
+            summary[key] = err
+            fan = _alert_admins(db, reason=reason, detail=err)
+            dispatched += fan.sent
+            failed += fan.failed
+            first_error = first_error or fan.first_error
 
         db.commit()
-        return {"dispatched": dispatched, **summary}
+        out = {"dispatched": dispatched, **summary}
+        if failed:
+            # The alerts ARE this job's work: one that could not be delivered is
+            # a failed run, not a quiet one.
+            return mark_failed(out, f"{failed} alert dispatch(es) failed: {first_error}")
+        return out
     finally:
         db.close()

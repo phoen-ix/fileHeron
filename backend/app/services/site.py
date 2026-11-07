@@ -33,8 +33,7 @@ def get_site_url(db: Session) -> str:
     trailing-slash-stripped so callers can ``f"{get_site_url(db)}/x"``
     without doubling slashes."""
     override = settings_svc.get(db, settings_svc.Keys.SITE_URL)
-    raw = (override or _env.APP_URL or "").rstrip("/")
-    return raw
+    return (override or _env.APP_URL or "").rstrip("/")
 
 
 def get_app_name(db: Session) -> str:

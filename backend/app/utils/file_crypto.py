@@ -54,9 +54,6 @@ class FileIntegrityError(FileCryptoError):
     size: tampered with, truncated, extended, or the wrong key."""
 
 
-class UnsupportedFormatError(FileCryptoError):
-    """The file does not start with a header this code knows."""
-
 
 class EncryptionCancelledError(FileCryptoError):
     """The caller asked the encryption to stop (worker shutdown). Not a fault
@@ -205,13 +202,6 @@ class EncryptingReader:
         return out
 
 
-def encrypt_bytes(data: bytes, dek: bytes) -> bytes:
-    """The whole ciphertext of a small in-memory plaintext (tests, attachments)."""
-    import io
-
-    return EncryptingReader(io.BytesIO(data), dek, len(data)).read()
-
-
 def iter_plaintext(
     opener: Opener,
     dek: bytes,
@@ -243,14 +233,6 @@ def iter_plaintext(
             lo = start - i * CHUNK_SIZE if i == first else 0
             hi = end - i * CHUNK_SIZE + 1 if i == last else plen
             yield data[lo:hi]
-
-
-def verify_header(opener: Opener) -> None:
-    """Raise unless the stored file starts with the v1 header."""
-    with contextlib.closing(opener(0, HEADER_SIZE - 1)) as src:
-        got = _read_exactly(src, HEADER_SIZE)
-    if got != HEADER:
-        raise UnsupportedFormatError("not a file:Heron v1 encrypted file")
 
 
 class DecryptingReader:

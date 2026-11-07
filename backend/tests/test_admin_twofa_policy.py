@@ -234,7 +234,7 @@ async def test_put_persists_and_audits(
     assert resp.status_code == 200, resp.text
 
     # Round-trip through the resolver
-    roles, group_ids, is_kv_overridden = twofa_policy_svc._resolve_policy(db)
+    roles, group_ids, is_kv_overridden = twofa_policy_svc.resolve_policy(db)
     assert roles == {"admin", "employee"}
     assert group_ids == [g.id]
     assert is_kv_overridden is True

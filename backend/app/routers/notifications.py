@@ -33,6 +33,7 @@ from ..schemas.notification import (
 from ..services import jwt_session, notification_prefs, rate_limit
 from ..services import sse as sse_svc
 from ..services import sse_token as sse_token_svc
+from ..utils.client_ip import get_client_ip
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 # /stream lives on a separate router so it bypasses the global
@@ -171,7 +172,7 @@ def get_stream_token(
     Generous per-IP backstop so a token-mint flood can't be used to
     amplify the stream DoS (the per-user connection cap in services/sse
     is the primary bound)."""
-    ip = request.client.host if request.client else "unknown"
+    ip = get_client_ip(request) or "unknown"
     if not rate_limit.check_ip_allowed("sse_token", ip, limit=120, window_sec=60):
         raise AppError(429, "RATE_LIMITED", "Too many requests; slow down.")
     return {"token": sse_token_svc.issue(user.id)}

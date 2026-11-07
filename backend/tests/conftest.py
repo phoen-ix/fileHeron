@@ -528,10 +528,10 @@ def _reset_oidc_caches():
     from app.services import jwks as jwks_svc
     from app.services import oidc as oidc_svc
     oidc_svc._DISCOVERY_CACHE.clear()
-    jwks_svc._reset_cache()
+    jwks_svc.reset_cache()
     yield
     oidc_svc._DISCOVERY_CACHE.clear()
-    jwks_svc._reset_cache()
+    jwks_svc.reset_cache()
 
 
 @pytest.fixture(autouse=True)
@@ -543,7 +543,6 @@ def _no_op_sse_publish(monkeypatch):
     Patch the publish helpers to no-ops; the durable in-app
     `notifications` row is what tests actually assert on."""
     from app.services import sse
-    monkeypatch.setattr(sse, "publish_sync", lambda *_a, **_kw: None)
     monkeypatch.setattr(sse, "publish_many_sync", lambda *_a, **_kw: None)
     monkeypatch.setattr(sse, "publish_admin_sync", lambda *_a, **_kw: None)
 
@@ -557,7 +556,7 @@ def _no_op_sse_publish(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _no_op_email_send(monkeypatch):
-    """`services/email.py::_send_resolved` opens its own `SessionLocal()`
+    """`services/email.py::send_resolved` opens its own `SessionLocal()`
     to look up SMTP config. With our SQLite + StaticPool test setup all
     sessions share the one connection, and the side session's
     close()-time rollback wipes pending writes from the main request
@@ -569,7 +568,7 @@ def _no_op_email_send(monkeypatch):
     async def _noop(*_a, **_kw):
         return None
 
-    monkeypatch.setattr(email_svc, "_send_resolved", _noop)
+    monkeypatch.setattr(email_svc, "send_resolved", _noop)
 
 
 @pytest.fixture(autouse=True)

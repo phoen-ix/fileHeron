@@ -33,9 +33,9 @@ PW = "Pass12345678!"
 
 @pytest.fixture(autouse=True)
 def _fresh_cache():
-    sg._reset_cache()
+    sg.reset_cache()
     yield
-    sg._reset_cache()
+    sg.reset_cache()
 
 
 @pytest_asyncio.fixture
@@ -69,7 +69,7 @@ def _enable(db, **over):
         )
         settings_svc.set_value(db, key=key, value=stored, actor=None)
     db.commit()
-    sg._reset_cache()
+    sg.reset_cache()
 
 
 async def _settled():
@@ -95,7 +95,7 @@ async def test_a_blocked_response_is_indistinguishable_from_a_real_404(
 
     sg.apply_block(db, subject=SCANNER, reason="probe_path", snap=sg.snapshot())
     db.commit()
-    sg._reset_cache()
+    sg.reset_cache()
 
     blocked = await scanner_client.get("/api/does-not-exist")
     assert blocked.status_code == 404
@@ -124,7 +124,7 @@ async def test_a_block_hides_an_otherwise_working_route(db, scanner_client):
 
     sg.apply_block(db, subject=SCANNER, reason="probe_path", snap=sg.snapshot())
     db.commit()
-    sg._reset_cache()
+    sg.reset_cache()
     assert (await scanner_client.get("/api/health")).status_code == 404
 
 
@@ -134,7 +134,7 @@ async def test_the_guard_does_nothing_while_disabled(db, scanner_client):
     still nothing is refused until an admin opts in."""
     sg.apply_block(db, subject=SCANNER, reason="probe_path", snap=sg._defaults())
     db.commit()
-    sg._reset_cache()
+    sg.reset_cache()
     assert (await scanner_client.get("/api/health")).status_code == 200
 
 
@@ -155,7 +155,7 @@ async def test_an_allowlisted_source_is_never_refused(db, scanner_client):
     db.commit()
     sg.apply_block(db, subject=SCANNER, reason="probe_path", snap=sg.snapshot())
     db.commit()
-    sg._reset_cache()
+    sg.reset_cache()
     assert (await scanner_client.get("/api/health")).status_code == 200
 
 
@@ -172,7 +172,7 @@ async def test_a_blocked_request_writes_no_error_log_row_and_enqueues_nothing(
     _enable(db)
     sg.apply_block(db, subject=SCANNER, reason="probe_path", snap=sg.snapshot())
     db.commit()
-    sg._reset_cache()
+    sg.reset_cache()
 
     enqueued: list = []
     monkeypatch.setattr(job_queue, "enqueue", lambda *a, **kw: enqueued.append(a))
@@ -760,7 +760,7 @@ async def test_releasing_a_block_does_not_leave_it_re_arming(
 
         sg.release(db, block_id=row.id, actor_id=None)
         db.commit()
-        sg._reset_cache()
+        sg.reset_cache()
 
         # One more offending request must NOT immediately re-block.
         await ac.post(

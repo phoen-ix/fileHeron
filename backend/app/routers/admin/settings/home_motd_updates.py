@@ -104,8 +104,7 @@ def update_updates_settings(
         key=settings_svc.Keys.UPDATES_API_URL,
         value=payload.api_url,
         actor=admin,
-        request=request,
-    )
+        )
     record_audit_event(
         db,
         event_type=AuditEventType.updates_settings_changed,
@@ -164,7 +163,7 @@ def update_auto_update_settings(
             (keys.UPDATES_AUTO_SCOPE, scope),
             (keys.UPDATES_AUTO_MIN_AGE_HOURS, str(min_age)),
         ):
-            settings_svc.set_value(db, key=key, value=value, actor=admin, request=request)
+            settings_svc.set_value(db, key=key, value=value, actor=admin)
         record_audit_event(
             db,
             event_type=AuditEventType.updates_settings_changed,
@@ -190,15 +189,13 @@ def update_motd_settings(
         key=settings_svc.Keys.MOTD_ENABLED,
         value="true" if payload.enabled else "false",
         actor=admin,
-        request=request,
-    )
+        )
     settings_svc.set_value(
         db,
         key=settings_svc.Keys.MOTD_TEXT,
-        value=payload.text if payload.text else None,
+        value=payload.text or None,
         actor=admin,
-        request=request,
-    )
+        )
     record_audit_event(
         db,
         event_type=AuditEventType.motd_changed,
@@ -224,8 +221,7 @@ def update_home_page_settings(
         key=settings_svc.Keys.HOME_PAGE_ENABLED,
         value="true" if payload.enabled else "false",
         actor=admin,
-        request=request,
-    )
+        )
     record_audit_event(
         db,
         event_type=AuditEventType.home_page_toggled,

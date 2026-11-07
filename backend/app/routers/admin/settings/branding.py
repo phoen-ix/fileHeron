@@ -24,6 +24,9 @@ from ....services.audit import record_audit_event
 
 router = APIRouter()
 
+# The stored filename is a Text setting; this caps what a browser sent, it is not a width.
+_LOGO_FILENAME_MAX = 255
+
 
 # ---- Branding (logo + surfaces + link) -------------------------------------
 
@@ -117,14 +120,12 @@ def update_branding_settings(
         if attr in fields:
             settings_svc.set_value(
                 db, key=key, value="true" if getattr(payload, attr) else "false",
-                actor=admin, request=request,
-            )
+                actor=admin, )
     if "link_url" in fields:
         # Validator turns "" into the clear sentinel; store None to drop the row.
         settings_svc.set_value(
             db, key=settings_svc.Keys.BRANDING_LINK_URL,
-            value=(payload.link_url or None), actor=admin, request=request,
-        )
+            value=(payload.link_url or None), actor=admin, )
     record_audit_event(
         db,
         event_type=AuditEventType.branding_changed,
@@ -191,19 +192,16 @@ async def upload_branding_logo(
 
     previous = settings_svc.get(db, settings_svc.Keys.BRANDING_LOGO_LOCATOR)
     previous_png = settings_svc.get(db, settings_svc.Keys.BRANDING_LOGO_PNG_LOCATOR)
-    settings_svc.set_value(db, key=settings_svc.Keys.BRANDING_LOGO_LOCATOR, value=locator, actor=admin, request=request)
+    settings_svc.set_value(db, key=settings_svc.Keys.BRANDING_LOGO_LOCATOR, value=locator, actor=admin)
     settings_svc.set_value(
         db, key=settings_svc.Keys.BRANDING_LOGO_FILENAME,
-        value=(file.filename or "logo")[:255], actor=admin, request=request,
-    )
+        value=(file.filename or "logo")[:_LOGO_FILENAME_MAX], actor=admin, )
     settings_svc.set_value(
         db, key=settings_svc.Keys.BRANDING_LOGO_CONTENT_TYPE,
-        value=content_type, actor=admin, request=request,
-    )
+        value=content_type, actor=admin, )
     settings_svc.set_value(
         db, key=settings_svc.Keys.BRANDING_LOGO_PNG_LOCATOR,
-        value=png_locator, actor=admin, request=request,
-    )
+        value=png_locator, actor=admin, )
     record_audit_event(
         db,
         event_type=AuditEventType.branding_changed,
@@ -241,7 +239,7 @@ def delete_branding_logo(
         settings_svc.Keys.BRANDING_LOGO_CONTENT_TYPE,
         settings_svc.Keys.BRANDING_LOGO_PNG_LOCATOR,
     ):
-        settings_svc.set_value(db, key=key, value=None, actor=admin, request=request)
+        settings_svc.set_value(db, key=key, value=None, actor=admin)
     if locator:
         record_audit_event(
             db,

@@ -73,7 +73,7 @@ logger = logging.getLogger("fileheron.oidc")
 
 # Hard byte cap streamed off the wire so a malicious/compromised IdP discovery
 # endpoint can't OOM the worker (mirrors _JWKS_MAX_BYTES in jwks.py).
-_DISCOVERY_MAX_BYTES = 1 * 1024 * 1024
+DISCOVERY_MAX_BYTES = 1 * 1024 * 1024
 # A token response is a few KB of JWTs. Same cap, same reason: the token
 # endpoint is whatever the discovery document named.
 _TOKEN_RESPONSE_MAX_BYTES = 1 * 1024 * 1024
@@ -89,7 +89,7 @@ def _cache_key(provider: OIDCProvider) -> str:
     return f"{provider.id}::{provider.issuer_url.rstrip('/')}"
 
 
-async def _discovery(provider: OIDCProvider) -> dict[str, Any]:
+async def discovery(provider: OIDCProvider) -> dict[str, Any]:
     if not is_provider_usable(provider):
         raise AppError(503, "OIDC_DISABLED", "OIDC sign-in is not configured.")
     key = _cache_key(provider)
@@ -106,7 +106,7 @@ async def _discovery(provider: OIDCProvider) -> dict[str, Any]:
     )
     try:
         doc = await fetch_json_capped(
-            "GET", url, max_bytes=_DISCOVERY_MAX_BYTES, http_timeout_sec=5.0
+            "GET", url, max_bytes=DISCOVERY_MAX_BYTES, http_timeout_sec=5.0
         )
     except ResponseTooLargeError as e:
         raise AppError(
@@ -152,7 +152,7 @@ def reset_discovery_cache() -> None:
     _DISCOVERY_CACHE.clear()
     # Local import to avoid the circular at module load.
     from . import jwks as jwks_svc
-    jwks_svc._reset_cache()
+    jwks_svc.reset_cache()
 
 
 def invalidate_provider_cache(provider_id: str) -> None:
@@ -161,7 +161,7 @@ def invalidate_provider_cache(provider_id: str) -> None:
             _DISCOVERY_CACHE.pop(k, None)
     # Same provider may have rotated its JWKS too.
     from . import jwks as jwks_svc
-    jwks_svc._cache.pop(provider_id, None)
+    jwks_svc.forget(provider_id)
 
 
 # ---------------------------------------------------------------------------
@@ -193,7 +193,7 @@ async def build_authorize_url(
     `state` and `nonce` in a short-lived cookie. State is checked
     against the query param on callback; nonce is checked against the
     `nonce` claim in the verified ID token."""
-    doc = await _discovery(provider)
+    doc = await discovery(provider)
     state = secrets.token_urlsafe(24)
     nonce = secrets.token_urlsafe(24)
 
@@ -221,7 +221,7 @@ async def build_authorize_url(
 async def _exchange_code(
     provider: OIDCProvider, code: str, *, kind: str = "login"
 ) -> dict[str, Any]:
-    doc = await _discovery(provider)
+    doc = await discovery(provider)
     token_url = doc.get("token_endpoint")
     if not token_url:
         raise AppError(503, "OIDC_BAD_DISCOVERY", "IdP discovery is missing token_endpoint.")
@@ -276,7 +276,7 @@ async def _verify_id_token(
     `expected_nonce` is required for first-party flows (login + connect)
     so a leaked ID token can't be replayed across login attempts. It's
     only None when the caller has its own replay protection."""
-    # Avoid circular import - jwks imports oidc for _discovery.
+    # Avoid circular import - jwks imports oidc for discovery.
     from . import jwks as jwks_svc
 
     try:

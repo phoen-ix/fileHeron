@@ -1,7 +1,7 @@
 """The SSO test-connection probe fails for an issuer that sign-in would refuse.
 
 `_probe_issuer` reported `ok` whenever the discovery document LOADED and only
-echoed its `issuer` field. Sign-in (services/oidc.py::_discovery) requires that
+echoed its `issuer` field. Sign-in (services/oidc.py::discovery) requires that
 field to equal the configured issuer, one trailing slash tolerated - so a
 provider saved with e.g. Keycloak's legacy `/auth/realms/x` path, whose
 discovery answers with the canonical issuer, tested green and then refused

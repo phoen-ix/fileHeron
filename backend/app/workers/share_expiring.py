@@ -22,7 +22,7 @@ from ..models.share import Share, ShareState
 from ..models.share_recipient import ShareRecipient
 from ..models.user import User
 from ..services import notification as notif_svc
-from ..services.cron_tracker import track_cron
+from ..services.cron_tracker import exc_summary, mark_failed, track_cron
 from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.share_expiring")
@@ -38,6 +38,9 @@ async def share_expiring_24h_warning(_ctx) -> dict:
     db = SessionLocal()
     notified_shares = 0
     notified_users = 0
+    dispatch_failures = 0
+    commit_failures = 0
+    first_error: str | None = None
     try:
         now = utc_now()
         # Warn ~24h ahead. The window width tracks this cron's configured cadence
@@ -113,7 +116,9 @@ async def share_expiring_24h_warning(_ctx) -> dict:
                         email_to=user.email,
                     )
                     notified_users += 1
-                except Exception:
+                except Exception as exc:
+                    dispatch_failures += 1
+                    first_error = first_error or exc_summary(exc)
                     logger.exception(
                         "share_expiring dispatch failed for user=%d share=%s",
                         uid,
@@ -126,8 +131,10 @@ async def share_expiring_24h_warning(_ctx) -> dict:
             try:
                 db.commit()
                 notified_shares += 1
-            except Exception:
+            except Exception as exc:
                 db.rollback()
+                commit_failures += 1
+                first_error = first_error or exc_summary(exc)
                 logger.exception(
                     "share_expiring commit failed for share=%s", share.id
                 )
@@ -138,9 +145,16 @@ async def share_expiring_24h_warning(_ctx) -> dict:
                 notified_shares,
                 notified_users,
             )
-        return {
+        out = {
             "notified_shares": notified_shares,
             "notified_users": notified_users,
         }
+        if dispatch_failures or commit_failures:
+            return mark_failed(
+                out,
+                f"{dispatch_failures} warning(s) not dispatched, {commit_failures} "
+                f"commit(s) failed: {first_error}",
+            )
+        return out
     finally:
         db.close()

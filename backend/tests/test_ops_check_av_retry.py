@@ -49,7 +49,7 @@ def _pings(monkeypatch, answers):
 @pytest.mark.asyncio
 async def test_a_reload_blip_is_not_an_outage(av_on, sleeps, monkeypatch):
     calls = _pings(monkeypatch, [False, True])
-    assert await ops._check_av(None) is None
+    assert await ops._check_av() is None
     assert len(calls) == 2
     assert sleeps == [ops._AV_PING_RETRY_DELAY_SEC], "it waits before trying again"
 
@@ -57,7 +57,7 @@ async def test_a_reload_blip_is_not_an_outage(av_on, sleeps, monkeypatch):
 @pytest.mark.asyncio
 async def test_an_outage_that_outlasts_the_retries_is_reported(av_on, sleeps, monkeypatch):
     calls = _pings(monkeypatch, [False] * ops._AV_PING_ATTEMPTS)
-    err = await ops._check_av(None)
+    err = await ops._check_av()
     assert err == "ClamAV ping returned false 3 times over 20 s"
     assert len(calls) == ops._AV_PING_ATTEMPTS
     assert sleeps == [ops._AV_PING_RETRY_DELAY_SEC] * (ops._AV_PING_ATTEMPTS - 1)
@@ -66,7 +66,7 @@ async def test_an_outage_that_outlasts_the_retries_is_reported(av_on, sleeps, mo
 @pytest.mark.asyncio
 async def test_a_healthy_clamd_is_asked_once(av_on, sleeps, monkeypatch):
     calls = _pings(monkeypatch, [True])
-    assert await ops._check_av(None) is None
+    assert await ops._check_av() is None
     assert (len(calls), sleeps) == (1, [])
 
 
@@ -76,14 +76,14 @@ async def test_a_raising_ping_is_reported(av_on, sleeps, monkeypatch):
         raise RuntimeError("socket gone")
 
     monkeypatch.setattr(av_scan, "ping", _boom)
-    assert await ops._check_av(None) == "ClamAV check raised: socket gone"
+    assert await ops._check_av() == "ClamAV check raised: socket gone"
 
 
 @pytest.mark.asyncio
 async def test_av_skip_never_pings(sleeps, monkeypatch):
     monkeypatch.setattr(settings, "AV_SKIP", True)
     calls = _pings(monkeypatch, [])
-    assert await ops._check_av(None) is None
+    assert await ops._check_av() is None
     assert calls == []
 
 
@@ -91,7 +91,8 @@ async def test_av_skip_never_pings(sleeps, monkeypatch):
 def sent(monkeypatch):
     out: list = []
     monkeypatch.setattr(
-        ops, "dispatch", lambda db, *, user, category, payload, **kw: out.append(payload)
+        "app.services.notification.dispatch",
+        lambda db, *, user, category, payload, **kw: out.append(payload),
     )
     monkeypatch.setattr(ops, "_check_redis", lambda: None)
     monkeypatch.setattr(ops, "_check_smtp", lambda _db: None)

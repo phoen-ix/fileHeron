@@ -71,8 +71,8 @@ def test_an_update_alert_says_what_who_when_and_which_version(locale):
 
 
 def test_a_missing_subject_field_leaves_no_colon_or_empty_brackets():
-    ops = email_svc._resolve_subject("en", "ops_alert", {})
-    err = email_svc._resolve_subject("en", "server_error", {})
+    ops = email_svc.resolve_subject("en", "ops_alert", {})
+    err = email_svc.resolve_subject("en", "server_error", {})
     assert not ops.endswith(":") and "{" not in ops
     assert "()" not in err and "{" not in err
 
@@ -83,7 +83,7 @@ def test_subject_tidying_is_linear_in_user_text():
     import time
 
     started = time.monotonic()
-    subject = email_svc._resolve_subject("en", "ops_alert", {"reason": " " * 200_000 + "x"})
+    subject = email_svc.resolve_subject("en", "ops_alert", {"reason": " " * 200_000 + "x"})
     assert time.monotonic() - started < 1.0
     assert subject.endswith("x")
 
@@ -170,14 +170,14 @@ def test_an_html_render_failure_degrades_to_text_and_says_so(monkeypatch, caplog
     trace. It had none, which is why release_available.html.j2 raised on every
     send for its whole life and shipped text-only with nobody the wiser.
     """
-    real = email_svc._render
+    real = email_svc.render
 
     def _boom(locale, slug, kind, ctx, **kw):
         if kind == "html":
             raise RuntimeError("template exploded")
         return real(locale, slug, kind, ctx, **kw)
 
-    monkeypatch.setattr(email_svc, "_render", _boom)
+    monkeypatch.setattr(email_svc, "render", _boom)
     payload = {
         "display_name": "Bob",
         "verify_url": "https://example.com/verify-email/x",
@@ -214,5 +214,5 @@ def test_subjects_render_per_locale(slug, locale, expect_in_subject):
         "sender_name": "Alice",
         "invitee_name": "Bob",
     }
-    subject = email_svc._resolve_subject(locale, slug, common)
+    subject = email_svc.resolve_subject(locale, slug, common)
     assert expect_in_subject.lower() in subject.lower()

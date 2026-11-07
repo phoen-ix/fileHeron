@@ -15,7 +15,6 @@ not allow client-side replay.
 """
 from __future__ import annotations
 
-import base64
 import json
 import logging
 from typing import Any, NamedTuple
@@ -42,6 +41,8 @@ from ..config import settings
 from ..middleware.errors import AppError
 from ..models.user import User
 from ..models.user_webauthn_credential import UserWebAuthnCredential
+from ..utils import signed_token
+from ..utils.columns import declared_width
 from ..utils.dbresult import updated_rows
 from ..utils.timeutil import utc_now
 from . import settings as settings_svc
@@ -54,6 +55,9 @@ AUTH_KEY = "fh:webauthn:auth:"
 # Passkey-only sign-in: the challenge belongs to no user yet - the credential
 # the browser picks decides who is signing in.
 SIGNIN_KEY = "fh:webauthn:signin:"
+
+_TRANSPORTS_MAX = declared_width(UserWebAuthnCredential.__table__.c.transports)
+_NAME_MAX = declared_width(UserWebAuthnCredential.__table__.c.name)
 
 
 def passkey_signin_enabled(db: Session) -> bool:
@@ -90,13 +94,8 @@ def _origins() -> list[str]:
     return [settings.APP_URL.rstrip("/")]
 
 
-def _b64url(b: bytes) -> str:
-    return base64.urlsafe_b64encode(b).rstrip(b"=").decode("ascii")
-
-
-def _b64url_decode(s: str) -> bytes:
-    pad = "=" * (-len(s) % 4)
-    return base64.urlsafe_b64decode(s + pad)
+_b64url = signed_token.b64url
+_b64url_decode = signed_token.b64url_decode
 
 
 # --------------------------------------------------------------------------
@@ -207,8 +206,8 @@ async def register_complete(
         credential_id=verification.credential_id,
         public_key=verification.credential_public_key,
         sign_count=verification.sign_count,
-        transports=transports[:120],
-        name=(name or "passkey")[:120],
+        transports=transports[:_TRANSPORTS_MAX],
+        name=(name or "passkey")[:_NAME_MAX],
         discoverable=_reported_discoverable(credential_response),
     )
     db.add(record)

@@ -35,7 +35,7 @@ from ..models.file import File, FileState
 from ..models.share import Share, ShareState
 from ..services import job_queue
 from ..services.audit import record_audit_event
-from ..services.cron_tracker import track_cron
+from ..services.cron_tracker import exc_summary, mark_failed, track_cron
 from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.cleanup_stale_uploads")
@@ -58,14 +58,19 @@ _RESCAN_BATCH = 500
 
 
 
-def _unlink_partial_bytes(file: File) -> None:
-    """Best-effort removal of any remnants of an abandoned upload."""
+def _unlink_partial_bytes(file: File) -> list[str]:
+    """Best-effort removal of any remnants of an abandoned upload. Returns what
+    could NOT be removed, one line each, so the run can report it: the row is
+    marked `deleted` either way, and bytes a deleted row points at are
+    unreachable for every sweeper (file.purge_locators says the same)."""
+    failures: list[str] = []
     # Finalized bytes (if any) live in the storage backend.
     if file.storage_path:
         from ..services.storage_backend import get_storage_backend
         try:
             get_storage_backend().delete(file.storage_path)
         except Exception as e:
+            failures.append(f"{file.storage_path}: {exc_summary(e)}")
             logger.warning(
                 "cleanup_stale_uploads: storage delete failed file=%s: %s", file.id, e
             )
@@ -77,10 +82,12 @@ def _unlink_partial_bytes(file: File) -> None:
                 if p.is_file():
                     p.unlink()
             except OSError as e:
+                failures.append(f"{p}: {exc_summary(e)}")
                 logger.warning(
                     "cleanup_stale_uploads: unlink failed file=%s path=%s: %s",
                     file.id, p, e,
                 )
+    return failures
 
 
 @track_cron("cleanup_stale_uploads")
@@ -89,6 +96,8 @@ async def cleanup_stale_uploads(_ctx) -> dict:
     files_reaped = 0
     shares_failed = 0
     scanned = 0
+    unlink_failures: list[str] = []
+    announce_failures: list[str] = []
     try:
         from ..services import upload_liveness
 
@@ -118,7 +127,7 @@ async def cleanup_stale_uploads(_ctx) -> dict:
         share_ids = {f.share_id for f in stale}
 
         for f in stale:
-            _unlink_partial_bytes(f)
+            unlink_failures.extend(_unlink_partial_bytes(f))
             f.state = FileState.deleted
             record_audit_event(
                 db,
@@ -158,7 +167,8 @@ async def cleanup_stale_uploads(_ctx) -> dict:
                             "cleanup_stale_uploads: announced share %s after reaping "
                             "its stuck upload(s)", share.id,
                         )
-                except Exception:
+                except Exception as exc:
+                    announce_failures.append(f"{share.id}: {exc_summary(exc)}")
                     logger.exception(
                         "cleanup_stale_uploads: deferred announce failed for %s", share.id
                     )
@@ -243,12 +253,19 @@ async def cleanup_stale_uploads(_ctx) -> dict:
                 "rescans_requeued=%d",
                 scanned, files_reaped, shares_failed, rescans_requeued,
             )
-        return {
+        out = {
             "scanned": scanned,
             "files_reaped": files_reaped,
             "shares_failed": shares_failed,
             "rescans_requeued": rescans_requeued,
         }
+        if unlink_failures or announce_failures:
+            return mark_failed(
+                out,
+                f"{len(unlink_failures)} unlink(s), {len(announce_failures)} deferred "
+                f"announcement(s) failed: {(unlink_failures + announce_failures)[0]}",
+            )
+        return out
     except Exception:
         db.rollback()
         raise

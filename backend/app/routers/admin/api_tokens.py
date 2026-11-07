@@ -25,6 +25,7 @@ from ...schemas.api_token import (
     UpdateTokenPolicyRequest,
 )
 from ...services import api_token as api_token_svc
+from ...services import policy_gate
 from ...services import settings as settings_svc
 from ...services.audit import record_audit_event
 from ...utils.timeutil import utc_now
@@ -66,7 +67,7 @@ def get_token_policy(
     db: Session = Depends(get_db),
     _admin: User = Depends(get_current_admin),
 ) -> TokenPolicyResponse:
-    mode, user_ids, group_ids = api_token_svc._resolve_policy(db)
+    mode, user_ids, group_ids = api_token_svc.resolve_policy(db)
     users = db.query(User).filter(User.id.in_(user_ids)).all() if user_ids else []
     groups = db.query(Group).filter(Group.id.in_(group_ids)).all() if group_ids else []
     return TokenPolicyResponse(
@@ -93,40 +94,9 @@ def update_token_policy(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ) -> TokenPolicyResponse:
-    if payload.allowed_user_ids:
-        found_user_ids = {
-            row[0]
-            for row in db.query(User.id)
-            .filter(User.id.in_(payload.allowed_user_ids))
-            .all()
-        }
-        missing = [
-            uid for uid in payload.allowed_user_ids if uid not in found_user_ids
-        ]
-        if missing:
-            raise AppError(
-                400,
-                "USER_NOT_FOUND",
-                "One or more selected users do not exist.",
-                details={"missing_user_ids": missing},
-            )
-    if payload.allowed_group_ids:
-        found_group_ids = {
-            row[0]
-            for row in db.query(Group.id)
-            .filter(Group.id.in_(payload.allowed_group_ids))
-            .all()
-        }
-        missing = [
-            gid for gid in payload.allowed_group_ids if gid not in found_group_ids
-        ]
-        if missing:
-            raise AppError(
-                400,
-                "GROUP_NOT_FOUND",
-                "One or more selected groups do not exist.",
-                details={"missing_group_ids": missing},
-            )
+    policy_gate.assert_ids_exist(
+        db, user_ids=payload.allowed_user_ids, group_ids=payload.allowed_group_ids
+    )
 
     settings_svc.set_value(
         db,

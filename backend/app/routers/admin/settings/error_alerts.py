@@ -56,7 +56,6 @@ def update_error_alert_settings(
         http_4xx_codes=payload.http_4xx_codes,
         retention_days=payload.retention_days,
         actor=admin,
-        request=request,
     )
     record_audit_event(
         db,

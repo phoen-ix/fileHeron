@@ -29,9 +29,15 @@ def _opener(blob: bytes, calls: list | None = None):
     return _open
 
 
+def _encrypt_bytes(data: bytes, key: bytes) -> bytes:
+    """The whole ciphertext of a small in-memory plaintext, through the one
+    production encryptor (a test helper; the app only streams)."""
+    return fc.EncryptingReader(io.BytesIO(data), key, len(data)).read()
+
+
 def _encrypt(data: bytes, key: bytes | None = None) -> tuple[bytes, bytes]:
     key = key or fc.new_data_key()
-    return fc.encrypt_bytes(data, key), key
+    return _encrypt_bytes(data, key), key
 
 
 @pytest.fixture(scope="module")
@@ -49,12 +55,12 @@ def test_round_trip_and_size_formula(plain, size):
     assert fc.DecryptingReader(_opener(ct), key, size).read() == data
 
 
-def test_the_header_is_checked_and_constant(plain):
+def test_the_header_is_constant(plain):
+    """The header is a format marker. Nothing VERIFIES it on read - every chunk
+    carries an AES-GCM tag, so a file that is not ours fails authentication,
+    which is the stronger check."""
     ct, _key = _encrypt(plain[:10])
     assert ct[: fc.HEADER_SIZE] == fc.HEADER == bytes.fromhex("4648456e630001140000000000000000")
-    fc.verify_header(_opener(ct))
-    with pytest.raises(fc.UnsupportedFormatError):
-        fc.verify_header(_opener(b"XXXXX" + ct[5:]))
 
 
 @pytest.mark.parametrize("where", ["body", "tag", "second chunk"])
@@ -162,7 +168,7 @@ def test_the_encrypting_reader_streams_and_describes_its_input(plain):
     out = bytearray()
     while chunk := reader.read(65536):
         out += chunk
-    assert bytes(out) == fc.encrypt_bytes(data, key)
+    assert bytes(out) == _encrypt_bytes(data, key)
     assert reader.crc32 == zlib.crc32(data) and reader.plaintext_read == len(data)
 
 

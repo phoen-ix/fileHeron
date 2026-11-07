@@ -69,41 +69,10 @@ def _get_file_or_404(db: Session, file_id: str) -> File:
     return file
 
 
-def _assert_previewable_state(file: File) -> None:
-    """The preview gate, which is stricter than the download gate.
-
-    `av_unscanned` files are `clean` - the state means "no verdict", not "a
-    clean verdict": clamd clamps MaxFileSize to ~2 GiB, so anything larger is
-    marked clean-but-unscanned and served with a badge. The download path can
-    do that, because the user is choosing to take a file they were told was not
-    scanned. Preview is different: the bytes are rendered INLINE, into the
-    browser's PDF/image viewer, on a path an anonymous public-link visitor can
-    reach with one click - and the trust model written three lines above the
-    previewable-type allowlist assumed clamd had read them (audit #2).
-    """
-    _assert_file_state_servable(file)
-    if getattr(file, "av_unscanned", False):
-        raise AppError(
-            409,
-            "FILE_NOT_SCANNED",
-            "This file was too large to scan for viruses, so it can't be "
-            "previewed in the browser. Download it and check it locally.",
-        )
-
-
-def _assert_file_state_servable(file: File) -> None:
-    """Same AV/state gate the download path applies - only `clean` files are
-    servable; we never hand out (or render inline) unscanned/quarantined bytes."""
-    if file.state == FileState.uploading:
-        raise AppError(409, "STILL_UPLOADING", "File hasn't finished uploading yet.")
-    if file.state == FileState.deleted:
-        raise AppError(410, "FILE_DELETED", "File has been deleted.")
-    if file.state == FileState.infected:
-        raise AppError(410, "FILE_INFECTED", "File was quarantined.")
-    if file.state == FileState.ready_unscanned:
-        raise AppError(
-            425, "SCAN_IN_PROGRESS", "Antivirus scan still in progress; try again shortly."
-        )
+# The two state gates live in services/file.py; these names stay for the
+# tests that read them by source.
+_assert_previewable_state = file_svc.assert_state_previewable
+_assert_file_state_servable = file_svc.assert_state_servable
 
 
 def _resolve_download_user(

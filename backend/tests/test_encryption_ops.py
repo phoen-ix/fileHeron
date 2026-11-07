@@ -214,7 +214,7 @@ def test_dry_run_changes_nothing(monkeypatch, db, stored, capsys):
 
 def test_it_waits_for_a_running_backfill(monkeypatch, db, stored):
     stored()
-    lease = lanes.RedisLease(lanes._BACKFILL_LOCK)
+    lease = lanes.RedisLease(lanes.BACKFILL_LOCK)
     assert lease.acquire()
     try:
         assert _run(monkeypatch) == 3

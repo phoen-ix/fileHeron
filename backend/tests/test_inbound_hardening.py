@@ -357,7 +357,7 @@ def test_an_unknown_message_size_is_fetched_with_a_bound(db, make_user, monkeypa
     s.set_value(db, key=s.Keys.IMAP_USE_SMTP_CREDENTIALS, value="false", actor=None)
     db.commit()
 
-    imap_poll.run_poll(manual=True, db=db, session_opener=lambda _cfg: _Sess())
+    imap_poll.run_poll(db=db, session_opener=lambda _cfg: _Sess())
     assert seen.get("max_bytes") == imap_poll.MAX_MESSAGE_BYTES, (
         "the message was downloaded with no ceiling at all"
     )

@@ -221,7 +221,7 @@ def send_links(db: Session, share: Share) -> int:
             html_body=html,
         )
         row.notified_at = now
-        notif_svc._queue_email_job(
+        notif_svc.queue_email_job(
             db,
             {
                 "to": row.email,

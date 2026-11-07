@@ -95,9 +95,9 @@ def update_email_settings(
         if value is None:
             continue
         coerced: str | None
-        coerced = str(value) if isinstance(value, int) else value if value else None
+        coerced = str(value) if isinstance(value, int) else value or None
         settings_svc.set_value(
-            db, key=key, value=coerced, actor=admin, request=request
+            db, key=key, value=coerced, actor=admin
         )
         changed_keys.append(key)
 
@@ -105,10 +105,9 @@ def update_email_settings(
         settings_svc.set_value(
             db,
             key=settings_svc.Keys.SMTP_PASSWORD,
-            value=payload.password if payload.password else None,
+            value=payload.password or None,
             actor=admin,
-            request=request,
-        )
+            )
         changed_keys.append(settings_svc.Keys.SMTP_PASSWORD)
 
     if changed_keys:

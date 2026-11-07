@@ -38,13 +38,8 @@ They age out on their own within one TTL.
 """
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
-from datetime import datetime, timezone
-
-from ..config import settings
 from ..middleware.errors import AppError
+from ..utils import signed_token
 from ..utils.crypto import constant_time_equals
 
 # 30 days. Manage links should outlive the email they ride in so an old
@@ -61,14 +56,8 @@ from ..utils.crypto import constant_time_equals
 DEFAULT_TTL_SEC = 30 * 24 * 60 * 60
 
 
-def _now() -> int:
-    return int(datetime.now(tz=timezone.utc).timestamp())
-
-
-def _sign(payload: bytes) -> str:
-    secret = settings.JWT_SECRET.encode("utf-8")
-    digest = hmac.new(secret, payload, hashlib.sha256).digest()
-    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+_now = signed_token.now_epoch
+_sign = signed_token.sign
 
 
 def issue(user_id: int, ttl_sec: int = DEFAULT_TTL_SEC) -> str:

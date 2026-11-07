@@ -240,7 +240,7 @@ def test_ingest_attachment_when_clamd_unavailable_is_pending_not_fatal(db, monke
 # --- poll gating ------------------------------------------------------------
 
 def test_poll_skips_when_disabled(db):
-    assert imap_poll.run_poll(manual=False, db=db, session_opener=_opener(_FakeSession({})))["skipped"] == "disabled"
+    assert imap_poll.run_poll(db=db, session_opener=_opener(_FakeSession({})))["skipped"] == "disabled"
 
 
 # NOTE (v1.28.0): imap_poll no longer self-gates on check_mode/interval -
@@ -257,14 +257,14 @@ def test_poll_ingests_and_marks_seen(db, monkeypatch):
     s.set_value(db, key=s.Keys.IMAP_POST_FETCH_ACTION, value="mark_read", actor=None)
     db.commit()
     sess = _FakeSession({5: NORMAL, 6: BOUNCE})
-    r = imap_poll.run_poll(manual=True, db=db, session_opener=_opener(sess))
+    r = imap_poll.run_poll(db=db, session_opener=_opener(sess))
     assert r["ingested"] == 2
     assert r["total"] == 2 and r["mailbox"] == "INBOX"
     assert set(sess.seen) == {5, 6}
     assert db.query(InboundMessage).count() == 2
     # re-poll: highwater means nothing new
     sess2 = _FakeSession({5: NORMAL, 6: BOUNCE})
-    r2 = imap_poll.run_poll(manual=True, db=db, session_opener=_opener(sess2))
+    r2 = imap_poll.run_poll(db=db, session_opener=_opener(sess2))
     assert r2["ingested"] == 0
 
 
@@ -303,5 +303,5 @@ def test_poll_move_action(db):
     s.set_value(db, key=s.Keys.IMAP_MOVE_FOLDER, value="Done", actor=None)
     db.commit()
     sess = _FakeSession({7: NORMAL})
-    imap_poll.run_poll(manual=True, db=db, session_opener=_opener(sess))
+    imap_poll.run_poll(db=db, session_opener=_opener(sess))
     assert sess.moved == [(7, "Done")]

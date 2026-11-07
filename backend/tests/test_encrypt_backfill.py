@@ -230,7 +230,7 @@ def test_the_budget_ends_a_run_and_the_rest_waits(db, stored):
 def test_a_second_run_finds_the_lane_busy(db, stored, _isolate_encryption_lanes):
     _enable(db)
     stored()
-    lease = lanes.RedisLease(lanes._BACKFILL_LOCK)
+    lease = lanes.RedisLease(lanes.BACKFILL_LOCK)
     assert lease.acquire()
     try:
         assert lanes.run_backfill(db)["skipped"] == "busy"

@@ -47,9 +47,10 @@ from ..services import api_token as api_token_svc
 from ..services import auth as auth_svc
 from ..services import email as email_svc
 from ..services import invite as invite_svc
+from ..services import jwt_session, settings_registry
 from ..services import rate_limit as rate_limit_svc
-from ..services import settings_registry
 from ..services import totp as totp_svc
+from ..utils.client_ip import get_client_ip
 from ..utils.timeutil import utc_now
 
 router = APIRouter(prefix="/api/account", tags=["account"])
@@ -295,7 +296,7 @@ async def change_password(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    ip = request.client.host if request.client else ""
+    ip = get_client_ip(request) or ""
     if not rate_limit_svc.check_ip_allowed(
         "change_password", ip,
         settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER),
@@ -339,22 +340,11 @@ async def change_password(
     # composing. The SPA comment at the call site asserted the opposite (audit
     # #2). Every OTHER device stays signed out, which is the point of the
     # revocation.
-    access, expires_in, refresh_plain = auth_svc.finalize_successful_login(
-        db, user=user, request=request, settings=settings,
-        via="password_change", notify_new_device=False,
+    access, expires_in, refresh_plain = jwt_session.remint_session(
+        db, user=user, request=request, settings=settings
     )
     db.commit()
-    response.set_cookie(
-        key="fh_refresh",
-        value=refresh_plain,
-        max_age=settings_registry.effective(
-            db, settings_registry.K.REFRESH_TOKEN_EXPIRE_DAYS
-        ) * 24 * 3600,
-        httponly=True,
-        secure=settings.COOKIE_SECURE,
-        samesite="lax",
-        path="/api/auth",
-    )
+    jwt_session.set_refresh_cookie(response, refresh_plain, db)
     return {"ok": True, "access_token": access, "expires_in_seconds": expires_in}
 
 
@@ -378,15 +368,15 @@ async def change_email(
             "EMAIL_CHANGE_DISABLED",
             "Changing your own email is disabled by the administrator.",
         )
-    ip = request.client.host if request.client else ""
+    ip = get_client_ip(request) or ""
     if not rate_limit_svc.check_ip_allowed(
         "change_password", ip,
         settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER),
     ):
         raise AppError(429, "RATE_LIMITED", "Too many attempts; try again shortly.")
-    # `_averify`, not `argon2_verify`: this is an `async def`, so a bare verify
+    # `averify`, not `argon2_verify`: this is an `async def`, so a bare verify
     # holds the event loop for the duration of a 64 MiB KDF.
-    if not await auth_svc._averify(user.password_hash, payload.current_password):
+    if not await auth_svc.averify(user.password_hash, payload.current_password):
         raise AppError(401, "INVALID_CREDENTIALS", "Current password is incorrect.")
 
     outcome = email_change_svc.request_email_change(
@@ -550,7 +540,7 @@ async def create_invite(
         request=request,
     )
     # Send BEFORE the commit, the same ordering `invite_svc.resend_invite` uses.
-    # `_send_resolved` re-raises so the caller sees a send failure, and with the
+    # `send_resolved` re-raises so the caller sees a send failure, and with the
     # row already durable that left an invite nobody could act on: the plaintext
     # token lived only in this frame, `has_pending_invite` then refused every
     # retry for the full 24h TTL, and resend/revoke are admin-only - so an

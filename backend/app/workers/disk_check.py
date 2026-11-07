@@ -18,13 +18,10 @@ import logging
 
 from ..config import settings
 from ..database import SessionLocal
-from ..models.notification import NotificationCategory
-from ..models.user import User, UserRole
-from ..services import alert_dedup
+from ..services import admin_alerts, alert_dedup
 from ..services import settings as settings_svc
 from ..services import storage as storage_svc
-from ..services.cron_tracker import track_cron
-from ..services.notification import dispatch
+from ..services.cron_tracker import mark_failed, track_cron
 from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.disk_check")
@@ -42,33 +39,15 @@ def _clear_dedup() -> None:
     alert_dedup.forget(_DEDUP_KEY)
 
 
-def _alert_admins(db, *, payload: dict) -> int:
+def _alert_admins(db, *, payload: dict) -> admin_alerts.FanOut:
     if _dedup_seen():
-        return 0
-    admins = (
-        db.query(User)
-        .filter(User.role == UserRole.admin, User.is_disabled.is_(False))
-        .all()
-    )
-    n = 0
-    for admin in admins:
-        try:
-            dispatch(
-                db,
-                user=admin,
-                category=NotificationCategory.ops_alert,
-                payload=payload,
-                link_url="/admin/system",
-                email_to=admin.email,
-            )
-            n += 1
-        except Exception:
-            logger.exception("ops_alert dispatch failed admin=%d", admin.id)
+        return admin_alerts.FanOut()
+    out = admin_alerts.notify_admins(db, payload=payload, link_url="/admin/system")
 
     from ..services import webhook as webhook_svc
     emit_payload = {"target_type": "ops", "target_id": "storage_critical_low", "metadata": payload}
     webhook_svc.emit_after_commit(db, webhook_svc.OPS_ALERT_EVENT, emit_payload)
-    return n
+    return out
 
 
 @track_cron("disk_check")
@@ -133,7 +112,7 @@ async def disk_check(_ctx) -> dict:
             db, settings_svc.Keys.STORAGE_CRITICAL_LOW, default=False
         )
 
-        dispatched = 0
+        fan = admin_alerts.FanOut()
         if is_critical != was_critical:
             settings_svc.set_value(
                 db,
@@ -143,7 +122,7 @@ async def disk_check(_ctx) -> dict:
             )
             db.commit()
             if is_critical:
-                dispatched = _alert_admins(
+                fan = _alert_admins(
                     db,
                     payload={
                         "reason": "storage_critical_low",
@@ -156,12 +135,15 @@ async def disk_check(_ctx) -> dict:
             else:
                 _clear_dedup()
 
-        return {
+        out = {
             "free_bytes": stats["free_bytes"],
             "percent_free": round(stats["percent_free"], 2),
             "is_critical": is_critical,
             "transitioned": is_critical != was_critical,
-            "dispatched": dispatched,
+            "dispatched": fan.sent,
         }
+        if fan.failed:
+            return mark_failed(out, f"{fan.failed} alert dispatch(es) failed: {fan.first_error}")
+        return out
     finally:
         db.close()

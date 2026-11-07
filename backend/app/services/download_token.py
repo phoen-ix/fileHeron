@@ -33,18 +33,11 @@ issuance.
 """
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
-from datetime import datetime, timezone
-
-from ..config import settings
 from ..middleware.errors import AppError
+from ..utils import signed_token
 from ..utils.crypto import constant_time_equals
 
-
-def _now() -> int:
-    return int(datetime.now(tz=timezone.utc).timestamp())
+_now = signed_token.now_epoch
 
 
 # Domain-separation prefix so a download-URL HMAC can never collide with another
@@ -55,9 +48,7 @@ _DOMAIN = b"fh:download-url:v1\x00"
 
 
 def _sign(payload: bytes) -> str:
-    secret = settings.JWT_SECRET.encode("utf-8")
-    digest = hmac.new(secret, _DOMAIN + payload, hashlib.sha256).digest()
-    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+    return signed_token.sign(payload, domain=_DOMAIN)
 
 
 def issue(file_id: str, user_id: int, ttl_sec: int) -> str:

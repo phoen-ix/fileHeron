@@ -28,6 +28,7 @@ from ..schemas.notification import (
 )
 from ..services import jwt_session, notification_prefs, rate_limit
 from ..services import unsubscribe_token as token_svc
+from ..utils.client_ip import get_client_ip
 
 router = APIRouter(
     prefix="/api/notification-subscriptions", tags=["notification-subscriptions"]
@@ -43,7 +44,7 @@ def _items(db: Session, user: User) -> list[PreferenceItem]:
 
 def _resolve(db: Session, request: Request, token: str) -> User:
     """Rate-limit + verify the token + load the (enabled) user it belongs to."""
-    ip = request.client.host if request.client else "unknown"
+    ip = get_client_ip(request) or "unknown"
     if not rate_limit.check_ip_allowed("notif_subs", ip, limit=60, window_sec=60):
         raise AppError(429, "RATE_LIMITED", "Too many requests; slow down.")
     user_id, issued_at = token_svc.verify_full(token)

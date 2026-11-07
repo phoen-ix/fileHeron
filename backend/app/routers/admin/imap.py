@@ -103,19 +103,18 @@ def update_imap_settings(
         (K.IMAP_TLS_INSECURE, "true" if payload.tls_insecure else "false"),
     ]
     for key, value in pairs:
-        settings_svc.set_value(db, key=key, value=value, actor=admin, request=request)
+        settings_svc.set_value(db, key=key, value=value, actor=admin)
     # When reusing the SMTP login, IMAP-specific user/password are ignored (SMTP
     # stays the single source of truth) - don't store what the form sent.
     if not payload.use_smtp_credentials:
         settings_svc.set_value(
-            db, key=K.IMAP_USER, value=payload.user or None, actor=admin, request=request
+            db, key=K.IMAP_USER, value=payload.user or None, actor=admin
         )
         if payload.password is not None:
             settings_svc.set_value(
                 db, key=K.IMAP_PASSWORD,
-                value=payload.password if payload.password else None,
-                actor=admin, request=request,
-            )
+                value=payload.password or None,
+                actor=admin, )
     record_audit_event(
         db,
         event_type=AuditEventType.imap_config_changed,
@@ -206,7 +205,7 @@ async def fetch_now(
     _admin: User = Depends(get_current_admin),
 ) -> ImapFetchNowResponse:
     # run_poll opens its own session (it runs in a worker thread).
-    result = await asyncio.to_thread(imap_poll_svc.run_poll, manual=True)
+    result = await asyncio.to_thread(imap_poll_svc.run_poll)
     return ImapFetchNowResponse(
         ok=bool(result.get("ok")),
         skipped=result.get("skipped"),

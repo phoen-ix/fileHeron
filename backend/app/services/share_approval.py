@@ -93,23 +93,10 @@ def can_approve(db: Session, user: User) -> bool:
         return True
     if not is_enabled(db):
         return False
+    from . import policy_gate
+
     mode, allowed_users, allowed_groups = resolve_approver_policy(db)
-    if mode == "employees_admins" and user.role == UserRole.employee:
-        return True
-    if user.id in allowed_users:
-        return True
-    if allowed_groups:
-        hit = (
-            db.query(GroupMember.user_id)
-            .filter(
-                GroupMember.user_id == user.id,
-                GroupMember.group_id.in_(allowed_groups),
-            )
-            .first()
-        )
-        if hit is not None:
-            return True
-    return False
+    return policy_gate.passes(db, user, mode, allowed_users, allowed_groups)
 
 
 def approver_user_ids(db: Session) -> set[int]:
@@ -273,13 +260,12 @@ def content_fingerprint(db: Session, share: Share) -> str:
     approver could echo a perfectly matching fingerprint and still sign off on
     bytes that did not exist when they looked. Size, digest and state all move
     when the upload completes, so now it moves too."""
-    parts = []
-    for f in sorted(
-        (f for f in share.files if f.state != FileState.deleted), key=lambda f: f.id
-    ):
-        parts.append(
-            f"{f.id}:{f.size_bytes}:{f.sha256_hex or ''}:{f.state.value}:{f.approval_state.value}"
+    parts = [
+        f"{f.id}:{f.size_bytes}:{f.sha256_hex or ''}:{f.state.value}:{f.approval_state.value}"
+        for f in sorted(
+            (f for f in share.files if f.state != FileState.deleted), key=lambda f: f.id
         )
+    ]
     link_id = (
         db.query(PublicLink.id)
         .filter(PublicLink.share_id == share.id, PublicLink.revoked_at.is_(None))

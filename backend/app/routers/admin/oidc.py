@@ -273,10 +273,10 @@ async def test_discovery_only(
     return await _probe_issuer(issuer)
 
 
-# The login path's own cap (services/oidc.py::_DISCOVERY_MAX_BYTES): a document
+# The login path's own cap (services/oidc.py::DISCOVERY_MAX_BYTES): a document
 # the probe accepted and sign-in refused would be the green-test-red-login trap
 # the issuer check below exists to close.
-_PROBE_MAX_BYTES = oidc_svc._DISCOVERY_MAX_BYTES
+_PROBE_MAX_BYTES = oidc_svc.DISCOVERY_MAX_BYTES
 
 
 async def _probe_issuer(issuer: str) -> TestConnectionResponse:
@@ -310,7 +310,7 @@ async def _probe_issuer(issuer: str) -> TestConnectionResponse:
     if not isinstance(doc, dict):
         return TestConnectionResponse(ok=False, error="Bad discovery doc: not a JSON object")
 
-    # The same check the login path applies (services/oidc.py::_discovery),
+    # The same check the login path applies (services/oidc.py::discovery),
     # with the same one-trailing-slash tolerance. This probe used to report
     # `ok` whenever discovery LOADED and merely echo the document's issuer, so
     # a provider saved with e.g. Keycloak's legacy `/auth/realms/x` path - whose

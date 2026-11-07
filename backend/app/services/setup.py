@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
 from ..models.user import Locale, User, UserRole
+from ..utils.columns import declared_width
 from ..utils.crypto import argon2_hash, constant_time_equals, normalize_email
 from ..utils.timeutil import utc_now
 from . import settings as settings_svc
@@ -25,6 +26,8 @@ from .audit import record_audit_event
 from .hibp import assert_password_not_breached
 
 logger = logging.getLogger("fileheron.setup")
+
+_DISPLAY_NAME_MAX = declared_width(User.__table__.c.display_name)
 
 
 def is_setup_complete(db: Session) -> bool:
@@ -123,7 +126,7 @@ async def complete_setup(
     user = User(
         email=em,
         password_hash=argon2_hash(password),
-        display_name=display_name.strip()[:120],
+        display_name=display_name.strip()[:_DISPLAY_NAME_MAX],
         role=UserRole.admin,
         locale=Locale.en,
         email_verified=True,

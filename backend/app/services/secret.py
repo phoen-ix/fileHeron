@@ -473,7 +473,7 @@ class CreatedSecret:
     link_token: str | None
 
 
-def _normalise_expiry(expires_at: datetime | None) -> datetime | None:
+def normalise_expiry(expires_at: datetime | None) -> datetime | None:
     if expires_at is None:
         return None
     if expires_at.tzinfo is not None:
@@ -490,7 +490,7 @@ def _connected_employee_ids(db: Session, client_id: int) -> set[int]:
     }
 
 
-def _validate_recipients(
+def validate_recipients(
     db: Session, sender: User, user_ids: list[int], group_ids: list[int]
 ) -> tuple[list[User], list[Group]]:
     users_by_id = (
@@ -536,7 +536,7 @@ def _validate_recipients(
     return users, groups
 
 
-def _member_ids(db: Session, group_id: int) -> list[int]:
+def member_ids(db: Session, group_id: int) -> list[int]:
     return [
         uid
         for (uid,) in db.query(GroupMember.user_id)
@@ -584,7 +584,7 @@ def create_secret(
 
     lim = limits(db)
     now = utc_now()
-    expires_at = _normalise_expiry(expires_at)
+    expires_at = normalise_expiry(expires_at)
     if max_views is None and expires_at is None:
         raise AppError(400, "SECRET_NEEDS_LIMIT", "Set a view limit, an expiry, or both.")
     if max_views is not None and not 1 <= max_views <= lim.max_views:
@@ -615,7 +615,7 @@ def create_secret(
         raise AppError(
             400, "SECRET_NO_RECIPIENTS", "Add at least one recipient, or create a link."
         )
-    users, groups = _validate_recipients(db, sender, user_ids, group_ids)
+    users, groups = validate_recipients(db, sender, user_ids, group_ids)
 
     secret = store_sealed(
         db,
@@ -645,7 +645,7 @@ def create_secret(
         )
         db.add(rec)
         db.flush()
-        for uid in _member_ids(db, g.id):
+        for uid in member_ids(db, g.id):
             if uid == sender.id:
                 continue
             db.add(SecretGroupMember(recipient_id=rec.id, user_id=uid))
@@ -697,7 +697,7 @@ def create_secret(
 # ---------------------------------------------------------------------------
 
 
-def _detail_url(db: Session, secret: Secret) -> str:
+def detail_url(db: Session, secret: Secret) -> str:
     from . import site as site_svc
 
     return f"{site_svc.get_site_url(db)}/secrets/{secret.id}"
@@ -715,7 +715,7 @@ def _notify_received(
         return
     from . import notification as notif_svc
 
-    url = _detail_url(db, secret)
+    url = detail_url(db, secret)
     base = {
         "sender_name": sender.display_name,
         "label": secret.label,
@@ -793,7 +793,7 @@ def _mail_addresses(
             html_body=html,
         )
         rec.notified_at = now
-        notif_svc._queue_email_job(
+        notif_svc.queue_email_job(
             db,
             {
                 "to": rec.email,
@@ -831,7 +831,7 @@ def notify_viewed(
         via, who, shown_ip = "email", rec.email, ip
     else:
         via, who, shown_ip = "link", None, ip
-    url = _detail_url(db, secret)
+    url = detail_url(db, secret)
     notif_svc.dispatch(
         db,
         user=sender,
@@ -858,7 +858,7 @@ def _notify_ended(db: Session, secret: Secret, reason: str) -> None:
         return
     from . import notification as notif_svc
 
-    url = _detail_url(db, secret)
+    url = detail_url(db, secret)
     notif_svc.dispatch(
         db,
         user=sender,

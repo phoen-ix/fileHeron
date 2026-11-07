@@ -101,3 +101,30 @@ def assert_public_http_url(
         raise AppError(400, "URL_BLOCKED", f"Could not resolve host: {host}") from e
 
     _assert_addresses_allowed(infos, allow_private=allow_private)
+
+
+def ip_in_allowlist(ip: str | None, raw: str | None) -> bool:
+    """Whether `ip` matches one entry of a comma-separated list of addresses
+    and/or CIDR ranges. Unparseable entries are skipped, an empty list or a
+    missing address never matches. The ONE parser for `METRICS_ALLOWED_IPS`
+    and `TUS_HOOK_ALLOWED_IPS` - each router carried its own copy of this loop
+    (audit 2026-11-07)."""
+    if not ip or not (raw or "").strip():
+        return False
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    for part in (raw or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            if "/" in part:
+                if addr in ipaddress.ip_network(part, strict=False):
+                    return True
+            elif addr == ipaddress.ip_address(part):
+                return True
+        except ValueError:
+            continue
+    return False

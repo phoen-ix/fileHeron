@@ -19,6 +19,7 @@ from ..database import SessionLocal
 from ..dependencies import get_db
 from ..schemas.settings import PublicConfigResponse
 from ..services import oidc_admin as oidc_admin_svc
+from ..utils.client_ip import get_client_ip
 from ..version import GIT_SHA, VERSION
 
 logger = logging.getLogger("fileheron.health")
@@ -81,7 +82,7 @@ def _peer_is_operator(request: Request) -> bool:
     X-Forwarded-For handling - the same assumption the audit log and the rate
     limiter already make (audit 2026-07-30).
     """
-    host = request.client.host if request.client else None
+    host = get_client_ip(request)
     if not host:
         return False
     try:

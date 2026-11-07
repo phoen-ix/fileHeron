@@ -16,16 +16,13 @@ from datetime import timedelta
 
 from ..database import SessionLocal
 from ..models.audit_log import AuditEventType
-from ..models.notification import NotificationCategory
-from ..models.user import User, UserRole
-from ..services import alert_dedup
+from ..services import admin_alerts, alert_dedup
 from ..services import anomaly as anomaly_svc
 from ..services import cron_schedule as cron_sched
 from ..services import settings as settings_svc
 from ..services import settings_registry as _sr
 from ..services.audit import record_audit_event
-from ..services.cron_tracker import track_cron
-from ..services.notification import dispatch
+from ..services.cron_tracker import exc_summary, mark_failed, track_cron
 from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.anomaly_check")
@@ -48,12 +45,7 @@ def _dedup_seen(finding) -> bool:
     )
 
 
-def _alert_admins(db, finding) -> None:
-    admins = (
-        db.query(User)
-        .filter(User.role == UserRole.admin, User.is_disabled.is_(False))
-        .all()
-    )
+def _alert_admins(db, finding) -> admin_alerts.FanOut:
     payload = {
         "reason": "anomaly",
         "type": finding.type,
@@ -62,18 +54,7 @@ def _alert_admins(db, finding) -> None:
         "detail": finding.detail,
         "at": utc_now().isoformat(),
     }
-    for admin in admins:
-        try:
-            dispatch(
-                db,
-                user=admin,
-                category=NotificationCategory.ops_alert,
-                payload=payload,
-                link_url="/admin/audit-log",
-                email_to=admin.email,
-            )
-        except Exception:
-            logger.exception("anomaly ops_alert dispatch failed admin=%d", admin.id)
+    return admin_alerts.notify_admins(db, payload=payload, link_url="/admin/audit-log")
 
 
 @track_cron("anomaly_check")
@@ -94,6 +75,8 @@ async def anomaly_check(_ctx) -> dict:
         login_window = max(_LOGIN_FAILURE_WINDOW_MIN, cadence)
 
         findings = []
+        detector_failures = 0
+        first_error: str | None = None
         for run in (
             lambda: anomaly_svc.mass_download(
                 db, cutoff=now - timedelta(minutes=mass_window), threshold=mass_threshold
@@ -107,10 +90,13 @@ async def anomaly_check(_ctx) -> dict:
         ):
             try:
                 findings.extend(run())
-            except Exception:
+            except Exception as exc:
+                detector_failures += 1
+                first_error = first_error or exc_summary(exc)
                 logger.exception("anomaly detector failed")
 
         alerted = 0
+        alert_failures = 0
         for f in findings:
             if _dedup_seen(f):
                 continue
@@ -122,10 +108,21 @@ async def anomaly_check(_ctx) -> dict:
                 target_id=f.subject,
                 metadata={"count": f.count, **f.detail},
             )
-            _alert_admins(db, f)
+            fan = _alert_admins(db, f)
+            alert_failures += fan.failed
+            first_error = first_error or fan.first_error
             alerted += 1
 
         db.commit()
-        return {"findings": len(findings), "alerted": alerted}
+        out = {"findings": len(findings), "alerted": alerted}
+        if detector_failures or alert_failures:
+            # A detector that raised scanned nothing, and a finding nobody was
+            # told about is not an alert: both make this a failed run.
+            return mark_failed(
+                out,
+                f"{detector_failures} detector(s), {alert_failures} alert dispatch(es) "
+                f"failed: {first_error}",
+            )
+        return out
     finally:
         db.close()

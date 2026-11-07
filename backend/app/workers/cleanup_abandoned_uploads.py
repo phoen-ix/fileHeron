@@ -23,7 +23,7 @@ from pathlib import Path
 from ..config import settings
 from ..database import SessionLocal
 from ..models.file import File, FileState
-from ..services.cron_tracker import track_cron
+from ..services.cron_tracker import exc_summary, mark_failed, track_cron
 from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.cleanup_abandoned_uploads")
@@ -40,6 +40,10 @@ async def cleanup_abandoned_uploads(_ctx) -> dict:
     scanned = 0
     deleted = 0
     skipped_active = 0
+    # A `stat` that fails is a file that vanished between the glob and the stat
+    # (tusd finishing or another sweep) and is skipped; an UNLINK that fails
+    # leaves bytes nothing else will ever remove, and is reported.
+    unlink_failures: list[str] = []
 
     db = SessionLocal()
     try:
@@ -70,6 +74,7 @@ async def cleanup_abandoned_uploads(_ctx) -> dict:
                 part_path.unlink()
                 deleted += 1
             except OSError as e:
+                unlink_failures.append(f"{part_path.name}: {exc_summary(e)}")
                 logger.warning("cleanup_abandoned_uploads: .part unlink failed %s: %s", part_path, e)
 
         for info_path in upload_dir.glob("*.info"):
@@ -103,6 +108,7 @@ async def cleanup_abandoned_uploads(_ctx) -> dict:
                 info_path.unlink()
                 deleted += 1
             except OSError as e:
+                unlink_failures.append(f"{tus_id}: {exc_summary(e)}")
                 logger.warning(
                     "cleanup_abandoned_uploads: unlink failed tus_id=%s: %s",
                     tus_id, e,
@@ -113,10 +119,15 @@ async def cleanup_abandoned_uploads(_ctx) -> dict:
                 "cleanup_abandoned_uploads: scanned=%d deleted=%d skipped_active=%d",
                 scanned, deleted, skipped_active,
             )
-        return {
+        out = {
             "scanned": scanned,
             "deleted": deleted,
             "skipped_active": skipped_active,
         }
+        if unlink_failures:
+            return mark_failed(
+                out, f"{len(unlink_failures)} unlink(s) failed: {unlink_failures[0]}"
+            )
+        return out
     finally:
         db.close()

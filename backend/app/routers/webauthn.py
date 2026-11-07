@@ -53,6 +53,7 @@ from ..services import rate_limit as rate_limit_svc
 from ..services import totp as totp_svc
 from ..services import webauthn as webauthn_svc
 from ..services.audit import record_audit_event
+from ..utils.client_ip import get_client_ip
 
 logger = logging.getLogger("fileheron.webauthn_router")
 
@@ -73,16 +74,7 @@ def _to_item(c) -> WebAuthnCredentialItem:
     )
 
 
-def _set_refresh_cookie(response: Response, refresh_plain: str, db: Session) -> None:
-    response.set_cookie(
-        key="fh_refresh",
-        value=refresh_plain,
-        max_age=settings_registry.effective(db, settings_registry.K.REFRESH_TOKEN_EXPIRE_DAYS) * 24 * 3600,
-        httponly=True,
-        secure=settings.COOKIE_SECURE,
-        samesite="lax",
-        path="/api/auth",
-    )
+_set_refresh_cookie = jwt_session.set_refresh_cookie
 
 
 # ---- Account: list / register / delete ----------------------------------
@@ -234,13 +226,9 @@ async def auth_complete(
 
     # The /begin gate verified account state, but that was a prior request -
     # re-check here so a passkey ceremony can't mint a session for an account
-    # disabled/locked/unverified in the interim (audit L3).
-    if user.is_disabled:
-        raise AppError(403, "ACCOUNT_DISABLED", "This account has been disabled.")
-    if rate_limit_svc.is_account_locked(user):
-        raise AppError(423, "ACCOUNT_LOCKED", "Account is temporarily locked.")
-    if not user.email_verified:
-        raise AppError(403, "EMAIL_NOT_VERIFIED", "Please verify your email first.")
+    # disabled/locked/unverified in the interim (audit L3). The shared gate also
+    # writes the login_attempts row this route used to skip.
+    auth_svc.assert_account_may_sign_in(db, user, request=request)
 
     # A passkey is a second factor only when the authenticator VERIFIED the
     # user (PIN / biometric - the UV flag on the assertion). /begin asks for
@@ -286,7 +274,7 @@ async def passkey_signin_begin(
 ) -> WebAuthnAuthBeginResponse:
     """Start a sign-in with a passkey alone. The options name no account, so the
     browser offers whichever passkeys it holds for this site."""
-    ip = request.client.host if request.client else ""
+    ip = get_client_ip(request) or ""
     if not rate_limit_svc.check_ip_allowed(
         "passkey_signin", ip,
         settings_registry.effective(db, settings_registry.K.RATE_LIMIT_LOGIN)
@@ -326,7 +314,7 @@ async def pending_passkey_begin(
     """Finish a pending sign-in (after SSO) with a passkey instead of a code.
     Shares /api/auth/2fa/complete's per-IP budget: both spend one pending
     token's attempts."""
-    ip = request.client.host if request.client else ""
+    ip = get_client_ip(request) or ""
     if not rate_limit_svc.check_ip_allowed(
         "twofa_complete", ip,
         settings_registry.effective(db, settings_registry.K.RATE_LIMIT_LOGIN),

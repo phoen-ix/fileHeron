@@ -299,7 +299,7 @@ def test_rotation_rewraps_secrets_and_their_links(db, people, monkeypatch):
         ("secret_recipients.token_encrypted", SecretRecipient, "token_encrypted"),
     ):
         stats = script.rotate_table(
-            db, label, db.query(model).all(),
+            label, db.query(model).all(),
             lambda r, f=field: getattr(r, f),
             lambda r, v, f=field: setattr(r, f, v),
             is_bytes=False, old=old_f, new=new_f,
@@ -337,12 +337,12 @@ def test_the_rotation_script_rotates_every_encrypted_column():
     # And each label is a real rotate_table call, not a comment.
     tree = ast.parse(src)
     labels = {
-        node.args[1].value
+        node.args[0].value
         for node in ast.walk(tree)
         if isinstance(node, ast.Call)
         and getattr(node.func, "id", None) == "rotate_table"
-        and len(node.args) > 1
-        and isinstance(node.args[1], ast.Constant)
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
     }
     assert set(columns) <= labels, set(columns) - labels
 

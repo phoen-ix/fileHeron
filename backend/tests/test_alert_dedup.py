@@ -84,7 +84,7 @@ def test_ops_check_sends_redis_unhealthy_once_during_the_outage(db, make_user, m
 
     _redis_down(monkeypatch)
     admin = make_user(email="admin@test.local", role=UserRole.admin)
-    sent = [ops_check._alert_admins(db, reason="redis_unhealthy", detail="probe") for _ in range(3)]
+    sent = [ops_check._alert_admins(db, reason="redis_unhealthy", detail="probe").sent for _ in range(3)]
     assert sent == [1, 0, 0]
     db.commit()
     assert db.query(Notification).filter(Notification.user_id == admin.id).count() == 1
@@ -129,7 +129,9 @@ async def test_a_failing_cron_alerts_once_during_an_outage(db, make_user, monkey
 
     _redis_down(monkeypatch)
     sent: list[str] = []
-    monkeypatch.setattr(cron_tracker, "dispatch", lambda *_a, **kw: sent.append(kw["category"]))
+    monkeypatch.setattr(
+        "app.services.notification.dispatch", lambda *_a, **kw: sent.append(kw["category"])
+    )
     make_user(email="admin@test.local", role=UserRole.admin)
 
     @cron_tracker.track_cron("test_job_outage")

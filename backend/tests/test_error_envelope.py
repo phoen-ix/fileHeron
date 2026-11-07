@@ -91,7 +91,7 @@ async def test_route_404_captured_when_allowlisted(client, db, monkeypatch):
     ssvc.set_value(db, key=k.ERROR_LOG_CAPTURE_4XX, value="true", actor=None)
     ssvc.set_value(db, key=k.ERROR_LOG_4XX_CODES, value="404", actor=None)
     db.commit()
-    error_log._reset_cache()
+    error_log.reset_cache()
 
     calls: list = []
     monkeypatch.setattr(job_queue, "enqueue", lambda name, **kw: calls.append((name, kw)))
@@ -104,4 +104,4 @@ async def test_route_404_captured_when_allowlisted(client, db, monkeypatch):
         and kw["event"]["code"] == "NOT_FOUND"
         for name, kw in calls
     )
-    error_log._reset_cache()
+    error_log.reset_cache()

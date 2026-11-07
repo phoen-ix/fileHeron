@@ -14,7 +14,6 @@ compute (fail-open).
 """
 from __future__ import annotations
 
-import ipaddress
 import logging
 from datetime import timedelta
 
@@ -31,7 +30,9 @@ from ..models.file import File, FileState
 from ..models.share import Share, ShareState
 from ..models.user import User
 from ..services.quota import STORED_STATES
+from ..utils.client_ip import get_client_ip
 from ..utils.crypto import constant_time_equals
+from ..utils.net import ip_in_allowlist
 from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.metrics")
@@ -42,26 +43,7 @@ _CACHE_KEY = "fh:metrics:cached"
 
 
 def _ip_allowed(client_ip: str | None) -> bool:
-    raw = (settings.METRICS_ALLOWED_IPS or "").strip()
-    if not raw or not client_ip:
-        return False
-    try:
-        addr = ipaddress.ip_address(client_ip)
-    except ValueError:
-        return False
-    for part in raw.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        try:
-            if "/" in part:
-                if addr in ipaddress.ip_network(part, strict=False):
-                    return True
-            elif addr == ipaddress.ip_address(part):
-                return True
-        except ValueError:
-            continue
-    return False
+    return ip_in_allowlist(client_ip, settings.METRICS_ALLOWED_IPS)
 
 
 def _bearer_allowed(authorization: str | None) -> bool:
@@ -188,7 +170,7 @@ def metrics(
     db: Session = Depends(get_db),
     authorization: str | None = Header(default=None),
 ) -> PlainTextResponse:
-    client_ip = request.client.host if request.client else None
+    client_ip = get_client_ip(request)
     if not (_bearer_allowed(authorization) or _ip_allowed(client_ip)):
         raise AppError(401, "AUTH_REQUIRED", "Metrics require a scraper token or allow-listed IP.")
 

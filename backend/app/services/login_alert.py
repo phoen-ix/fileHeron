@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from ..models.notification import NotificationCategory
 from ..models.user import User
+from ..utils.client_ip import get_client_ip
 from ..utils.timeutil import utc_now
 from . import notification as notif_svc
 
@@ -38,7 +39,7 @@ def fire_new_device_alert(
     """Best-effort: dispatch the notification but never fail the login.
     Caller has already inserted the KnownDevice row + audited."""
     try:
-        ip = (request.client.host if (request and request.client) else "") or ""
+        ip = (get_client_ip(request) if request else None) or ""
         ua = (request.headers.get("user-agent", "") if request else "") or ""
         from . import site as site_svc
         account_url = f"{site_svc.get_site_url(db)}/account"

@@ -25,6 +25,7 @@ from ..middleware.errors import AppError
 from ..models.api_token import ApiToken
 from ..models.audit_log import AuditEventType
 from ..models.user import User
+from ..utils.columns import declared_width
 from ..utils.crypto import constant_time_equals, sha256_hex
 from ..utils.like import LIKE_ESCAPE, contains
 from ..utils.timeutil import utc_now
@@ -36,6 +37,8 @@ TOKEN_SECRET_BYTES = 32  # 43 b64url chars (no padding)
 # Granularity for the `last_used_at` write - one update per minute is plenty for
 # a human-facing "last used" while avoiding an UPDATE on every single request.
 LAST_USED_THROTTLE_SEC = 60
+
+_NAME_MAX = declared_width(ApiToken.__table__.c.name)
 
 # Canonical per-token scopes (least privilege). A token's stored `scopes` is a
 # JSON array of a SUBSET of these; NULL = unrestricted (full access). Each maps
@@ -147,7 +150,7 @@ def create_token(
 
     record = ApiToken(
         owner_user_id=owner.id,
-        name=name.strip()[:120] or "(unnamed)",
+        name=name.strip()[:_NAME_MAX] or "(unnamed)",
         prefix=prefix,
         last4=secret[-4:],
         secret_hash=sha256_hex(secret),
@@ -267,7 +270,7 @@ def _policy_keys() -> dict[str, str]:
     }
 
 
-def _resolve_policy(db: Session) -> tuple[str, list[int], list[int]]:
+def resolve_policy(db: Session) -> tuple[str, list[int], list[int]]:
     from . import policy_gate
 
     return policy_gate.resolve_policy(db, **_policy_keys())

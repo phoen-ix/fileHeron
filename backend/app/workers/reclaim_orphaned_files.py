@@ -31,11 +31,9 @@ from sqlalchemy import update
 
 from ..database import SessionLocal
 from ..models.file import File, FileState
-from ..models.notification import NotificationCategory
 from ..models.share import Share, ShareState
-from ..models.user import User, UserRole
-from ..services.cron_tracker import track_cron
-from ..services.notification import dispatch
+from ..services import admin_alerts
+from ..services.cron_tracker import exc_summary, mark_failed, track_cron
 from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.reclaim_orphaned_files")
@@ -50,12 +48,7 @@ _RECLAIMABLE = [FileState.clean, FileState.ready_unscanned]
 
 
 
-def _notify_admins(db, *, count: int, bytes_freed: int, days: int) -> None:
-    admins = (
-        db.query(User)
-        .filter(User.role == UserRole.admin, User.is_disabled.is_(False))
-        .all()
-    )
+def _notify_admins(db, *, count: int, bytes_freed: int, days: int) -> admin_alerts.FanOut:
     mb = bytes_freed / 1_000_000
     payload = {
         "reason": "orphaned_files_reclaimed",
@@ -65,18 +58,7 @@ def _notify_admins(db, *, count: int, bytes_freed: int, days: int) -> None:
         ),
         "at": utc_now().isoformat(),
     }
-    for admin in admins:
-        try:
-            dispatch(
-                db,
-                user=admin,
-                category=NotificationCategory.ops_alert,
-                payload=payload,
-                link_url="/admin/file-history",
-                email_to=admin.email,
-            )
-        except Exception:
-            logger.exception("orphan-reclaim alert dispatch failed admin=%d", admin.id)
+    return admin_alerts.notify_admins(db, payload=payload, link_url="/admin/file-history")
 
 
 @track_cron("reclaim_orphaned_files")
@@ -117,6 +99,7 @@ async def reclaim_orphaned_files(_ctx) -> dict:
         failed = 0
         skipped = 0
         bytes_freed = 0
+        first_error: str | None = None
         for f in orphans:
             try:
                 # Re-assert under a row lock that the file is STILL reclaimable
@@ -165,27 +148,37 @@ async def reclaim_orphaned_files(_ctx) -> dict:
                 # `clean`, and the next nightly run retried it.
                 if file_svc.purge_locators(db, [locator], reason="orphan_reclaim"):
                     failed += 1
+                    first_error = first_error or f"could not unlink {locator}"
                 else:
                     reclaimed += 1
                     bytes_freed += size
             except Exception as e:
                 db.rollback()
                 failed += 1
-                logger.exception("reclaim_orphaned_files: failed file=%s: %s", f.id, e)
+                first_error = first_error or exc_summary(e)
+                logger.exception("reclaim_orphaned_files: failed file=%s", f.id)
 
+        fan = admin_alerts.FanOut()
         if reclaimed:
-            _notify_admins(db, count=reclaimed, bytes_freed=bytes_freed, days=days)
+            fan = _notify_admins(db, count=reclaimed, bytes_freed=bytes_freed, days=days)
             db.commit()
             logger.info(
                 "reclaim_orphaned_files: reclaimed=%d bytes=%d failed=%d (grace=%dd)",
                 reclaimed, bytes_freed, failed, days,
             )
-        return {
+        out = {
             "reclaimed": reclaimed,
             "bytes_freed": bytes_freed,
             "failed": failed,
             "skipped": skipped,
             "grace_days": days,
         }
+        if failed or fan.failed:
+            return mark_failed(
+                out,
+                f"{failed} file(s) not reclaimed, {fan.failed} alert dispatch(es) failed: "
+                f"{first_error or fan.first_error}",
+            )
+        return out
     finally:
         db.close()

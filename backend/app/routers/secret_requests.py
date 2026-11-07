@@ -94,7 +94,7 @@ def answered_via(db: Session, req: SecretRequest) -> tuple[
     return ("email" if target.kind == SecretRecipientKind.email else "link"), target
 
 
-def to_response(db: Session, req: SecretRequest, viewer: User, role: Role) -> SecretRequestResponse:
+def to_response(db: Session, req: SecretRequest, role: Role) -> SecretRequestResponse:
     reason = request_svc.closed_reason(req)
     resp = SecretRequestResponse(
         id=req.id,
@@ -169,7 +169,7 @@ def create_request(
     )
     db.commit()
     db.refresh(created.request)
-    resp = to_response(db, created.request, user, "requester")
+    resp = to_response(db, created.request, "requester")
     if created.link_token is not None:
         url = request_svc.request_url(db, created.link_token)
         resp.link_url = url
@@ -222,7 +222,7 @@ def get_request(
     db: Session = Depends(get_db),
 ) -> SecretRequestResponse:
     req, role = _visible_or_404(db, request_id, user)
-    return to_response(db, req, user, role)
+    return to_response(db, req, role)
 
 
 @router.post("/{request_id}/answer", response_model=AnswerSecretRequestResponse)
@@ -259,7 +259,7 @@ def cancel_request(
     request_svc.cancel_request(db, req, actor=user, request=request)
     db.commit()
     db.refresh(req)
-    return to_response(db, req, user, role)
+    return to_response(db, req, role)
 
 
 @router.get("/{request_id}/links", response_model=SecretRequestLinksResponse)

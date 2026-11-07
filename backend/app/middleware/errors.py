@@ -16,6 +16,8 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from ..utils.client_ip import get_client_ip
+
 logger = logging.getLogger("fileheron.errors")
 
 # Friendly codes for framework-raised HTTPExceptions (route-not-found 404, 405,
@@ -208,7 +210,7 @@ def _maybe_enqueue_error_event(
             "path": _redact_path(request.url.path),
             "status_code": status_code,
             "code": code,
-            "ip": request.client.host if request.client else None,
+            "ip": get_client_ip(request),
             "request_id": getattr(request.state, "request_id", None),
             "user_id": getattr(request.state, "user_id", None),
             "auth_via": getattr(request.state, "auth_via", None),

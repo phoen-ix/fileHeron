@@ -1,6 +1,6 @@
 """Inbound poll orchestration. Cadence/enable is owned by the cron scheduler
 (services/cron_schedule.py 'imap_poll', v1.28.0); this only does the work + a
-feature guard. ``run_poll(manual=True)`` powers the admin "Fetch now" button.
+feature guard. ``run_poll()`` also powers the admin "Fetch now" button.
 
 Sync (stdlib IMAP + DB); the worker runs it via ``asyncio.to_thread``. The IMAP
 session is injectable (``session_opener``) so tests drive it with a fake.
@@ -197,10 +197,10 @@ def last_success_at(db: Session | None = None) -> datetime | None:
     return to_naive_utc(parsed) if parsed.tzinfo is not None else parsed
 
 
-def run_poll(*, manual: bool, db: Session | None = None, session_opener=open_session) -> dict:
-    """Fetch new mail and ingest it. ``manual`` marks the admin "Fetch now" call
-    (kept for symmetry; scheduling is handled by the cron dispatcher now). Opens
-    its own DB session when one isn't supplied (the worker thread case)."""
+def run_poll(*, db: Session | None = None, session_opener=open_session) -> dict:
+    """Fetch new mail and ingest it - the cron and the admin "Fetch now" button
+    alike. Opens its own DB session when one isn't supplied (the worker thread
+    case)."""
     own = db is None
     db = db or SessionLocal()
     lock_token: str | None = None

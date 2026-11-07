@@ -90,6 +90,45 @@ def display_order(files: list[File]) -> list[File]:
     )
 
 
+def assert_state_servable(file: File) -> None:
+    """The AV/state gate every byte-serving route applies: only a `clean` file
+    is served - never uploading, deleted, quarantined or still-unscanned bytes.
+    One copy, after the two public-link routes re-implemented the ladder inline
+    (audit 2026-11-07)."""
+    if file.state == FileState.uploading:
+        raise AppError(409, "STILL_UPLOADING", "File hasn't finished uploading yet.")
+    if file.state == FileState.deleted:
+        raise AppError(410, "FILE_DELETED", "File has been deleted.")
+    if file.state == FileState.infected:
+        raise AppError(410, "FILE_INFECTED", "File was quarantined.")
+    if file.state == FileState.ready_unscanned:
+        raise AppError(
+            425, "SCAN_IN_PROGRESS", "Antivirus scan still in progress; try again shortly."
+        )
+
+
+def assert_state_previewable(file: File) -> None:
+    """The preview gate, which is stricter than the download gate.
+
+    `av_unscanned` files are `clean` - the state means "no verdict", not "a
+    clean verdict": clamd clamps MaxFileSize to ~2 GiB, so anything larger is
+    marked clean-but-unscanned and served with a badge. The download path can
+    do that, because the user is choosing to take a file they were told was not
+    scanned. Preview is different: the bytes are rendered INLINE, into the
+    browser's PDF/image viewer, on a path an anonymous public-link visitor can
+    reach with one click - and the trust model behind the previewable-type
+    allowlist assumed clamd had read them (audit #2).
+    """
+    assert_state_servable(file)
+    if getattr(file, "av_unscanned", False):
+        raise AppError(
+            409,
+            "FILE_NOT_SCANNED",
+            "This file was too large to scan for viruses, so it can't be "
+            "previewed in the browser. Download it and check it locally.",
+        )
+
+
 def safe_original_filename(name: str) -> str:
     """Reduce a client-supplied filename to a safe leaf: strip any directory
     components (both / and \\ - a Windows client may send back-slashes), drop
@@ -402,11 +441,10 @@ def purge_locators(
         try:
             backend.delete(locator)
         except Exception:
-            logger.error(
+            logger.exception(
                 "deferred purge FAILED for %s - the row is deleted, so these bytes "
                 "are now orphaned and no sweeper will find them",
                 locator,
-                exc_info=True,
             )
             failed.append(locator)
             record_orphan_locator(db, locator=locator, reason=reason)

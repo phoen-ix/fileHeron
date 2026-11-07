@@ -45,35 +45,17 @@ from ..services import email as email_svc
 from ..services import email_change as email_change_svc
 from ..services import jwt_session, settings_registry
 from ..services import rate_limit as rate_limit_svc
+from ..utils.client_ip import get_client_ip
 from ..utils.crypto import refresh_token_hash
 from ..utils.timeutil import utc_now
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 logger = logging.getLogger("fileheron.routers.auth")
 
-_REFRESH_COOKIE = "fh_refresh"
-_REFRESH_PATH = "/api/auth"
-
-
-def _set_refresh_cookie(response: Response, plaintext: str, db: Session) -> None:
-    # Match the cookie's client-side lifetime to the refresh token's
-    # server-side expiry - both read the admin-tunable value (kv overlay,
-    # env default) so an admin change keeps them in sync.
-    from ..services import settings_registry
-    days = settings_registry.effective(db, settings_registry.K.REFRESH_TOKEN_EXPIRE_DAYS)
-    response.set_cookie(
-        key=_REFRESH_COOKIE,
-        value=plaintext,
-        max_age=days * 24 * 3600,
-        httponly=True,
-        secure=settings.COOKIE_SECURE,
-        samesite="lax",
-        path=_REFRESH_PATH,
-    )
-
-
-def _clear_refresh_cookie(response: Response) -> None:
-    response.delete_cookie(_REFRESH_COOKIE, path=_REFRESH_PATH)
+# The refresh-cookie policy lives in services/jwt_session.py (one copy for the
+# five routers that set it).
+_set_refresh_cookie = jwt_session.set_refresh_cookie
+_clear_refresh_cookie = jwt_session.clear_refresh_cookie
 
 
 @router.post("/register-from-invite", status_code=status.HTTP_200_OK, response_model=LoginResponse)
@@ -83,7 +65,7 @@ async def register_from_invite(
     response: Response,
     db: Session = Depends(get_db),
 ) -> LoginResponse:
-    ip = request.client.host if request.client else ""
+    ip = get_client_ip(request) or ""
     if not rate_limit_svc.check_ip_allowed(
         "register", ip, settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER)
     ):
@@ -177,7 +159,7 @@ async def complete_second_factor(
     the pending token names its own subject, so without an IP budget an
     attacker holding one leaked token could grind TOTP codes at line rate.
     """
-    ip = request.client.host if request.client else ""
+    ip = get_client_ip(request) or ""
     if not rate_limit_svc.check_ip_allowed(
         "twofa_complete", ip,
         settings_registry.effective(db, settings_registry.K.RATE_LIMIT_LOGIN),
@@ -259,7 +241,7 @@ async def forgot_password(
     db: Session = Depends(get_db),
 ) -> dict:
     """Always returns 200 - never reveals whether the email exists."""
-    ip = request.client.host if request.client else ""
+    ip = get_client_ip(request) or ""
     if not rate_limit_svc.check_ip_allowed(
         "forgot", ip, settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER)
     ):
@@ -304,7 +286,7 @@ async def reset_password(
     response: Response,
     db: Session = Depends(get_db),
 ) -> dict:
-    ip = request.client.host if request.client else ""
+    ip = get_client_ip(request) or ""
     if not rate_limit_svc.check_ip_allowed(
         "reset", ip, settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER)
     ):
@@ -320,7 +302,7 @@ async def reset_password(
 
 @router.post("/verify-email", response_model=OkResponse, status_code=status.HTTP_200_OK)
 def verify_email(payload: VerifyEmailRequest, request: Request, db: Session = Depends(get_db)) -> dict:
-    ip = request.client.host if request.client else ""
+    ip = get_client_ip(request) or ""
     if not rate_limit_svc.check_ip_allowed(
         "verify", ip, settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER)
     ):
@@ -341,7 +323,7 @@ async def confirm_email_change(
     verify_both mode this confirms one side; the change applies only once both
     sides have confirmed. On apply, the user's sessions are revoked, so clear
     the refresh cookie to force a fresh sign-in with the new identity."""
-    ip = request.client.host if request.client else ""
+    ip = get_client_ip(request) or ""
     if not rate_limit_svc.check_ip_allowed(
         "verify", ip, settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER)
     ):
@@ -369,7 +351,7 @@ def cancel_email_change(
     db: Session = Depends(get_db),
 ) -> dict:
     """Old-address 'it wasn't me' kill switch for a pending email change."""
-    ip = request.client.host if request.client else ""
+    ip = get_client_ip(request) or ""
     if not rate_limit_svc.check_ip_allowed(
         "verify", ip, settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER)
     ):
@@ -381,7 +363,6 @@ def cancel_email_change(
 
 @router.post("/resend-verification", response_model=ResendVerificationResponse, status_code=status.HTTP_200_OK)
 async def resend_verification(
-    request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -509,20 +490,9 @@ def revoke_other_sessions(
     # per-user mark; the count above is what the caller actually asked about.
     jwt_session.revoke_all_user_refresh_tokens(db, user.id)
 
-    _access, _expires_in, refresh_plain = auth_svc.finalize_successful_login(
-        db, user=user, request=request, settings=settings,
-        via="revoke_others", notify_new_device=False,
+    _access, _expires_in, refresh_plain = jwt_session.remint_session(
+        db, user=user, request=request, settings=settings
     )
     db.commit()
-    response.set_cookie(
-        key="fh_refresh",
-        value=refresh_plain,
-        max_age=settings_registry.effective(
-            db, settings_registry.K.REFRESH_TOKEN_EXPIRE_DAYS
-        ) * 24 * 3600,
-        httponly=True,
-        secure=settings.COOKIE_SECURE,
-        samesite="lax",
-        path="/api/auth",
-    )
+    _set_refresh_cookie(response, refresh_plain, db)
     return {"revoked": revoked}

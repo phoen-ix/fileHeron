@@ -41,6 +41,7 @@ from ..models.group_member import GroupMember
 from ..models.share import Share, ShareKind, ShareState
 from ..models.share_recipient import ShareRecipient
 from ..models.user import User, UserRole
+from ..utils.columns import declared_width
 from ..utils.dbresult import updated_rows
 from ..utils.like import LIKE_ESCAPE, contains
 from ..utils.timeutil import utc_now
@@ -50,6 +51,11 @@ if TYPE_CHECKING:
     from .file import PurgeEntry
 
 logger = logging.getLogger("fileheron.share")
+
+_SUBJECT_MAX = declared_width(Share.__table__.c.subject)
+# `rejection_reason` is a Text column: this is a policy cap on an approver's
+# note, not a width, so it is a constant rather than a derived clip.
+_REJECTION_REASON_MAX = 1000
 
 
 
@@ -461,7 +467,7 @@ def create_share(
     share = Share(
         created_by_id=created_by.id,
         kind=kind,
-        subject=(subject or "")[:255] or None,
+        subject=(subject or "")[:_SUBJECT_MAX] or None,
         message=message or None,
         expires_at=expires_at,
         state=ShareState.active,
@@ -1178,7 +1184,7 @@ def reject_share(
     from ..models.notification import NotificationCategory
 
     _assert_can_decide(db, user, share)
-    reason = (reason or "").strip()[:1000] or None
+    reason = (reason or "").strip()[:_REJECTION_REASON_MAX] or None
     now = utc_now()
     result = db.execute(
         update(Share)
@@ -1352,7 +1358,7 @@ def decide_added_files(
         )
         _dispatch_files_added_after_approval(db, share, file_ids=pending)
     else:
-        reason = (reason or "").strip()[:1000] or None
+        reason = (reason or "").strip()[:_REJECTION_REASON_MAX] or None
         for f in (
             db.query(File)
             .filter(

@@ -354,7 +354,7 @@ def finalize_successful_login(
     from a new device" about the account's very first second - training the
     reader to ignore the one message that matters later."""
     access, expires_in = create_access_token(user.id, settings, db)
-    _, refresh_plain = create_refresh_token(db, user, request, settings)
+    _, refresh_plain = create_refresh_token(db, user, request)
     is_new_device = _record_login_device(db, user=user, request=request)
     _record_login_attempt(
         db, email_value=email_value or user.email, ip=_request_ip(request),
@@ -454,7 +454,7 @@ async def _after_second_factor_failure(
 # Hand them to a thread; the security property (constant-ish latency between the
 # unknown-email and wrong-password branches) is unaffected because both branches
 # still spend one verify (audit 2026-07-30).
-async def _averify(hash_str: str, plaintext: str) -> bool:
+async def averify(hash_str: str, plaintext: str) -> bool:
     return await asyncio.to_thread(argon2_verify, hash_str, plaintext)
 
 async def authenticate_first_factor(
@@ -496,7 +496,7 @@ async def authenticate_first_factor(
     # fixed dummy hash so the latency matches the wrong-password branch below
     # (no enumeration-by-timing tell).
     if user is None:
-        await _averify(_DUMMY_PASSWORD_HASH, password)
+        await averify(_DUMMY_PASSWORD_HASH, password)
         _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.unknown_email)
         record_audit_event(
             db,
@@ -526,7 +526,7 @@ async def authenticate_first_factor(
     # `locked_until` - the honest owner needs to know why they cannot get in.
     # A wrong password gets the same 401 as an address that does not exist.
     locked = rate_limit_svc.is_account_locked(user)
-    if locked and not await _averify(user.password_hash, password):
+    if locked and not await averify(user.password_hash, password):
         _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.locked)
         record_audit_event(
             db,
@@ -559,7 +559,7 @@ async def authenticate_first_factor(
         )
 
     # 4. Verify password
-    if not await _averify(user.password_hash, password):
+    if not await averify(user.password_hash, password):
         just_locked, should_email = rate_limit_svc.record_failure(db, user=user)
         _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.bad_password)
         record_audit_event(
@@ -594,9 +594,30 @@ async def authenticate_first_factor(
         db.commit()
         raise AppError(401, "INVALID_CREDENTIALS", "Invalid email or password.")
 
-    # 5. Disabled / not-verified
+    # 5. Disabled / locked since step 3 / not-verified - the shared gate.
+    assert_account_may_sign_in(db, user, email_value=em_email, request=request)
+    return user
+
+
+def assert_account_may_sign_in(
+    db: Session, user: User, *, email_value: str | None = None, request: Request | None
+) -> None:
+    """The account-state gate a sign-in passes once its credential has verified:
+    disabled -> 403 ACCOUNT_DISABLED, locked -> 423 ACCOUNT_LOCKED (with
+    `locked_until`), unverified -> 403 EMAIL_NOT_VERIFIED. Each refusal writes
+    its `login_attempts` row and commits, so the forensic trail is the same
+    whichever flow asked: the password flow, the passkey-only flow and the
+    password+passkey completion route each carried their own copy, and the last
+    one refused without writing any row at all (audit 2026-11-07).
+
+    The pending-token completions (an SSO or passkey FIRST factor finishing with
+    a code or passkey) deliberately keep their own locked-only check: their
+    first factor already judged the account, and the SSO path admits a local
+    account whose email is unverified - a rule that belongs to it, not here."""
+    ip = _request_ip(request)
+    email_value = email_value or user.email
     if user.is_disabled:
-        _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.account_disabled)
+        _record_login_attempt(db, email_value=email_value, ip=ip, outcome=LoginOutcome.account_disabled)
         record_audit_event(
             db,
             event_type=AuditEventType.login_failure,
@@ -608,13 +629,29 @@ async def authenticate_first_factor(
         )
         db.commit()
         raise AppError(403, "ACCOUNT_DISABLED", "This account has been disabled.")
-
+    if rate_limit_svc.is_account_locked(user):
+        locked_until = user.locked_until.isoformat() if user.locked_until else None
+        _record_login_attempt(db, email_value=email_value, ip=ip, outcome=LoginOutcome.locked)
+        record_audit_event(
+            db,
+            event_type=AuditEventType.account_locked,
+            actor_user_id=user.id,
+            target_type="user",
+            target_id=user.id,
+            metadata={"locked_until": locked_until},
+            request=request,
+        )
+        db.commit()
+        raise AppError(
+            423,
+            "ACCOUNT_LOCKED",
+            "Account is temporarily locked due to too many failed attempts.",
+            details={"locked_until": locked_until},
+        )
     if not user.email_verified:
-        _record_login_attempt(db, email_value=em_email, ip=ip, outcome=LoginOutcome.email_not_verified)
+        _record_login_attempt(db, email_value=email_value, ip=ip, outcome=LoginOutcome.email_not_verified)
         db.commit()
         raise AppError(403, "EMAIL_NOT_VERIFIED", "Please verify your email first.")
-
-    return user
 
 
 def _passkey_is_the_second_factor(db: Session, user: User) -> bool:
@@ -930,7 +967,7 @@ async def change_password(
 ) -> None:
     # Off the loop, like every other verify in this module: 64 MiB of Argon2id
     # on the event loop freezes the whole process for ~0.2 s.
-    if not await _averify(user.password_hash, current_password):
+    if not await averify(user.password_hash, current_password):
         raise AppError(401, "INVALID_CREDENTIALS", "Current password is incorrect.")
     await assert_password_not_breached(db, new_password)
 
@@ -1096,26 +1133,9 @@ async def login_with_passkey(
         )
         raise AppError(401, "PASSKEY_SIGNIN_FAILED", "That passkey could not sign you in.") from None
 
-    # The same account-state gate as the password flow, in the same order as
-    # /api/auth/webauthn/complete; the assertion is spent either way.
-    ip = _request_ip(request)
-    if user.is_disabled:
-        _record_login_attempt(db, email_value=user.email, ip=ip, outcome=LoginOutcome.account_disabled)
-        db.commit()
-        raise AppError(403, "ACCOUNT_DISABLED", "This account has been disabled.")
-    if rate_limit_svc.is_account_locked(user):
-        _record_login_attempt(db, email_value=user.email, ip=ip, outcome=LoginOutcome.locked)
-        db.commit()
-        raise AppError(
-            423,
-            "ACCOUNT_LOCKED",
-            "Account is temporarily locked due to too many failed attempts.",
-            details={"locked_until": user.locked_until.isoformat() if user.locked_until else None},
-        )
-    if not user.email_verified:
-        _record_login_attempt(db, email_value=user.email, ip=ip, outcome=LoginOutcome.email_not_verified)
-        db.commit()
-        raise AppError(403, "EMAIL_NOT_VERIFIED", "Please verify your email first.")
+    # The same account-state gate as the password flow; the assertion is spent
+    # either way.
+    assert_account_may_sign_in(db, user, request=request)
 
     rate_limit_svc.record_success(db, user=user)
     access, expires_in, refresh_plain = finalize_successful_login(

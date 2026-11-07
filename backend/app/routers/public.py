@@ -18,13 +18,10 @@ Counter decrement happens on the actual download request, atomically.
 """
 from __future__ import annotations
 
-import base64
 import binascii
-import hashlib
-import hmac as hmac_mod
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Cookie, Depends, Header, Request, Response
 from sqlalchemy.orm import Session
@@ -50,6 +47,7 @@ from ..services import settings as settings_svc
 from ..services import zip_stream as zip_stream_svc
 from ..services.audit import record_audit_event
 from ..services.storage_backend import get_storage_backend
+from ..utils import signed_token
 from ..utils.client_ip import get_client_ip
 from ..utils.columns import declared_width
 from ..utils.crypto import constant_time_equals
@@ -80,13 +78,8 @@ COOKIE_PATH_PREFIX = "/api/public"
 
 
 
-def _b64url(b: bytes) -> str:
-    return base64.urlsafe_b64encode(b).rstrip(b"=").decode("ascii")
-
-
-def _b64url_decode(s: str) -> bytes:
-    pad = "=" * (-len(s) % 4)
-    return base64.urlsafe_b64decode(s + pad)
+_b64url = signed_token.b64url
+_b64url_decode = signed_token.b64url_decode
 
 
 def _make_unlock_cookie(link_id: str, expires_at: datetime) -> str:
@@ -97,23 +90,16 @@ def _make_unlock_cookie(link_id: str, expires_at: datetime) -> str:
         {"link_id": link_id, "exp": int(to_epoch(expires_at))},
         separators=(",", ":"),
     ).encode("utf-8")
-    sig = hmac_mod.new(
-        settings.JWT_SECRET.encode("utf-8"), payload, hashlib.sha256
-    ).digest()
-    return f"{_b64url(payload)}.{_b64url(sig)}"
+    return f"{_b64url(payload)}.{signed_token.sign(payload)}"
 
 
 def _verify_unlock_cookie(value: str, link_id: str) -> bool:
     try:
         payload_b64, sig_b64 = value.split(".", 1)
         payload = _b64url_decode(payload_b64)
-        sig = _b64url_decode(sig_b64)
     except (ValueError, binascii.Error):
         return False
-    expected = hmac_mod.new(
-        settings.JWT_SECRET.encode("utf-8"), payload, hashlib.sha256
-    ).digest()
-    if not constant_time_equals(expected, sig):
+    if not constant_time_equals(signed_token.sign(payload), sig_b64):
         return False
     try:
         data = json.loads(payload.decode("utf-8"))
@@ -122,7 +108,7 @@ def _verify_unlock_cookie(value: str, link_id: str) -> bool:
     if data.get("link_id") != link_id:
         return False
     exp = int(data.get("exp", 0))
-    return exp > int(datetime.now(tz=timezone.utc).timestamp())
+    return exp > signed_token.now_epoch()
 
 
 def _is_unlocked(link: PublicLink, cookie_value: str | None) -> bool:
@@ -321,16 +307,7 @@ def public_download(
         or file.approval_state != FileApprovalState.approved
     ):
         raise AppError(404, "FILE_NOT_FOUND", "File not found in this public share.")
-    if file.state == FileState.uploading:
-        raise AppError(409, "STILL_UPLOADING", "File hasn't finished uploading yet.")
-    if file.state == FileState.ready_unscanned:
-        raise AppError(
-            425, "SCAN_IN_PROGRESS", "Antivirus scan still in progress; try again shortly."
-        )
-    if file.state == FileState.infected:
-        raise AppError(410, "FILE_INFECTED", "File was quarantined.")
-    if file.state == FileState.deleted:
-        raise AppError(410, "FILE_DELETED", "File has been deleted.")
+    file_svc.assert_state_servable(file)
 
     backend = get_storage_backend()
     if not file.storage_path or not backend.exists(file.storage_path):
@@ -448,28 +425,9 @@ def public_preview(
         or file.approval_state != FileApprovalState.approved
     ):
         raise AppError(404, "FILE_NOT_FOUND", "File not found in this public share.")
-    if file.state == FileState.uploading:
-        raise AppError(409, "STILL_UPLOADING", "File hasn't finished uploading yet.")
-    if file.state == FileState.ready_unscanned:
-        raise AppError(
-            425, "SCAN_IN_PROGRESS", "Antivirus scan still in progress; try again shortly."
-        )
-    if file.state == FileState.infected:
-        raise AppError(410, "FILE_INFECTED", "File was quarantined.")
-    if file.av_unscanned:
-        # `clean` here means "no verdict", not "a clean verdict" - clamd clamps
-        # MaxFileSize to ~2 GiB, so anything larger is served with an
-        # `unscanned` badge and never opened by the scanner. Downloading it is
-        # the visitor's informed choice; rendering it INLINE into their PDF
-        # viewer, one anonymous click from a public link, is not (audit #2).
-        raise AppError(
-            409,
-            "FILE_NOT_SCANNED",
-            "This file was too large to scan for viruses, so it can't be "
-            "previewed in the browser. Download it and check it locally.",
-        )
-    if file.state == FileState.deleted:
-        raise AppError(410, "FILE_DELETED", "File has been deleted.")
+    # The same gate as the authenticated preview, including the "no verdict is
+    # not a clean verdict" refusal for files clamd never read.
+    file_svc.assert_state_previewable(file)
     if not preview_svc.is_previewable(file.mime_type):
         raise AppError(415, "PREVIEW_UNSUPPORTED", "This file type can't be previewed.")
     if link.download_limit is not None and (link.downloads_remaining or 0) <= 0:

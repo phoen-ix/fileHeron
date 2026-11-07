@@ -54,8 +54,7 @@ def update_encryption_settings(
             key=settings_svc.Keys.STORAGE_ENCRYPT_AT_REST,
             value="true" if payload.enabled else "false",
             actor=admin,
-            request=request,
-        )
+            )
         record_audit_event(
             db,
             event_type=AuditEventType.encryption_at_rest_changed,

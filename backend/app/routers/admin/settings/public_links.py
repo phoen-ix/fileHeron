@@ -13,7 +13,6 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from ....dependencies import get_current_admin, get_db
-from ....middleware.errors import AppError
 from ....models.audit_log import AuditEventType
 from ....models.group import Group
 from ....models.user import User
@@ -24,6 +23,7 @@ from ....schemas.public_link import (
     UpdatePublicLinkPolicyRequest,
 )
 from ....services import external_recipients as external_svc
+from ....services import policy_gate
 from ....services import public_link as public_link_svc
 from ....services import settings as settings_svc
 from ....services.audit import record_audit_event
@@ -41,7 +41,7 @@ def get_public_link_policy(
     db: Session = Depends(get_db),
     _admin: User = Depends(get_current_admin),
 ) -> PublicLinkPolicyResponse:
-    mode, user_ids, group_ids = public_link_svc._resolve_policy(db)
+    mode, user_ids, group_ids = public_link_svc.resolve_policy(db)
     users = (
         db.query(User).filter(User.id.in_(user_ids)).all() if user_ids else []
     )
@@ -78,40 +78,9 @@ def update_public_link_policy(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ) -> PublicLinkPolicyResponse:
-    if payload.allowed_user_ids:
-        found_user_ids = {
-            row[0]
-            for row in db.query(User.id)
-            .filter(User.id.in_(payload.allowed_user_ids))
-            .all()
-        }
-        missing = [
-            uid for uid in payload.allowed_user_ids if uid not in found_user_ids
-        ]
-        if missing:
-            raise AppError(
-                400,
-                "USER_NOT_FOUND",
-                "One or more selected users do not exist.",
-                details={"missing_user_ids": missing},
-            )
-    if payload.allowed_group_ids:
-        found_group_ids = {
-            row[0]
-            for row in db.query(Group.id)
-            .filter(Group.id.in_(payload.allowed_group_ids))
-            .all()
-        }
-        missing = [
-            gid for gid in payload.allowed_group_ids if gid not in found_group_ids
-        ]
-        if missing:
-            raise AppError(
-                400,
-                "GROUP_NOT_FOUND",
-                "One or more selected groups do not exist.",
-                details={"missing_group_ids": missing},
-            )
+    policy_gate.assert_ids_exist(
+        db, user_ids=payload.allowed_user_ids, group_ids=payload.allowed_group_ids
+    )
 
     settings_svc.set_value(
         db,

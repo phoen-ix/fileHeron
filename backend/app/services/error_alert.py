@@ -514,7 +514,6 @@ def update_settings(
     http_4xx_codes: list[int],
     retention_days: int,
     actor: User,
-    request=None,
 ) -> dict[str, Any]:
     """Persist all error-alert + error-log settings. Caller commits. Numeric
     bounds are enforced by the registry's ``coerce_for_store`` (clamped)."""
@@ -536,31 +535,26 @@ def update_settings(
         (K.ERROR_LOG_CAPTURE_4XX, capture_4xx),
     ):
         settings_svc.set_value(
-            db, key=key, value="true" if flag else "false", actor=actor, request=request,
-        )
+            db, key=key, value="true" if flag else "false", actor=actor, )
     if source_worker is not None:
         # None = the caller never sent the field (a client older than it); leave
         # whatever is stored rather than resetting it to a value they never chose.
         settings_svc.set_value(
             db, key=K.ERROR_ALERT_SOURCE_WORKER,
             value="true" if source_worker else "false",
-            actor=actor, request=request,
-        )
+            actor=actor, )
     settings_svc.set_value(
         db, key=K.ERROR_ALERT_RECIPIENTS_MODE, value=recipients_mode,
-        actor=actor, request=request,
-    )
+        actor=actor, )
     settings_svc.set_value(
         db, key=K.ERROR_ALERT_CUSTOM_RECIPIENTS,
         value=",".join(_parse_recipients(",".join(custom_recipients))),
-        actor=actor, request=request,
-    )
+        actor=actor, )
     # Normalise the 4xx allowlist to a sorted CSV of valid 4xx codes.
     valid = sorted(error_log_svc.parse_4xx_codes(",".join(str(c) for c in http_4xx_codes)))
     settings_svc.set_value(
         db, key=K.ERROR_LOG_4XX_CODES, value=",".join(str(c) for c in valid),
-        actor=actor, request=request,
-    )
+        actor=actor, )
     for key, value in (
         (K.ERROR_ALERT_COOLDOWN_MINUTES, cooldown_minutes),
         (K.ERROR_ALERT_MAX_PER_HOUR, max_per_hour),
@@ -569,8 +563,7 @@ def update_settings(
         spec = settings_registry.BY_KEY[key]
         settings_svc.set_value(
             db, key=key, value=settings_registry.coerce_for_store(spec, value),
-            actor=actor, request=request,
-        )
+            actor=actor, )
     # Drop the middleware's cached 4xx-capture flag so the change applies at once.
-    error_log_svc._reset_cache()
+    error_log_svc.reset_cache()
     return get_settings(db)

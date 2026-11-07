@@ -158,7 +158,7 @@ async def test_error_log_keys_reset_the_capture_cache(client, login_as, make_use
     from app.services import error_log as error_log_svc
 
     calls: list[int] = []
-    monkeypatch.setattr(error_log_svc, "_reset_cache", lambda: calls.append(1))
+    monkeypatch.setattr(error_log_svc, "reset_cache", lambda: calls.append(1))
     make_user(email="adm3@test.local", role=UserRole.admin, password="Pass12345678!")
     token, _ = await login_as("adm3@test.local", "Pass12345678!")
     h = {"Authorization": f"Bearer {token}"}

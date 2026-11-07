@@ -24,7 +24,7 @@ from ..models.inbound_attachment import AttachmentAVState, InboundAttachment
 from ..redis_client import get_redis, sync
 from ..services import av_scan, file_encryption
 from ..services import storage_backend as storage_svc
-from ..services.cron_tracker import track_cron
+from ..services.cron_tracker import exc_summary, mark_failed, track_cron
 from ..utils.timeutil import utc_now_aware
 
 logger = logging.getLogger("fileheron.workers.rescan_inbound_attachments")
@@ -79,6 +79,8 @@ def _deferred_ids() -> set[int]:
 async def rescan_inbound_attachments(_ctx) -> dict:
     db = SessionLocal()
     clean = infected = still_pending = 0
+    errors = 0
+    first_error: str | None = None
     try:
         # RANDOM order, not the table's natural one. `pending` has no terminal
         # state for an attachment that can never be scanned - a blob lost to a
@@ -128,6 +130,8 @@ async def rescan_inbound_attachments(_ctx) -> dict:
                 )
                 break
             except Exception as e:
+                errors += 1
+                first_error = first_error or f"attachment {att.id}: {exc_summary(e)}"
                 logger.error(
                     "rescan_inbound_attachments: read/scan failed att=%s: %s", att.id, e
                 )
@@ -142,7 +146,11 @@ async def rescan_inbound_attachments(_ctx) -> dict:
                 att.av_state = AttachmentAVState.infected
                 infected += 1
             else:
-                # Inconclusive ('error') - leave pending and retry next run.
+                # Inconclusive ('error') - leave pending and retry next run. Still
+                # a failure of THIS run: the attachment stays undownloadable, and
+                # nothing else ever surfaces that to an admin.
+                errors += 1
+                first_error = first_error or f"attachment {att.id}: scan returned {result.state}"
                 _record_failure(att.id)
                 still_pending += 1
 
@@ -152,12 +160,15 @@ async def rescan_inbound_attachments(_ctx) -> dict:
                 "rescan_inbound_attachments: clean=%d infected=%d still_pending=%d",
                 clean, infected, still_pending,
             )
-        return {
+        out = {
             "rescanned": clean + infected,
             "clean": clean,
             "infected": infected,
             "still_pending": still_pending,
         }
+        if errors:
+            return mark_failed(out, f"{errors} attachment(s) could not be scanned: {first_error}")
+        return out
     except Exception:
         db.rollback()
         raise

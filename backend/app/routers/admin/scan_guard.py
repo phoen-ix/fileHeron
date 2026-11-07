@@ -208,7 +208,7 @@ def create_block(
         request=request,
     )
     db.commit()
-    guard_svc._reset_cache()
+    guard_svc.reset_cache()
     return _to_row(row)
 
 
@@ -227,7 +227,7 @@ def release_block(
     db.commit()
     # So the admin's own release is effective immediately rather than after the
     # cache TTL - which matters most when they are unblocking themselves.
-    guard_svc._reset_cache()
+    guard_svc.reset_cache()
 
 
 @router.post("/scan-guard/blocks/release-all", response_model=ReleaseAllResponse)
@@ -238,7 +238,7 @@ def release_all_blocks(
 ) -> ReleaseAllResponse:
     released = guard_svc.release_all(db, actor_id=admin.id, request=request)
     db.commit()
-    guard_svc._reset_cache()
+    guard_svc.reset_cache()
     return ReleaseAllResponse(released=released)
 
 
@@ -259,7 +259,7 @@ def allow_block(
         db, block_id=block_id, actor=admin, request=request
     )
     db.commit()
-    guard_svc._reset_cache()
+    guard_svc.reset_cache()
     return AllowBlockResponse(block=_to_row(row), allowlist=entries["entries"])
 
 
@@ -292,7 +292,7 @@ def add_allowlist_entry(
         raise AppError(
             409, "CONFLICT_RETRY", "The allowlist changed at the same time. Retry."
         ) from None
-    guard_svc._reset_cache()
+    guard_svc.reset_cache()
     return AllowlistResponse(**guard_svc.allowlist_entries(db))
 
 
@@ -308,7 +308,7 @@ def remove_allowlist_entry(
 ) -> AllowlistResponse:
     guard_svc.allowlist_remove(db, entry=entry, actor=admin, request=request)
     db.commit()
-    guard_svc._reset_cache()
+    guard_svc.reset_cache()
     return AllowlistResponse(**guard_svc.allowlist_entries(db))
 
 

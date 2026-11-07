@@ -822,7 +822,7 @@ def _keep_existing_ids(val, existing: set[int], key: str, warnings: list[str]):
     return json.dumps(kept)
 
 
-def _resolve_log_user(bid, user_id_map, has_users, db, *, existing_ids):
+def _resolve_log_user(bid, user_id_map, has_users, *, existing_ids):
     if bid is None:
         return None
     if has_users:
@@ -850,7 +850,7 @@ def _restore_log(
         d = dict(d)
         if user_fk and user_fk in d:
             resolved = _resolve_log_user(
-                d.get(user_fk), user_id_map, has_users, db, existing_ids=existing_ids
+                d.get(user_fk), user_id_map, has_users, existing_ids=existing_ids
             )
             if required_user and resolved is None:
                 continue
@@ -966,7 +966,7 @@ def _import_logo(db, logo, *, actor, warnings):
         warnings.append("failed to restore branding logo bytes")
 
 
-def _purge_user(db, user, *, actor, request) -> str:
+def _purge_user(db, user, *, actor) -> str:
     """Hard-delete where FKs allow (true purge); fall back to anonymise (erasure)
     when transactional references block the delete."""
     # Unlink the bytes of every file that would otherwise be cascade-deleted with
@@ -1058,7 +1058,9 @@ def _validate_backup_payload(p: dict, actor: User) -> None:
             _ = (c["client_user_id"], c["employee_user_id"])
         for d in users.get("users", []):
             if not isinstance(d.get("email"), str):
-                raise ValueError("a user row's 'email' is not a string")
+                # ValueError like every other shape complaint here: the import
+                # route maps it to one 400, a TypeError would be a 500.
+                raise ValueError("a user row's 'email' is not a string")  # noqa: TRY004
         for c in users.get("user_webauthn_credentials", []):
             _build(UserWebAuthnCredential, c, overrides={"user_id": 0},
                    skip=frozenset({"id", "user_id"}))
@@ -1140,7 +1142,7 @@ def _reconcile_after_import(
     # 1. The scan-guard process cache holds the PRE-import snapshot for up to
     #    _CACHE_TTL_SEC. Cheap, and everything below reads the new values.
     try:
-        scan_guard_svc._reset_cache()
+        scan_guard_svc.reset_cache()
     except Exception:
         logger.exception("config import: scan-guard cache reset failed")
 
@@ -1184,7 +1186,7 @@ def _reconcile_after_import(
                     f"instance's, so {released} live network block(s) were "
                     "released - their recorded network no longer matches"
                 )
-            scan_guard_svc._reset_cache()
+            scan_guard_svc.reset_cache()
     except Exception:
         db.rollback()
         logger.exception("config import: network-block reconciliation failed")
@@ -1213,10 +1215,9 @@ def _reconcile_after_import(
                 key=settings_svc.Keys.SCAN_GUARD_ENABLED,
                 value="false",
                 actor=actor,
-                request=request,
-            )
+                )
             db.commit()
-            scan_guard_svc._reset_cache()
+            scan_guard_svc.reset_cache()
             summary.warnings.append(
                 "the imported scan-guard config was enabled with no signals on, "
                 "which can never fire; it was turned OFF - re-enable it with at "
@@ -1564,7 +1565,7 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
                 {"created_by_id": actor.id}, synchronize_session=False
             )
             db.flush()
-            outcome = _purge_user(db, u, actor=actor, request=request)
+            outcome = _purge_user(db, u, actor=actor)
             if outcome == "deferred":
                 deferred_erasures.append(u.id)
             summary.purged_users.append(

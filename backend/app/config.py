@@ -485,7 +485,7 @@ class Settings(BaseSettings):
         )
 
     @property
-    def _env_normalized(self) -> str:
+    def env_normalized(self) -> str:
         return self.ENVIRONMENT.strip().lower()
 
     @property
@@ -494,7 +494,7 @@ class Settings(BaseSettings):
         # mixed case so a typo like "Production " doesn't silently disable
         # COOKIE_SECURE force-true, AV_SKIP fail-fast, and the docs-disable
         # below.
-        return self._env_normalized in _PRODUCTION_ALIASES
+        return self.env_normalized in _PRODUCTION_ALIASES
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
@@ -522,7 +522,7 @@ if os.environ.get("PYTEST_CURRENT_TEST") is None:
     # Hard-exit on a misspelled ENVIRONMENT so the prod safety rails below
     # aren't silently disabled (e.g. ENVIRONMENT="Production " left
     # is_production False and shipped insecure cookies + docs exposed).
-    if settings._env_normalized not in _KNOWN_ENVIRONMENTS:
+    if settings.env_normalized not in _KNOWN_ENVIRONMENTS:
         sys.exit(
             f"FATAL: ENVIRONMENT={settings.ENVIRONMENT!r} is not recognised. "
             f"Use one of: {', '.join(sorted(_KNOWN_ENVIRONMENTS))}."

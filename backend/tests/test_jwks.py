@@ -1,7 +1,7 @@
 """JWKS cache + IdP key-rotation handling.
 
 Pure unit coverage - we don't talk to a real IdP. `_fetch_jwks` and
-`oidc._discovery` are monkeypatched per test so we exercise the cache
+`oidc.discovery` are monkeypatched per test so we exercise the cache
 state machine without httpx round-trips.
 """
 from __future__ import annotations
@@ -47,7 +47,7 @@ async def test_first_call_populates_cache(monkeypatch):
         fetched.append(uri)
         return {"kid-a": _StubKey("key-a")}
 
-    monkeypatch.setattr(oidc_svc, "_discovery", fake_discovery)
+    monkeypatch.setattr(oidc_svc, "discovery", fake_discovery)
     monkeypatch.setattr(jwks_svc, "_fetch_jwks", fake_fetch)
 
     key = await jwks_svc.get_signing_key(provider, "kid-a")
@@ -72,7 +72,7 @@ async def test_unknown_kid_triggers_refresh(monkeypatch):
             return {"kid-a": _StubKey("key-a")}
         return {"kid-a": _StubKey("key-a"), "kid-b": _StubKey("key-b")}
 
-    monkeypatch.setattr(oidc_svc, "_discovery", fake_discovery)
+    monkeypatch.setattr(oidc_svc, "discovery", fake_discovery)
     monkeypatch.setattr(jwks_svc, "_fetch_jwks", fake_fetch)
 
     # First call caches kid-a.
@@ -94,7 +94,7 @@ async def test_still_unknown_kid_after_refresh_raises(monkeypatch):
     async def fake_fetch(_uri):
         return {"kid-a": _StubKey("key-a")}  # never has kid-z
 
-    monkeypatch.setattr(oidc_svc, "_discovery", fake_discovery)
+    monkeypatch.setattr(oidc_svc, "discovery", fake_discovery)
     monkeypatch.setattr(jwks_svc, "_fetch_jwks", fake_fetch)
 
     with pytest.raises(AppError) as exc:
@@ -123,8 +123,8 @@ async def test_missing_jwks_uri_in_discovery_raises(monkeypatch):
     async def fake_discovery(_p):
         return {}  # no jwks_uri
 
-    monkeypatch.setattr(oidc_svc, "_discovery", fake_discovery)
-    jwks_svc._reset_cache()
+    monkeypatch.setattr(oidc_svc, "discovery", fake_discovery)
+    jwks_svc.reset_cache()
 
     with pytest.raises(AppError) as exc:
         await jwks_svc.get_signing_key(provider, "kid-a")
@@ -145,7 +145,7 @@ async def test_jwks_endpoint_http_error_raises(monkeypatch):
     async def fake_fetch(_uri):
         raise AppError(503, "OIDC_JWKS_UNAVAILABLE", "boom")
 
-    monkeypatch.setattr(oidc_svc, "_discovery", fake_discovery)
+    monkeypatch.setattr(oidc_svc, "discovery", fake_discovery)
     monkeypatch.setattr(jwks_svc, "_fetch_jwks", fake_fetch)
 
     with pytest.raises(AppError) as exc:
@@ -157,7 +157,7 @@ async def test_jwks_endpoint_http_error_raises(monkeypatch):
 
 def test_reset_cache_clears(monkeypatch):
     jwks_svc._cache["x"] = (0.0, {})
-    jwks_svc._reset_cache()
+    jwks_svc.reset_cache()
     assert jwks_svc._cache == {}
 
 

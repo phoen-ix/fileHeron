@@ -149,7 +149,7 @@ def test_one_bad_message_does_not_stop_the_poll(db, imap_enabled, monkeypatch):
 
     session = _FakeSession({1: POISON_DATE, 2: GOOD})
     result = imap_poll_svc.run_poll(
-        manual=False, db=db, session_opener=lambda _cfg: session
+        db=db, session_opener=lambda _cfg: session
     )
 
     assert result["ok"] is True
@@ -169,7 +169,7 @@ def test_highwater_advances_past_an_uningestable_message(db, imap_enabled, monke
 
     session = _FakeSession({7: POISON_DATE, 8: POISON_8BIT})
     result = imap_poll_svc.run_poll(
-        manual=False, db=db, session_opener=lambda _cfg: session
+        db=db, session_opener=lambda _cfg: session
     )
 
     assert result["ok"] is True

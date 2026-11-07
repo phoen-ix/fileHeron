@@ -10,7 +10,7 @@ miss = one extra HTTPS round-trip; JWKS endpoints are well-cached at
 the CDN edge so foreground refresh is fine at our scale. Per-provider
 TTL bounds staleness when an IdP rotates without bumping kid.
 
-Tests reset the cache via `_reset_cache()` (see conftest autouse).
+Tests reset the cache via `reset_cache()` (see conftest autouse).
 """
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ _JWKS_MAX_BYTES = 1 * 1024 * 1024
 _cache: dict[str, tuple[float, dict[str, jwt.PyJWK]]] = {}
 
 
-def _reset_cache() -> None:
+def reset_cache() -> None:
     """Test hook + provider-edit hook."""
     _cache.clear()
 
@@ -90,8 +90,15 @@ async def _fetch_jwks(jwks_uri: str) -> dict[str, jwt.PyJWK]:
     return keys
 
 
+def forget(provider_id: str) -> None:
+    """Drop a provider's cached key set - the OIDC admin calls it when the
+    provider's discovery document is re-read, since a rotated JWKS tends to
+    travel with it."""
+    _cache.pop(provider_id, None)
+
+
 async def _load(provider: OIDCProvider) -> dict[str, jwt.PyJWK]:
-    doc: dict[str, Any] = await oidc_svc._discovery(provider)
+    doc: dict[str, Any] = await oidc_svc.discovery(provider)
     jwks_uri = doc.get("jwks_uri")
     if not jwks_uri:
         raise AppError(

@@ -108,20 +108,18 @@ def update_cron(
         return f"cron.{name}.{field}"
 
     en = "true" if payload.enabled else "false"
-    settings_svc.set_value(db, key=k("enabled"), value=en, actor=admin, request=request)
-    settings_svc.set_value(db, key=k("kind"), value=payload.kind, actor=admin, request=request)
+    settings_svc.set_value(db, key=k("enabled"), value=en, actor=admin)
+    settings_svc.set_value(db, key=k("kind"), value=payload.kind, actor=admin)
     settings_svc.set_value(
         db, key=k("interval_minutes"), value=str(payload.interval_minutes),
-        actor=admin, request=request,
-    )
+        actor=admin, )
     settings_svc.set_value(
-        db, key=k("daily_time"), value=payload.daily_time, actor=admin, request=request
+        db, key=k("daily_time"), value=payload.daily_time, actor=admin
     )
     settings_svc.set_value(
         db, key=k("alert_on_failure"),
         value="true" if payload.alert_on_failure else "false",
-        actor=admin, request=request,
-    )
+        actor=admin, )
     record_audit_event(
         db,
         event_type=AuditEventType.cron_schedule_changed,

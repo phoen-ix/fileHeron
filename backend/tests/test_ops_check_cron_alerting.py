@@ -38,7 +38,7 @@ from app.workers import ops_check as ops
 def quiet_deps(monkeypatch):
     """Silence the three checks that already alert, so a dispatch in a test can
     only have come from the cron check."""
-    async def _av_ok(_db):
+    async def _av_ok():
         return None
 
     monkeypatch.setattr(ops, "_check_av", _av_ok)
@@ -70,7 +70,8 @@ async def test_a_repeatedly_failing_cron_alerts_an_admin(
 
     sent: list = []
     monkeypatch.setattr(
-        ops, "dispatch", lambda db, *, user, category, payload, **kw: sent.append(payload)
+        "app.services.notification.dispatch",
+        lambda db, *, user, category, payload, **kw: sent.append(payload),
     )
 
     result = await ops.ops_check({})
@@ -92,7 +93,8 @@ async def test_one_transient_failure_does_not_alert(
 
     sent: list = []
     monkeypatch.setattr(
-        ops, "dispatch", lambda db, *, user, category, payload, **kw: sent.append(payload)
+        "app.services.notification.dispatch",
+        lambda db, *, user, category, payload, **kw: sent.append(payload),
     )
 
     result = await ops.ops_check({})
@@ -111,7 +113,8 @@ async def test_old_failures_fall_out_of_the_window(
 
     sent: list = []
     monkeypatch.setattr(
-        ops, "dispatch", lambda db, *, user, category, payload, **kw: sent.append(payload)
+        "app.services.notification.dispatch",
+        lambda db, *, user, category, payload, **kw: sent.append(payload),
     )
 
     result = await ops.ops_check({})
@@ -137,7 +140,8 @@ async def test_successful_runs_are_not_counted(db, make_user, quiet_deps, monkey
 
     sent: list = []
     monkeypatch.setattr(
-        ops, "dispatch", lambda db, *, user, category, payload, **kw: sent.append(payload)
+        "app.services.notification.dispatch",
+        lambda db, *, user, category, payload, **kw: sent.append(payload),
     )
     result = await ops.ops_check({})
     assert sent == []
@@ -156,4 +160,4 @@ def test_the_docstring_no_longer_implies_coverage_it_lacks():
     # and it must actually be wired into the run, not merely defined
     body = inspect.getsource(ops.ops_check)
     assert "_check_failing_crons" in body
-    assert 'reason="cron_failing"' in body
+    assert '"cron_failing"' in body

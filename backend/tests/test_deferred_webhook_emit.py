@@ -95,7 +95,7 @@ def test_an_ops_alert_reaches_the_webhook_queue(db, make_user, collected, monkey
     _active_wildcard(db)
     db.commit()
 
-    monkeypatch.setattr(ops, "dispatch", lambda *a, **kw: None)
+    monkeypatch.setattr("app.services.notification.dispatch", lambda *a, **kw: None)
     ops._alert_admins(db, reason="redis_unhealthy", detail="probe")
     db.commit()
 

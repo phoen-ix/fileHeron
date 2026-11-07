@@ -111,7 +111,7 @@ def update_advanced_settings(
     )
 
     for key, stored in to_set.items():
-        settings_svc.set_value(db, key=key, value=stored, actor=admin, request=request)
+        settings_svc.set_value(db, key=key, value=stored, actor=admin)
     settings_svc.audit_settings_change(
         db, actor=admin, changed_keys=to_set.keys(), request=request
     )
@@ -131,7 +131,7 @@ def update_advanced_settings(
     # writer did not, so a change here lagged a minute. Same reset, same trigger.
     if any(key.startswith("error_log.") for key in to_set):
         from ....services import error_log as error_log_svc
-        error_log_svc._reset_cache()
+        error_log_svc.reset_cache()
 
     db.commit()
     return get_advanced_settings(db=db, _admin=admin)

@@ -30,7 +30,7 @@ from ..config import settings
 from ..dependencies import get_db
 from ..middleware.errors import AppError
 from ..services import auth as auth_svc
-from ..services import jwt_session, settings_registry
+from ..services import jwt_session
 from ..services import oidc as oidc_svc
 from ..services import oidc_admin as oidc_admin_svc
 from ..services import rate_limit as rate_limit_svc
@@ -178,15 +178,7 @@ async def _callback_inner(
     db.commit()
 
     response = RedirectResponse(url=f"{site_svc.get_site_url(db)}/", status_code=302)
-    response.set_cookie(
-        key="fh_refresh",
-        value=refresh_plain,
-        max_age=settings_registry.effective(db, settings_registry.K.REFRESH_TOKEN_EXPIRE_DAYS) * 24 * 3600,
-        httponly=True,
-        secure=settings.COOKIE_SECURE,
-        samesite="lax",
-        path="/api/auth",
-    )
+    jwt_session.set_refresh_cookie(response, refresh_plain, db)
     # No access-token cookie here. There used to be a `fh_oidc_access` cookie
     # carrying the raw JWT with httponly=False and path=/, commented "SPA reads
     # + clears on landing" - but the SPA never read it and never touches

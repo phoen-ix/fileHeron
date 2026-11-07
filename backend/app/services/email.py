@@ -102,7 +102,7 @@ _LAYOUT_WRAP = _env.from_string(
 )
 
 
-def _render(
+def render(
     locale: Locale | str, slug: str, kind: str, ctx: dict,
     *, app_url: str | None = None, site_timezone: str | None = None,
     app_name: str | None = None,
@@ -125,7 +125,7 @@ def _render(
         template = _env.get_template(fallback)
     return template.render(
         **ctx,
-        app_name=app_name if app_name else settings.APP_NAME,
+        app_name=app_name or settings.APP_NAME,
         app_url=app_url if app_url is not None else settings.APP_URL,
         locale=code,
         site_timezone=site_timezone or DEFAULT_TIMEZONE,
@@ -134,7 +134,7 @@ def _render(
     )
 
 
-def _resolve_subject(
+def resolve_subject(
     locale_code: str, slug: str, ctx: dict, app_name: str | None = None
 ) -> str:
     """Pull the subject line from subjects.json with str.format(**ctx).
@@ -178,7 +178,7 @@ def _normalize_text(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", text).rstrip("\n") + "\n"
 
 
-def _sanitize_html(raw_html: str) -> str:
+def sanitize_html(raw_html: str) -> str:
     return nh3.clean(
         raw_html,
         tags=_ALLOWED_TAGS,
@@ -234,7 +234,7 @@ def _wrap_layout(
     return _LAYOUT_WRAP.render(
         fragment=fragment,
         email_subject=subject,
-        app_name=app_name if app_name else settings.APP_NAME,
+        app_name=app_name or settings.APP_NAME,
         app_url=settings.APP_URL,
         locale=locale_code,
         site_timezone=site_timezone or DEFAULT_TIMEZONE,
@@ -372,7 +372,7 @@ def render_override(
     from . import email_placeholders as ep
 
     eff_app_url = app_url if app_url is not None else settings.APP_URL
-    eff_app_name = app_name if app_name else settings.APP_NAME
+    eff_app_name = app_name or settings.APP_NAME
     eff_tz = site_timezone or DEFAULT_TIMEZONE
     text_values, html_values = ep.build_substitutions(
         slug, ctx, locale_code=locale_code, app_url=eff_app_url,
@@ -380,7 +380,7 @@ def render_override(
     )
     url_toks = ep.url_tokens(slug)
 
-    raw_subject = override.subject if override.subject else _resolve_subject(
+    raw_subject = override.subject or resolve_subject(
         locale_code, slug, ctx, app_name
     )
     subject = _sub(raw_subject, text_values)
@@ -472,10 +472,10 @@ def render_email(
             app_url=app_url, site_timezone=site_timezone, app_name=app_name,
         )
     else:
-        subject = _resolve_subject(code, slug, ctx, app_name)
-        text = _render(code, slug, "txt", ctx, app_url=app_url, site_timezone=site_timezone, app_name=app_name)
+        subject = resolve_subject(code, slug, ctx, app_name)
+        text = render(code, slug, "txt", ctx, app_url=app_url, site_timezone=site_timezone, app_name=app_name)
         try:
-            html = _render(code, slug, "html", ctx, app_url=app_url, site_timezone=site_timezone, app_name=app_name)
+            html = render(code, slug, "html", ctx, app_url=app_url, site_timezone=site_timezone, app_name=app_name)
         except TemplateNotFound:
             html = None
         except Exception:
@@ -547,7 +547,7 @@ def resolve_smtp_config(db: Session) -> SmtpConfig:
     )
 
 
-async def _send_resolved(
+async def send_resolved(
     *,
     to: str,
     subject: str,
@@ -692,7 +692,7 @@ def _smtp_error_hint(exc: Exception) -> str | None:
     return None
 
 
-def _smtp_error_payload(exc: Exception) -> dict:
+def smtp_error_payload(exc: Exception) -> dict:
     """Convert any aiosmtplib / OSError exception into the structured
     diagnostic the admin UI renders. Pulls SMTP code if available."""
     out: dict = {
@@ -732,10 +732,10 @@ async def test_send(
     ctx = {"now": datetime.now(tz=timezone.utc).replace(microsecond=0)}
     locale_code = "en"
     tz = site_svc.get_site_timezone(db)
-    subject = _resolve_subject(locale_code, "smtp_test", ctx)
-    text = _render(locale_code, "smtp_test", "txt", ctx, site_timezone=tz)
+    subject = resolve_subject(locale_code, "smtp_test", ctx)
+    text = render(locale_code, "smtp_test", "txt", ctx, site_timezone=tz)
     try:
-        html = _render(locale_code, "smtp_test", "html", ctx, site_timezone=tz)
+        html = render(locale_code, "smtp_test", "html", ctx, site_timezone=tz)
     except TemplateNotFound:
         html = None
     except Exception:
@@ -747,7 +747,7 @@ async def test_send(
         )
     except Exception as exc:  # noqa: BLE001 - surface every error to the admin
         _log_test_send(to, subject, text, html, exc=exc)
-        return _smtp_error_payload(exc)
+        return smtp_error_payload(exc)
     _log_test_send(to, subject, text, html, exc=None)
     return {
         "ok": True,
@@ -823,7 +823,7 @@ async def send_password_reset_email(
         locale, "reset_password", ctx, app_url=base, site_timezone=tz, db=db,
         recipient_email=to, category="reset_password",
     )
-    await _send_resolved(
+    await send_resolved(
         to=to, subject=subject, text_body=body, html_body=html, category="reset_password"
     )
 
@@ -848,7 +848,7 @@ async def send_verification_email(
         locale, "verify", ctx, app_url=base, site_timezone=tz, db=db,
         recipient_email=to, category="verify",
     )
-    await _send_resolved(
+    await send_resolved(
         to=to, subject=subject, text_body=body, html_body=html, category="verify"
     )
 
@@ -869,7 +869,7 @@ async def send_invite_email(
         locale, "invite", ctx, app_url=base, site_timezone=tz, db=db,
         recipient_email=to, category="invite",
     )
-    await _send_resolved(
+    await send_resolved(
         to=to, subject=subject, text_body=body, html_body=html, category="invite"
     )
 
@@ -897,7 +897,7 @@ async def send_lockout_warning_email(
         locale, "lockout_warning", ctx, app_url=base, site_timezone=tz, db=db,
         recipient_email=to, category="lockout_warning",
     )
-    await _send_resolved(
+    await send_resolved(
         to=to, subject=subject, text_body=body, html_body=html, category="lockout_warning"
     )
 
@@ -926,7 +926,7 @@ async def send_password_changed_email(
     subject, body, html = render_email(
         locale, "password_changed", ctx, app_url=base, site_timezone=tz, db=db,
     )
-    await _send_resolved(
+    await send_resolved(
         to=to, subject=subject, text_body=body, html_body=html, category="password_changed"
     )
 
@@ -957,7 +957,7 @@ async def send_email_change_confirm(
         locale, "email_change_confirm", ctx, app_url=base, site_timezone=tz, db=db,
         recipient_email=to, category="email_change_confirm",
     )
-    await _send_resolved(
+    await send_resolved(
         to=to, subject=subject, text_body=body, html_body=html, category="email_change_confirm"
     )
 
@@ -982,7 +982,7 @@ async def send_email_change_verify_old(
         locale, "email_change_verify_old", ctx, app_url=base, site_timezone=tz, db=db,
         recipient_email=to, category="email_change_verify_old",
     )
-    await _send_resolved(
+    await send_resolved(
         to=to, subject=subject, text_body=body, html_body=html, category="email_change_verify_old"
     )
 
@@ -1010,7 +1010,7 @@ async def send_email_change_alert(
         locale, "email_change_alert", ctx, app_url=base, site_timezone=tz, db=db,
         recipient_email=to, category="email_change_alert",
     )
-    await _send_resolved(
+    await send_resolved(
         to=to, subject=subject, text_body=body, html_body=html,
         category="email_change_alert", recipient_user_id=user_id,
     )
@@ -1035,7 +1035,7 @@ async def send_email_change_completed(
         locale, "email_change_completed", ctx, app_url=base, site_timezone=tz, db=db,
         recipient_email=to, category="email_change_completed",
     )
-    await _send_resolved(
+    await send_resolved(
         to=to, subject=subject, text_body=body, html_body=html,
         category="email_change_completed", recipient_user_id=user_id,
     )

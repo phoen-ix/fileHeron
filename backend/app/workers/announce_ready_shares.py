@@ -22,7 +22,7 @@ from ..database import SessionLocal
 from ..models.file import File
 from ..models.share import Share, ShareState
 from ..services import share as share_svc
-from ..services.cron_tracker import track_cron
+from ..services.cron_tracker import exc_summary, mark_failed, track_cron
 from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.workers.announce_ready_shares")
@@ -36,6 +36,8 @@ _LOOKBACK_HOURS = 48
 async def announce_ready_shares(_ctx) -> dict:
     db = SessionLocal()
     sent = 0
+    failed = 0
+    first_error: str | None = None
     try:
         candidates = (
             db.query(Share.id)
@@ -66,12 +68,17 @@ async def announce_ready_shares(_ctx) -> dict:
                     sent += 1
                 else:
                     db.rollback()
-            except Exception:
+            except Exception as exc:
                 db.rollback()
+                failed += 1
+                first_error = first_error or exc_summary(exc)
                 logger.exception("announce sweep failed for share=%s", share_id)
         if sent:
             logger.info("announce_ready_shares: announced %d share(s)", sent)
-        return {"announced": sent, "candidates": len(candidates)}
+        out = {"announced": sent, "candidates": len(candidates)}
+        if failed:
+            return mark_failed(out, f"{failed} share(s) could not be announced: {first_error}")
+        return out
     except Exception:
         db.rollback()
         raise

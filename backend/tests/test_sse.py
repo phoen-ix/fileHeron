@@ -5,7 +5,7 @@ here - it would need a real Redis subscriber. These tests cover the
 producer-side invariants the dispatcher relies on.
 
 Note: conftest has an autouse `_no_op_sse_publish` that replaces
-`sse.publish` / `sse.publish_sync` so other tests don't fire real
+`sse.publish` / `sse.publish_many_sync` so other tests don't fire real
 network traffic. We capture references to the *real* implementations
 at module-load time, before any fixture runs, so this file can still
 exercise them against mocked Redis.
@@ -20,7 +20,7 @@ from app.services import sse as sse_svc
 
 # Captured before the conftest autouse monkeypatch swaps these out.
 _REAL_PUBLISH = sse_svc.publish
-_REAL_PUBLISH_SYNC = sse_svc.publish_sync
+_REAL_PUBLISH_MANY_SYNC = sse_svc.publish_many_sync
 
 
 def test_channel_naming():
@@ -72,8 +72,8 @@ async def test_publish_channel_isolation(monkeypatch):
     assert sent == ["fh:sse:1", "fh:sse:2", "fh:sse:1"]
 
 
-def test_publish_sync_swallows_redis_down(monkeypatch):
-    """SSE is best-effort. publish_sync must never raise back to the
+def test_publish_many_sync_swallows_redis_down(monkeypatch):
+    """SSE is best-effort. The sync publisher must never raise back to the
     caller (notification dispatcher) - the durable in-app row already
     landed by the time we get here."""
 
@@ -85,18 +85,17 @@ def test_publish_sync_swallows_redis_down(monkeypatch):
             pass
 
     monkeypatch.setattr(sse_svc, "_redis", lambda: _Boom())
-    # Also restore the real publish - publish_sync calls publish internally
-    # via asyncio.run / loop.create_task; the conftest noop would mask the
+    # Also restore the real publish - the conftest noop would mask the
     # error-handling we want to exercise.
     monkeypatch.setattr(sse_svc, "publish", _REAL_PUBLISH)
 
-    # No event loop running - publish_sync uses asyncio.run internally.
-    _REAL_PUBLISH_SYNC(1, {"event": "x"})  # must not raise
+    # No event loop running - the sync publisher uses asyncio.run internally.
+    _REAL_PUBLISH_MANY_SYNC([(1, {"event": "x"})])  # must not raise
 
 
 @pytest.mark.asyncio
-async def test_publish_sync_inside_running_loop_does_not_raise(monkeypatch):
-    """When called from within an event loop, publish_sync schedules
+async def test_publish_many_sync_inside_running_loop_does_not_raise(monkeypatch):
+    """When called from within an event loop, the sync publisher schedules
     the task and returns. We hold a strong reference in
     `_pending_publish_tasks` so the GC doesn't reap mid-flight."""
 
@@ -110,7 +109,7 @@ async def test_publish_sync_inside_running_loop_does_not_raise(monkeypatch):
     monkeypatch.setattr(sse_svc, "_redis", lambda: _FakeRedis())
     monkeypatch.setattr(sse_svc, "publish", _REAL_PUBLISH)
 
-    _REAL_PUBLISH_SYNC(99, {"event": "in-loop"})
+    _REAL_PUBLISH_MANY_SYNC([(99, {"event": "in-loop"})])
     # Yield so the scheduled task can run.
     await asyncio.sleep(0)
     await asyncio.sleep(0)

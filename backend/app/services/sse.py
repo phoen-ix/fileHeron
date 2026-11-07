@@ -105,8 +105,8 @@ def _redis() -> aioredis.Redis:
     )
 
 
-# Strong references for fire-and-forget tasks scheduled by
-# `publish_sync`. asyncio doesn't keep a reference to tasks created
+# Strong references for the fire-and-forget tasks the sync publishers
+# schedule from inside a running loop. asyncio doesn't keep a reference to tasks created
 # via `loop.create_task()`, so the GC could collect one mid-execution
 # and inject GeneratorExit into the running coroutine. We park the
 # task here and discard on completion.
@@ -129,37 +129,6 @@ async def publish(user_id: int, event: dict) -> None:
         await r.aclose()
 
 
-def publish_sync(user_id: int, event: dict) -> None:
-    """Sync wrapper for callers in non-async contexts (the notification
-    dispatcher, called from sync FastAPI routes that run in the
-    threadpool). Failures are swallowed - SSE delivery is best-effort;
-    the in-app row is the durable record."""
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-    if loop is None:
-        try:
-            asyncio.run(publish(user_id, event))
-        except Exception:
-            logger.warning(
-                "SSE publish failed for user_id=%s", user_id, exc_info=True
-            )
-        return
-    # Already inside an event loop (tests, async route): schedule and
-    # forget. The task is fire-and-forget; we don't await it, but we
-    # do hold a strong reference (see `_pending_publish_tasks` above)
-    # so the GC doesn't kill it mid-flight.
-    try:
-        _track_publish_task(loop.create_task(publish(user_id, event)))
-    except Exception:
-        logger.warning(
-            "SSE publish (loop variant) failed for user_id=%s",
-            user_id,
-            exc_info=True,
-        )
-
-
 async def publish_many(events: list[tuple[int, dict]]) -> None:
     """Push a whole notification fan-out over ONE connection and one pipeline.
 
@@ -180,7 +149,7 @@ async def publish_many(events: list[tuple[int, dict]]) -> None:
 
 
 def publish_many_sync(events: list[tuple[int, dict]]) -> None:
-    """`publish_sync` for a batch: one event loop and one connection when called
+    """The sync publisher for a batch: one event loop and one connection when called
     from the threadpool, one tracked task when a loop is already running.
     Failures are logged, never raised - the in-app rows are the record."""
     if not events:
@@ -223,7 +192,7 @@ async def publish_admin(event: dict) -> None:
 
 
 def publish_admin_sync(event: dict) -> None:
-    """Sync wrapper for the admin channel - mirrors `publish_sync`'s
+    """Sync wrapper for the admin channel - mirrors `publish_many_sync`'s
     loop-aware behavior so callers in worker / sync contexts can both
     invoke it without ceremony."""
     try:

@@ -636,7 +636,7 @@ async def test_turning_the_watchlist_off_touches_redis_at_all(
         db, key=settings_svc.Keys.SCAN_GUARD_WATCHLIST, value="false", actor=None
     )
     db.commit()
-    sg._reset_cache()
+    sg.reset_cache()
 
     fake = _WatchRedis()
     monkeypatch.setattr("app.redis_client.get_redis", lambda: fake)

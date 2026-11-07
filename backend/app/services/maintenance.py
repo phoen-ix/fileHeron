@@ -50,16 +50,14 @@ def set_enabled(
         key=settings_svc.Keys.MAINTENANCE_ENABLED,
         value="true" if enabled else "false",
         actor=actor,
-        request=request,
-    )
+        )
     if message is not None:
         settings_svc.set_value(
             db,
             key=settings_svc.Keys.MAINTENANCE_MESSAGE,
             value=message.strip() or None,
             actor=actor,
-            request=request,
-        )
+            )
     if audit:
         record_audit_event(
             db,
@@ -510,30 +508,9 @@ def _dispatch_update_started_to_admins(db: Session, *, tag: str, via: str) -> No
 def notify_admins(db: Session, *, payload: dict) -> None:
     """An ops_alert to every enabled admin. Caller commits (dispatch is
     caller-commits)."""
-    from ..models.notification import NotificationCategory
-    from ..models.user import UserRole
-    from .notification import dispatch
+    from . import admin_alerts
 
-    # The mail renders `at` as "when"; without it an update alert carried no
-    # time at all.
-    payload = {**payload, "at": payload.get("at") or utc_now().isoformat()}
-    admins = (
-        db.query(User)
-        .filter(User.role == UserRole.admin, User.is_disabled.is_(False))
-        .all()
-    )
-    for a in admins:
-        try:
-            dispatch(
-                db,
-                user=a,
-                category=NotificationCategory.ops_alert,
-                payload=payload,
-                link_url="/admin/system",
-                email_to=a.email,
-            )
-        except Exception:
-            logger.exception("update ops alert failed for admin=%s", a.id)
+    admin_alerts.notify_admins(db, payload=payload, link_url="/admin/system")
 
 
 def cancel_pending_update(db: Session, *, actor: User | None, request=None) -> bool:

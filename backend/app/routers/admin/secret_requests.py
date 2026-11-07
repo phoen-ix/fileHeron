@@ -65,4 +65,4 @@ def cancel_request(
     request_svc.cancel_request(db, req, actor=admin, request=request)
     db.commit()
     db.refresh(req)
-    return to_response(db, req, admin, "admin")
+    return to_response(db, req, "admin")

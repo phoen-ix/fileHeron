@@ -49,8 +49,7 @@ def update_share_defaults_settings(
         key=settings_svc.Keys.SHARE_NOTIFY_RECIPIENTS_DEFAULT,
         value="true" if payload.notify_recipients_default else "false",
         actor=admin,
-        request=request,
-    )
+        )
     record_audit_event(
         db,
         event_type=AuditEventType.share_defaults_policy_changed,

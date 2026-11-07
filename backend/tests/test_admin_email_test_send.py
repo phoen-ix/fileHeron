@@ -18,7 +18,7 @@ def test_smtp_test_template_renders_in_site_timezone_24h():
     # Afternoon so 12h vs 24h is distinguishable: 12:28 UTC → 14:28 CEST.
     dt = datetime(2026, 6, 5, 12, 28, 42, tzinfo=timezone.utc)
     for locale in ("en", "de"):
-        out = email_svc._render(
+        out = email_svc.render(
             locale, "smtp_test", "txt", {"now": dt}, site_timezone="Europe/Vienna"
         )
         assert "(Europe/Vienna)" in out

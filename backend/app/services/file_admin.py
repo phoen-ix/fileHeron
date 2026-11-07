@@ -42,16 +42,12 @@ def is_orphan(file: File, share: Share) -> bool:
 
 
 def _format_recipients(
-    share_id: str,
     user_recipients: list[User],
     group_recipients: list[Group],
 ) -> str:
     """Compact, display-only label."""
-    parts: list[str] = []
-    for u in user_recipients[:1]:
-        parts.append(f"{u.display_name} ({u.role.value})")
-    for g in group_recipients[:1]:
-        parts.append(f"{g.name} (group)")
+    parts: list[str] = [f"{u.display_name} ({u.role.value})" for u in user_recipients[:1]]
+    parts.extend(f"{g.name} (group)" for g in group_recipients[:1])
     extra = (len(user_recipients) - 1 if user_recipients else 0) + (
         len(group_recipients) - 1 if group_recipients else 0
     )
@@ -230,7 +226,7 @@ def list_all_files(
                     "email": uploader.email,
                     "role": uploader.role.value,
                 },
-                "recipients_summary": _format_recipients(s.id, urs, grs),
+                "recipients_summary": _format_recipients(urs, grs),
                 "uploaded_at": f.created_at,
                 "last_downloaded_at": last_dl,
                 "download_count": dl_count or 0,

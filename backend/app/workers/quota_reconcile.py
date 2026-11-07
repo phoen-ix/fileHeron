@@ -25,7 +25,7 @@ from ..database import SessionLocal
 from ..models.file import File
 from ..models.user import User
 from ..redis_client import eval_script, get_redis, sync
-from ..services.cron_tracker import track_cron
+from ..services.cron_tracker import exc_summary, mark_failed, track_cron
 from ..services.quota import STORED_STATES, _key
 
 logger = logging.getLogger("fileheron.workers.quota_reconcile")
@@ -54,12 +54,18 @@ async def quota_reconcile(_ctx) -> dict:
     db = SessionLocal()
     checked = 0
     fixed = 0
+    errors = 0
+    first_error: str | None = None
     try:
         try:
             redis = get_redis()
-        except Exception:
+        except Exception as exc:
+            # Nothing was reconciled: a run that could not reach the counters
+            # it exists to repair is a failed run, not an empty one.
             logger.warning("quota_reconcile: redis unreachable, skipping")
-            return {"checked": 0, "fixed": 0}
+            return mark_failed(
+                {"checked": 0, "fixed": 0}, f"redis unreachable: {exc_summary(exc)}"
+            )
 
         # One grouped SUM for every uploader, instead of one query per user -
         # the loop below ran N+1 statements against the files table hourly.
@@ -78,7 +84,9 @@ async def quota_reconcile(_ctx) -> dict:
             db_sum = sums.get(user_id, 0)
             try:
                 redis_val_raw = sync(redis.get(_key(user_id)))
-            except Exception:
+            except Exception as exc:
+                errors += 1
+                first_error = first_error or exc_summary(exc)
                 continue
             redis_val = int(redis_val_raw) if redis_val_raw else 0
             # Fix on meaningful drift, OR whenever the counter went negative
@@ -106,12 +114,17 @@ async def quota_reconcile(_ctx) -> dict:
                             "skipping (next run reconciles)", user_id,
                         )
                 except Exception as e:
+                    errors += 1
+                    first_error = first_error or exc_summary(e)
                     logger.error(
                         "quota_reconcile: redis CAS failed user=%d: %s",
                         user_id, e,
                     )
         if fixed:
             logger.info("quota_reconcile: checked %d users, fixed %d", checked, fixed)
-        return {"checked": checked, "fixed": fixed}
+        out = {"checked": checked, "fixed": fixed}
+        if errors:
+            return mark_failed(out, f"{errors} redis operation(s) failed: {first_error}")
+        return out
     finally:
         db.close()

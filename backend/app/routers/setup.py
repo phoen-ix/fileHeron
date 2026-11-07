@@ -18,6 +18,7 @@ from ..schemas.setup import (
 )
 from ..services import rate_limit
 from ..services import setup as setup_svc
+from ..utils.client_ip import get_client_ip
 
 router = APIRouter(prefix="/api/setup", tags=["setup"])
 
@@ -51,7 +52,7 @@ async def complete_setup(
     there was nothing to assert. The window is small and real: an instance is
     reachable from the moment compose comes up, and the operator has not
     finished the wizard yet."""
-    ip = request.client.host if request.client else "unknown"
+    ip = get_client_ip(request) or "unknown"
     if not rate_limit.check_ip_allowed("setup_admin", ip, limit=10, window_sec=900):
         raise AppError(429, "RATE_LIMITED", "Too many requests; slow down.")
     user = await setup_svc.complete_setup(

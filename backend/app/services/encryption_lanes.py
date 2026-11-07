@@ -309,7 +309,7 @@ def run_release_lane(db: Session, *, cancel: threading.Event | None = None) -> d
 # ---------------------------------------------------------------------------
 
 BACKFILL_JOB = "encrypt_existing_files"
-_BACKFILL_LOCK = "fh:enc:backfill:lock"
+BACKFILL_LOCK = "fh:enc:backfill:lock"
 # Failures per stored object ("file:<id>" / "inbound_attachment:<id>"), and the
 # objects deferred after `_FAIL_THRESHOLD` of them, scored by when the deferral
 # ends. FIXED keys, read directly - never a keyspace walk.
@@ -434,7 +434,7 @@ def run_backfill(
     held = run_release_lane(db, cancel=cancel)
     if not file_encryption.is_enabled(db):
         return {"skipped": "disabled", "purged": purged["purged"], "held_released": held}
-    lease = RedisLease(_BACKFILL_LOCK)
+    lease = RedisLease(BACKFILL_LOCK)
     if not lease.acquire():
         return {"skipped": "busy", "purged": purged["purged"]}
 

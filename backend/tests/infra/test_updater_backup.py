@@ -18,7 +18,7 @@ from types import SimpleNamespace
 
 import pytest
 
-PASSWORD = "s3cret-root-pw"  # noqa: S105 - a test fixture value
+PASSWORD = "s3cret-root-pw"  # a test fixture value
 DUMP = b"-- MariaDB dump\nCREATE TABLE users (id int);\n-- Dump completed on 2026-09-26 12:00:00\n"
 RDB = b"REDIS0012\xfa\x09redis-ver"
 
@@ -89,7 +89,7 @@ def test_a_backup_holds_the_dump_the_snapshot_and_a_verifiable_manifest(executor
     assert sorted(p.name for p in d.iterdir()) == ["KIND", "db.sql", "manifest.txt", "redis.rdb"]
     assert (d / "db.sql").read_bytes() == DUMP and (d / "redis.rdb").read_bytes() == RDB
     # S603/S607: the same check restore.sh runs, on the test's own files.
-    check = subprocess.run(["sha256sum", "-c", "manifest.txt"], cwd=d,  # noqa: S603, S607
+    check = subprocess.run(["sha256sum", "-c", "manifest.txt"], cwd=d,  # noqa: S607
                            capture_output=True, text=True)
     assert check.returncode == 0, check.stdout + check.stderr
     kind = dict(line.split("=", 1) for line in (d / "KIND").read_text().splitlines())

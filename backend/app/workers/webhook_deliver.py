@@ -18,6 +18,7 @@ from ..middleware.errors import AppError
 from ..models.webhook import Webhook, WebhookDelivery, WebhookDeliveryStatus
 from ..services import job_queue
 from ..services import webhook as webhook_svc
+from ..utils.columns import declared_width
 from ..utils.crypto import SecretUndecryptableError, decrypt_setting
 from ..utils.net import assert_public_http_url
 from ..utils.timeutil import utc_now
@@ -25,6 +26,7 @@ from ..utils.timeutil import utc_now
 logger = logging.getLogger("fileheron.workers.webhook_deliver")
 
 _MAX_ATTEMPTS = 5
+_ERROR_MAX = declared_width(WebhookDelivery.__table__.c.error)
 _TIMEOUT_SEC = 5.0
 # Seconds to wait before the next attempt, keyed by the attempt just completed.
 _BACKOFF = {1: 5, 2: 15, 3: 30, 4: 60}
@@ -55,6 +57,16 @@ async def webhook_deliver(
     try:
         wh = db.query(Webhook).filter(Webhook.id == webhook_id).one_or_none()
         if wh is None or not wh.active:
+            # A RETRY whose webhook was switched off (or deleted) meanwhile owns
+            # a `pending` row that nothing else will ever move; close it, or the
+            # admin's delivery list shows it pending forever (audit 2026-11-08).
+            if delivery_id is not None:
+                row = db.query(WebhookDelivery).filter(WebhookDelivery.id == delivery_id).one_or_none()
+                if row is not None and row.status == WebhookDeliveryStatus.pending:
+                    row.status = WebhookDeliveryStatus.failed
+                    row.error = "webhook deactivated or deleted before the retry"
+                    row.delivered_at = utc_now()
+                    db.commit()
             return {"skipped": True, "reason": "webhook missing or inactive"}
 
         if delivery_id is not None:
@@ -83,10 +95,10 @@ async def webhook_deliver(
         try:
             assert_public_http_url(wh.url, allow_private=True, require_https=False)
         except AppError as e:
-            if "could not resolve" not in (e.message or "").lower():
+            if (e.details or {}).get("reason") != "unresolved":
                 delivery.attempts = attempt
                 delivery.status = WebhookDeliveryStatus.failed
-                delivery.error = f"blocked: {e.message}"[:500]
+                delivery.error = f"blocked: {e.message}"[:_ERROR_MAX]
                 delivery.delivered_at = utc_now()
                 db.commit()
                 return {"delivery_id": delivery.id, "status": "blocked"}
@@ -135,7 +147,7 @@ async def webhook_deliver(
         except Exception as e:  # network / timeout / DNS
             delivery.response_code = None
             ok = False
-            err = str(e)[:500]
+            err = str(e)[:_ERROR_MAX]
 
         if ok:
             delivery.status = WebhookDeliveryStatus.sent

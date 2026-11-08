@@ -143,8 +143,11 @@ def schedule(db: Session) -> dict:
     )
     db.commit()
     try:
-        maintenance.notify_admins(
+        from . import admin_alerts
+
+        admin_alerts.notify_admins(
             db,
+            link_url="/admin/system",
             payload={
                 "reason": "update_auto_scheduled",
                 "target_tag": tag,

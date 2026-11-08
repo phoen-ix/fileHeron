@@ -1,8 +1,6 @@
 """/api/admin/users + /api/admin/erasure-receipts."""
 from __future__ import annotations
 
-from datetime import timedelta
-
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -29,7 +27,6 @@ from ...services import email_change as email_change_svc
 from ...services import erasure as erasure_svc
 from ...services import step_up
 from ...services import user_management as um_svc
-from ...utils.timeutil import utc_now
 
 router = APIRouter()
 
@@ -193,13 +190,13 @@ def force_password_reset(
     admin: User = Depends(get_current_admin),
 ) -> ForcePasswordResetResponse:
     target = um_svc.get_or_404(db, user_id)
-    plaintext = um_svc.force_password_reset(
+    forced = um_svc.force_password_reset(
         db, actor=admin, target=target, request=request
     )
     db.commit()
     return ForcePasswordResetResponse(
-        plaintext_token=plaintext,
-        expires_at=utc_now() + timedelta(hours=1),
+        plaintext_token=forced.token,
+        expires_at=forced.expires_at,
     )
 
 

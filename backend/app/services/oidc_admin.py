@@ -151,7 +151,7 @@ def get_client_secret(provider: OIDCProvider) -> str:
         # client secret to the IdP token endpoint, surfacing as a confusing
         # generic auth failure. A decrypt failure almost always means JWT_SECRET
         # was rotated without re-encrypting the provider secrets - say so.
-        logger.error(
+        logger.error(  # noqa: TRY400 - a decrypt failure is a key-rotation config error the message names; the InvalidToken traceback adds nothing
             "oidc_admin.get_client_secret: decryption failed provider=%s: %s",
             provider.id, e,
         )

@@ -287,7 +287,7 @@ def handle_post_finish(db: Session, body: dict[str, Any]) -> None:
 
 
 def handle_post_terminate(db: Session, body: dict[str, Any]) -> None:
-    upload, meta = _extract_upload(body)
+    _upload, meta = _extract_upload(body)
     try:
         envelope = _extract_envelope(meta)
     except AppError:

@@ -2,7 +2,9 @@ import api, { createBareClient } from './client'
 import type {
   AdminSecretListResponse,
   CreateSecretRequest,
+  PublicRevealSecretRequest,
   PublicSecretPeekResponse,
+  RevealSecretRequest,
   RevealSecretResponse,
   SecretLinkResponse,
   SecretLinksResponse,
@@ -39,10 +41,8 @@ export function revealSecret(
   passphrase: string | null,
   requestPassphrase: string | null = null,
 ) {
-  return api.post<RevealSecretResponse>(`/secrets/${id}/reveal`, {
-    passphrase,
-    request_passphrase: requestPassphrase,
-  })
+  const body: RevealSecretRequest = { passphrase, request_passphrase: requestPassphrase }
+  return api.post<RevealSecretResponse>(`/secrets/${id}/reveal`, body)
 }
 
 export function burnSecret(id: string) {
@@ -76,10 +76,8 @@ export function peekSecret(token: string) {
 }
 
 export function revealPublicSecret(token: string, passphrase: string | null) {
-  return publicClient.post<RevealSecretResponse>('/api/public/secrets/reveal', {
-    token,
-    passphrase,
-  })
+  const body: PublicRevealSecretRequest = { token, passphrase }
+  return publicClient.post<RevealSecretResponse>('/api/public/secrets/reveal', body)
 }
 
 /* Admin: metadata only - there is no admin route to a secret's content. */

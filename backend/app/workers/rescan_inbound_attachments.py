@@ -132,8 +132,8 @@ async def rescan_inbound_attachments(_ctx) -> dict:
             except Exception as e:
                 errors += 1
                 first_error = first_error or f"attachment {att.id}: {exc_summary(e)}"
-                logger.error(
-                    "rescan_inbound_attachments: read/scan failed att=%s: %s", att.id, e
+                logger.exception(
+                    "rescan_inbound_attachments: read/scan failed att=%s", att.id
                 )
                 _record_failure(att.id)
                 still_pending += 1

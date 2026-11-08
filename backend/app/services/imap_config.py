@@ -17,6 +17,9 @@ from . import settings as settings_svc
 
 logger = logging.getLogger("fileheron.imap_config")
 
+# Hosts already warned about cleartext IMAP in this process.
+_CLEARTEXT_WARNED: set[str] = set()
+
 POST_FETCH_ACTIONS = ("mark_read", "untouched", "move", "delete")
 NOTIFY_MODES = ("off", "human", "all")
 TLS_MODES = ("implicit", "starttls", "none")
@@ -82,12 +85,17 @@ def resolve_imap_config(db: Session) -> ImapConfig:
     # tls_mode 'none' sends IMAP credentials + message bodies in CLEARTEXT. It's
     # a deliberate opt-in (e.g. a localhost relay), but in production against a
     # remote host it is almost certainly a mistake - surface it loudly (audit L19).
+    # Once per process and host: this resolver runs on every poll tick and every
+    # settings GET, so the "loud" error used to be most of the log
+    # (audit 2026-11-08).
     if (
         tls_mode == "none"
         and settings.is_production
         and host
         and host.lower() not in ("localhost", "127.0.0.1", "::1")
+        and host.lower() not in _CLEARTEXT_WARNED
     ):
+        _CLEARTEXT_WARNED.add(host.lower())
         logger.error(
             "IMAP tls_mode=none in production against remote host %r - credentials "
             "and message bodies are transmitted in CLEARTEXT; use implicit/starttls.",

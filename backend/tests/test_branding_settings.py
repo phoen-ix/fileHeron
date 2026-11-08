@@ -119,3 +119,40 @@ async def test_admin_only(make_user, client, login_as):
         "/api/admin/settings/branding", headers={"Authorization": f"Bearer {token}"}
     )
     assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_a_failed_save_does_not_leave_the_new_logo_blobs_behind(make_user, client, login_as, monkeypatch):
+    """The bytes are written before the rows that point at them. A failure
+    after that (here: the audit write) rolled the rows back and left both new
+    blobs with nothing referencing them and no sweeper that would look (audit
+    2026-11-08)."""
+    from app.routers.admin.settings import branding as branding_router
+    from app.services.storage_backend import get_storage_backend
+
+    token = await _admin_token(make_user, login_as)
+    backend = get_storage_backend()
+    written: list[str] = []
+    real_finalize = backend.finalize
+
+    def _spy_finalize(tmp_path, locator):
+        written.append(locator)
+        return real_finalize(tmp_path, locator)
+
+    monkeypatch.setattr(backend, "finalize", _spy_finalize)
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("audit write failed")
+
+    monkeypatch.setattr(branding_router, "record_audit_event", _boom)
+
+    with pytest.raises(RuntimeError):
+        await client.post(
+            "/api/admin/settings/branding/logo",
+            files={"file": ("logo.png", _PNG, "image/png")},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert written, "the upload never reached the storage backend"
+    for loc in written:
+        assert not backend.exists(loc), f"{loc} survived the rollback"

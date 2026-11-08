@@ -151,6 +151,9 @@ async def test_fetch_now_answers_the_real_poll_result(
     assert body["skipped"] is None  # the poll ran; nothing to report as a reason
     assert body["skipped_messages"] == 0
     assert body["ingested"] == n_messages
+    # Both used to be dropped between run_poll and the reply.
+    assert body["backlog"] == 0
+    assert body["refused_unknown_sender"] == 0
 
 
 @pytest.mark.asyncio

@@ -137,7 +137,8 @@ def update_token_policy(
 def admin_list_api_tokens(
     q: str = Query("", max_length=120),
     owner_id: int | None = Query(None),
-    status: str | None = Query(None),
+    # An unknown value used to fall through every branch and list ALL tokens.
+    status: str | None = Query(None, pattern="^(active|expired|disabled|revoked)$"),
     page: int = Query(1, ge=1, le=1000),
     page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),

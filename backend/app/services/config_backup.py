@@ -98,7 +98,6 @@ logger = logging.getLogger("fileheron.config_backup")
 MAGIC = "FILEHERON_CONFIG_BACKUP"
 FORMAT_VERSION = 1
 
-CATEGORIES = ("settings_branding", "oidc_webhooks", "groups", "users", "logs")
 SECRET_MODES = ("passphrase", "ciphertext", "exclude")
 
 # Runtime / cron state - looks like config but isn't; never exported.
@@ -703,8 +702,12 @@ def _render_dotenv(snapshot: dict[str, str]) -> str:
 # Preview (dry run - no writes)
 # ---------------------------------------------------------------------------
 
-def preview_backup(db: Session, parsed: ParsedBackup) -> ImportSummary:
+def preview_backup(db: Session, parsed: ParsedBackup, *, actor: User) -> ImportSummary:
     p = parsed.payload
+    # The same up-front check the import runs: a hand-edited backup answered
+    # 400 BACKUP_CORRUPT on Import but 500 on Preview, which reads the same
+    # rows without the guard (audit 2026-11-08).
+    _validate_backup_payload(p, actor)
     summary = ImportSummary(
         dry_run=True, secret_mode=parsed.secret_mode, categories=parsed.categories,
         version_warning=_version_warning(db, parsed), warnings=list(parsed.warnings),

@@ -389,14 +389,10 @@ def run_poll(*, db: Session | None = None, session_opener=open_session) -> dict:
                     )
                     last_uid = max(last_uid, uid)
                     continue
-                # Apply the server-side action only when we OWN this message: a
-                # genuine new ingest, or a true re-poll of THIS (uidvalidity, uid).
-                # If ingest returned None because a DIFFERENT message shares this
-                # Message-ID, deleting/moving it would destroy a distinct, unread
-                # mail that was never ingested.
-                owns_message = msg is not None or inbound_mail.ingested_by_uid(
-                    db, uidvalidity=uidvalidity, uid=uid
-                )
+                # Reaching here, the message is ours: ingest returns None only for
+                # a re-poll of THIS (uidvalidity, uid) - a Message-ID collision no
+                # longer drops mail (audit #2, N-15) - so the server-side action is
+                # safe. An `owns_message` re-query here could only answer yes.
                 # A message whose attachments could not all be stored is NOT
                 # safely ours: `delete` would expunge the only remaining copy of
                 # a file that exists nowhere else (audit #2). Downgrade to the
@@ -408,7 +404,7 @@ def run_poll(*, db: Session | None = None, session_opener=open_session) -> dict:
                         "leaving the message on the server",
                         uid,
                     )
-                if owns_message and not incomplete:
+                if not incomplete:
                     try:
                         if action == "mark_read":
                             sess.mark_seen(uid)
@@ -457,7 +453,7 @@ def run_poll(*, db: Session | None = None, session_opener=open_session) -> dict:
             "backlog": backlog,
             "last_uid": last_uid, "mailbox": cfg.mailbox, "total": total,
         }
-    except Exception as exc:  # noqa: BLE001 - surface to caller/cron tracker
+    except Exception as exc:  # surface to caller/cron tracker
         with contextlib.suppress(Exception):
             settings_svc.set_value(
                 db, key=K.IMAP_LAST_POLL_AT, value=utc_now().isoformat(), actor=None
@@ -485,7 +481,7 @@ def test_connection(db: Session, *, override: imap_config.ImapConfig | None = No
         with open_session(cfg) as sess:
             folders = sess.list_folders()
         return {"ok": True, "error": None, "hint": None, "folders": folders}
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         name = type(exc).__name__
         text = str(exc)[:300]
         hint = None

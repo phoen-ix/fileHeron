@@ -79,15 +79,16 @@ def _lookup(table: dict[str, Any], dotted: str) -> Any:
 
 
 def has(key: str) -> bool:
-    """Whether `key` resolves in the ACTIVE locale (not the fallback).
+    """Whether `key` resolves to a string in the active locale or its English
+    fallback - exactly when `t(key)` would not return the raw key.
 
     Used by ApiError.localized: an unknown backend code must fall through to
-    the server's own text rather than render a raw key."""
-    if _active_table is None:
-        set_locale(_active)
-    found = _lookup(_active_table or {}, key)
+    the server's own text rather than render a raw key. (It used to say "not
+    the fallback" while checking it, and to lazy-load on a table that is never
+    None - both dead, audit 2026-11-08.)"""
+    found = _lookup(_active_table, key)
     if found is None:
-        found = _lookup(_fallback_table or {}, key)
+        found = _lookup(_fallback_table, key)
     return isinstance(found, str)
 
 

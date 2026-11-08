@@ -99,6 +99,19 @@ def update_updates_settings(
         raise AppError(
             400, "INVALID_URL", "api_url must start with http:// or https://"
         )
+    # The same address policy the release check applies on every fetch, at
+    # SAVE time too: a loopback or cloud-metadata URL used to be accepted here
+    # and only refused on the next check, so the admin saw "Saved" and then a
+    # failing release check (audit 2026-11-08). A host that does not resolve
+    # right now is kept - it is re-checked at use, and an internal mirror may
+    # simply be unreachable from where the admin is saving.
+    from ....utils.net import assert_public_http_url
+
+    try:
+        assert_public_http_url(payload.api_url, allow_private=True, require_https=False)
+    except AppError as e:
+        if e.details.get("reason") != "unresolved":
+            raise
     settings_svc.set_value(
         db,
         key=settings_svc.Keys.UPDATES_API_URL,

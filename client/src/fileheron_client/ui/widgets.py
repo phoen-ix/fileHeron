@@ -70,14 +70,12 @@ class PillLabel(ctk.CTkLabel):
             height=20,
             **kwargs,
         )
-        self._state_value = state or text
 
     def setState(self, state: str | None) -> None:  # Qt-style camelCase
         # Preserved name from the v0.3.x API so the callsites in
         # share_detail_view don't all need updating.
         bg, fg = _PILL_COLOURS.get(state or "", ("#e5e7eb", "#374151"))
         self.configure(fg_color=bg, text_color=fg)
-        self._state_value = state or ""
 
     def setText(self, text: str) -> None:
         self.configure(text=text)
@@ -222,8 +220,6 @@ def modal_dialog(parent, title: str, width: int, height: int) -> tuple[ctk.CTkTo
 
 def ok_cancel_row(win: ctk.CTkToplevel, outer: ctk.CTkFrame, on_ok: Callable[[], None]) -> None:
     """OK / Cancel buttons, right-aligned, with Return and Escape bound to them."""
-    from ..i18n import t
-
     btn_row = ctk.CTkFrame(outer, fg_color="transparent")
     btn_row.pack(fill="x")
     ctk.CTkButton(btn_row, text=t("common.ok"), command=on_ok, width=90).pack(side="right")

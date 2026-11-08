@@ -456,6 +456,31 @@ async def test_imap_blank_user_means_the_stored_one_and_must_not_prompt(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("on_screen, expected", [(True, True), (False, False), (None, True)])
+async def test_imap_test_uses_the_on_screen_tls_toggle(
+    make_user, db, client, login_as, captured_imap, on_screen, expected
+):
+    """Every other field came from the form; `tls_insecure` came from storage,
+    so "accept any certificate" could not be tried before saving it (audit
+    2026-11-08). Absent (an older SPA) keeps the stored value - here True."""
+    from app.services import settings as s
+
+    headers = await _admin(make_user, login_as, email="tlsform@test.local")
+    _persist_imap(db)
+    s.set_value(db, key=s.Keys.IMAP_TLS_INSECURE, value="true", actor=None)
+    db.commit()
+    body = {"host": "imap.corp.local", "port": 993, "user": "inbox@corp.local",
+            "password": None, "tls_mode": "implicit", "mailbox": "INBOX"}
+    if on_screen is not None:
+        body["tls_insecure"] = on_screen
+
+    resp = await client.post("/api/admin/settings/imap/test", json=body, headers=headers)
+
+    assert resp.status_code == 200, resp.text
+    assert captured_imap["override"].tls_insecure is expected
+
+
+@pytest.mark.asyncio
 async def test_a_refused_exfiltration_attempt_is_audited(
     make_user, db, client, login_as, captured_smtp
 ):

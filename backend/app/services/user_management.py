@@ -6,13 +6,14 @@ than mutate the row - it walks files + share recipients.
 from __future__ import annotations
 
 import logging
+from datetime import datetime
+from typing import NamedTuple
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType
-from ..models.refresh_token import RefreshToken
 from ..models.user import User, UserRole
 from ..utils.columns import declared_width
 from ..utils.like import LIKE_ESCAPE, contains
@@ -108,9 +109,9 @@ def update_user(
         # zero. Locking the target row does not help - they are different rows -
         # so the guarantee has to be a re-check AFTER the change is applied,
         # which is at the end of this function (audit 2026-07-30).
-        _reassert_admin_remains = True
+        reassert_admin_remains = True
     else:
-        _reassert_admin_remains = False
+        reassert_admin_remains = False
 
     if display_name is not None and display_name.strip() != target.display_name:
         target.display_name = display_name.strip()
@@ -143,17 +144,16 @@ def update_user(
         target.is_disabled = is_disabled
         changed["is_disabled"] = is_disabled
         if is_disabled:
-            # Disabled users: revoke every refresh token immediately so
-            # session is killed across devices.
-            db.query(RefreshToken).filter(
-                RefreshToken.user_id == target.id,
-                RefreshToken.revoked_at.is_(None),
-            ).update(
-                {RefreshToken.revoked_at: utc_now()},
-                synchronize_session=False,
-            )
+            # Disabled users: every session ends across devices. Through the
+            # one revoke helper, which also stamps sessions_invalidated_at, so
+            # issued ACCESS tokens die too - not just the refresh rows. The
+            # per-request is_disabled check covered it in practice; the
+            # documented chokepoint was bypassed (audit 2026-11-08).
+            from . import jwt_session
 
-    if _reassert_admin_remains:
+            jwt_session.revoke_all_user_refresh_tokens(db, target.id)
+
+    if reassert_admin_remains:
         # Re-check with the change APPLIED. db.flush() makes it visible to this
         # transaction, and on MariaDB the FOR UPDATE serialises concurrent
         # demotions so the loser sees the winner's result and aborts.
@@ -234,9 +234,14 @@ def unlock_account(db: Session, *, actor: User, target: User, request=None) -> b
     return True
 
 
+class ForcedReset(NamedTuple):
+    token: str
+    expires_at: datetime
+
+
 def force_password_reset(
     db: Session, *, actor: User, target: User, request=None
-) -> str:
+) -> ForcedReset:
     """Generate a fresh password-reset token for `target`. Returns the
     plaintext (admin can share via out-of-band channel; in dev SMTP-less
     mode the email-with-logs-fallback also surfaces it).
@@ -264,7 +269,9 @@ def force_password_reset(
         metadata={"forced_by_admin": True},
         request=request,
     )
-    return plaintext
+    # The record's own expiry, not a second utc_now() + 1h in the router that
+    # could disagree with it (audit 2026-11-08).
+    return ForcedReset(plaintext, record.expires_at)
 
 
 def get_or_404(db: Session, user_id: int) -> User:
@@ -333,6 +340,9 @@ async def create_user_as_admin(
         password_hash=argon2_hash(password),
         display_name=display_name.strip()[:_DISPLAY_NAME_MAX],
         role=target_role,
+        # The creating admin's language: one organisation, one working
+        # language, and there is no instance-wide default to prefer. The
+        # person can change it under Account at their first sign-in.
         locale=actor.locale,
         email_verified=True,
         is_disabled=False,

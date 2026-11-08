@@ -181,7 +181,7 @@ def create_request(
 @router.get("", response_model=SecretRequestListResponse)
 def list_requests(
     box: str = Query("mine", pattern="^(mine|asked)$"),
-    state: list[SecretRequestState] = Query(default_factory=list),  # noqa: B008
+    state: list[SecretRequestState] = Query(default_factory=list),
     q: str = Query("", max_length=200),
     page: int = Query(1, ge=1, le=10_000),
     page_size: int = Query(50, ge=1, le=200),

@@ -21,7 +21,7 @@ router = APIRouter()
 
 @router.get("/secrets", response_model=AdminSecretListResponse)
 def list_secrets(
-    state: list[SecretState] = Query(default_factory=list),  # noqa: B008
+    state: list[SecretState] = Query(default_factory=list),
     q: str = Query("", max_length=200),
     page: int = Query(1, ge=1, le=10_000),
     page_size: int = Query(50, ge=1, le=200),

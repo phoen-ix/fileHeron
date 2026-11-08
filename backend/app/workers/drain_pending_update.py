@@ -6,9 +6,9 @@ Runs every minute. When a postponed self-update is pending (the admin chose
 transfers have drained - or once the max-wait deadline has passed, so a single
 paused/stuck resumable transfer can't block the update forever.
 
-Idempotent: with no pending record it no-ops; once it triggers the update it
-clears both the pending record and maintenance mode (so the freshly-updated
-container doesn't boot stuck in maintenance).
+Idempotent: with no pending record it no-ops. Triggering the update clears the
+pending record and keeps maintenance ON; the new container lifts it on boot,
+and `_lift_if_stale` below lifts it if the hand-off never produced one.
 """
 from __future__ import annotations
 
@@ -74,13 +74,10 @@ def _lift_if_stale(db) -> bool:
 
     if release_apply.get_version().get("job_in_progress"):
         return False
-    try:
-        from datetime import datetime, timedelta
-
-        handed_off = datetime.fromisoformat(stamp)
-    except ValueError:
+    age = maintenance_svc.handoff_age_sec(stamp)
+    if age is None:
         return maintenance_svc.clear_maintenance_after_update(db)
-    if utc_now() - handed_off < timedelta(minutes=maintenance_svc.HANDOFF_STALE_MIN):
+    if age < maintenance_svc.HANDOFF_STALE_MIN * 60:
         return False
     logger.warning(
         "update hand-off at %s produced no new container within %d min; "

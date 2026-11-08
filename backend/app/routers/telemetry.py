@@ -86,6 +86,36 @@ def _redact_uri(uri: str) -> str:
     return f"{scheme}://{host}{_redact_path('/' + path) if path else ''}"[:_PATH_MAX]
 
 
+def _beacon_event(
+    request: Request,
+    ip: str | None,
+    *,
+    source: str,
+    exception_type: str,
+    message: str,
+    method: str,
+    path: str,
+    status_code: int,
+    code: str,
+) -> dict:
+    """The `notify_admin_error` event both beacons send. It was written out
+    twice, field for field (audit 2026-11-08)."""
+    return {
+        "source": source,
+        "exception_type": exception_type,
+        "message": message,
+        "method": method,
+        "path": path,
+        "status_code": status_code,
+        "code": code,
+        "ip": ip or None,
+        "request_id": getattr(request.state, "request_id", None),
+        "user_id": None,
+        "auth_via": None,
+        "at": utc_now().isoformat(),
+    }
+
+
 @router.post("/page-404", status_code=204)
 def report_page_404(body: Page404Request, request: Request) -> Response:
     try:
@@ -114,20 +144,12 @@ def report_page_404(body: Page404Request, request: Request) -> Response:
         # the SPA's own token routes are exactly the ones a user mistypes into
         # a 404 (audit #2).
         path = _redact_path((body.path or "").split("?", 1)[0])[:_PATH_MAX]
-        event = {
-            "source": "spa",
-            "exception_type": "ClientNavigation",
-            "message": "Client-side 404 (no matching route)",
-            "method": "GET",
-            "path": path,
-            "status_code": 404,
-            "code": "NOT_FOUND",
-            "ip": ip or None,
-            "request_id": getattr(request.state, "request_id", None),
-            "user_id": None,
-            "auth_via": None,
-            "at": utc_now().isoformat(),
-        }
+        event = _beacon_event(
+            request, ip,
+            source="spa", exception_type="ClientNavigation",
+            message="Client-side 404 (no matching route)",
+            method="GET", path=path, status_code=404, code="NOT_FOUND",
+        )
         job_queue.enqueue("notify_admin_error", event=event)
     except Exception:
         logger.warning("page-404 beacon skipped", exc_info=True)
@@ -210,27 +232,19 @@ async def report_csp_violation(request: Request) -> Response:
         # instance by construction, and keeping it whole would make grouping by
         # `signature` split on scheme/host variations.
         doc = (report.document_uri or "").split("?", 1)[0]
-        for sep in ("://",):
-            if sep in doc:
-                doc = "/" + doc.split(sep, 1)[1].split("/", 1)[-1] if "/" in doc.split(sep, 1)[1] else "/"
+        if "://" in doc:
+            rest = doc.split("://", 1)[1]
+            doc = "/" + rest.split("/", 1)[1] if "/" in rest else "/"
         doc = _redact_path(doc)
-        event = {
-            "source": "csp",
-            "exception_type": "CspViolation",
+        event = _beacon_event(
+            request, ip,
+            source="csp", exception_type="CspViolation",
             # The blocked URI is browser-supplied and can be a same-origin
             # URL - so it gets the same token collapsing as the document URI.
-            "message": f"CSP would block {directive or 'a resource'}: "
-                       f"{_redact_uri(report.blocked_uri) or '(inline)'}"[:_MESSAGE_MAX],
-            "method": "POST",
-            "path": doc[:_PATH_MAX],
-            "status_code": 0,
-            "code": "CSP_VIOLATION",
-            "ip": ip or None,
-            "request_id": getattr(request.state, "request_id", None),
-            "user_id": None,
-            "auth_via": None,
-            "at": utc_now().isoformat(),
-        }
+            message=f"CSP would block {directive or 'a resource'}: "
+                    f"{_redact_uri(report.blocked_uri) or '(inline)'}"[:_MESSAGE_MAX],
+            method="POST", path=doc[:_PATH_MAX], status_code=0, code="CSP_VIOLATION",
+        )
         job_queue.enqueue("notify_admin_error", event=event)
     except Exception:
         logger.warning("csp report skipped", exc_info=True)

@@ -1008,6 +1008,8 @@ export function testImap(body?: {
   password: string | null
   tls_mode: string
   mailbox: string
+  /** The on-screen "accept any certificate" toggle. */
+  tls_insecure?: boolean
   /** The admin's OWN password, re-confirmed. Only needed when testing a server
    *  other than the saved one while relying on the stored credentials. */
   confirm_password?: string

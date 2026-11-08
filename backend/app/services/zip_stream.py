@@ -35,6 +35,7 @@ Three things make a resume safe rather than merely possible:
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 from functools import partial
 from pathlib import Path
 
@@ -294,8 +295,10 @@ def zip_streaming_response(
 
     headers["Content-Length"] = str(length)
 
-    body = zs.iter_from(start, length)
-    if count:
+    body: Iterator[bytes]
+    if not count:
+        body = zs.iter_from(start, length)
+    else:
         from . import transfer_activity
 
         def _counted():

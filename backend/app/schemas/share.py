@@ -23,6 +23,7 @@ class ShareRecipientsRequest(APIBaseModel):
     # unless `share.external_recipients.enabled`). Optional with a default, so
     # a client that predates it is unaffected. Bounded far lower than the id
     # lists: each one is an outbound mail to an arbitrary address.
+    # The one copy of the per-share cap (services/external_recipients had an unused second).
     emails: list[EmailLike] = Field(default_factory=list, max_length=20)
 
     @field_validator("user_ids", "group_ids")

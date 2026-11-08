@@ -1053,6 +1053,12 @@ def revoke_share(db: Session, *, user: User, share: Share, request=None) -> None
         raise AppError(403, "FORBIDDEN", "You cannot revoke this share.")
     if share.state == ShareState.deleted:
         raise AppError(409, "ALREADY_DELETED", "Share already deleted.")
+    # Only a share that is still live, or a rejected one the owner discards.
+    # An expired, failed or already-revoked share used to be relabelled
+    # `revoked` with a fresh `terminated_at`, which restarted the orphan
+    # reclaim's grace window and rewrote how the share ended (audit 2026-11-08).
+    if share.state not in (ShareState.active, ShareState.pending_approval, ShareState.rejected):
+        raise AppError(409, "SHARE_NOT_ACTIVE", "This share is no longer active.")
     share.state = ShareState.revoked
     # Stamp the terminal transition so the orphan-reclaim cron can age its
     # grace window. Bytes are kept (soft revoke); the cron frees them later.

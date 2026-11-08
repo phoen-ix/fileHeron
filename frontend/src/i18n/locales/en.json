@@ -1141,6 +1141,8 @@
     "fetch_now": "Fetch now",
     "fetch_done": "Fetched {n} new message | Fetched {n} new messages",
     "fetch_empty": "No new mail - {mailbox} has {total} message(s)",
+    "fetch_refused": "{n} message refused - the sender is not a known user | {n} messages refused - their senders are not known users",
+    "fetch_backlog": "{n} more message waits for the next run | {n} more messages wait for the next runs",
     "search_placeholder": "Search subject or sender…",
     "class_all": "All types",
     "class_normal": "Replies",

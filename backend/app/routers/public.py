@@ -430,6 +430,8 @@ def public_preview(
     file_svc.assert_state_previewable(file)
     if not preview_svc.is_previewable(file.mime_type):
         raise AppError(415, "PREVIEW_UNSUPPORTED", "This file type can't be previewed.")
+    # Not a repeat of `assert_link_usable`: that one reads `downloads_remaining`
+    # alone, this also refuses a limited link whose remaining count is NULL.
     if link.download_limit is not None and (link.downloads_remaining or 0) <= 0:
         raise AppError(
             410, "PUBLIC_LINK_EXHAUSTED", "This public link's download limit has been reached."

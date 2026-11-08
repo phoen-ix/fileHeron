@@ -2,13 +2,6 @@ import type { SecretRequestState, SecretState, ShareState } from '@/types/api'
 
 type PillTone = 'active' | 'warn' | 'danger' | undefined
 
-/**
- * Map a share state to a design-system pill tone. Shared by the share lists +
- * detail (was duplicated as `pillForState` / `pillForShareState`).
- * File-state pills are intentionally NOT unified here - they differ by context
- * (e.g. ready_unscanned reads as active in the recipient view but warn in the
- * admin inventory).
- */
 /** Mail-log row status → pill tone. Shared by the mail log and its detail
  *  view, which each carried a byte-identical copy. */
 export function mailStatusPill(status: string): PillTone {
@@ -18,6 +11,13 @@ export function mailStatusPill(status: string): PillTone {
   return undefined
 }
 
+/**
+ * Map a share state to a design-system pill tone. Shared by the share lists +
+ * detail (was duplicated as `pillForState` / `pillForShareState`).
+ * File-state pills are intentionally NOT unified here - they differ by context
+ * (e.g. ready_unscanned reads as active in the recipient view but warn in the
+ * admin inventory).
+ */
 export function shareStatePill(state: ShareState | string): PillTone {
   if (state === 'active') return 'active'
   if (state === 'expired' || state === 'pending_approval') return 'warn'

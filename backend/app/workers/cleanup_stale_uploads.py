@@ -53,6 +53,9 @@ _USABLE_FILE_STATES = {
 # (audit L8). The normal post-finish scan completes in seconds, so this window
 # never races an in-flight scan.
 _RESCAN_STUCK_AFTER_MIN = 30
+# A file still without a verdict this long after finalize has been rescanned
+# about a dozen times by now: not a slow scan, a scan that keeps failing.
+_SCAN_GIVEN_UP_AFTER_H = 6
 _RESCAN_BATCH = 500
 
 
@@ -216,12 +219,12 @@ async def cleanup_stale_uploads(_ctx) -> dict:
         # file with no verdict and no recovery), but it means a persistently
         # failing scan shows up as repeated work and NOTHING ELSE.
         #
-        # Nothing surfaces it today, and saying "ops_check should" would be the
-        # same kind of comment this release exists to delete: `notify_admin_error`
-        # is fed by the HTTP error middleware, the telemetry routes, and
-        # cron_tracker when a cron RAISES. `av_scan_file` returning
-        # `{"state": "error"}` is none of those. Wiring it up is worth doing;
-        # until then this is a known blind spot, written down as one.
+        # It is surfaced HERE, because this cron is the one that keeps seeing
+        # it: a file still `ready_unscanned` _SCAN_GIVEN_UP_AFTER_H after
+        # finalize makes the run report failed (`mark_failed`), which the
+        # Scheduled-tasks page and the cron failure alert both read. Until
+        # 2026-11-08 nothing did - `av_scan_file` returning `{"state": "error"}`
+        # is not a cron, so `track_cron` never saw it.
         rescan_cutoff = utc_now() - timedelta(minutes=_RESCAN_STUCK_AFTER_MIN)
         stuck = (
             db.query(File)
@@ -246,6 +249,10 @@ async def cleanup_stale_uploads(_ctx) -> dict:
             [("av_scan_file", (f.id,), {}) for f in stuck]
         )
         rescans_requeued = len(stuck)
+        given_up_cutoff = utc_now() - timedelta(hours=_SCAN_GIVEN_UP_AFTER_H)
+        persistently_failing = [
+            f.id for f in stuck if f.finalized_at is not None and f.finalized_at < given_up_cutoff
+        ]
 
         if files_reaped or shares_failed or rescans_requeued:
             logger.info(
@@ -264,6 +271,14 @@ async def cleanup_stale_uploads(_ctx) -> dict:
                 out,
                 f"{len(unlink_failures)} unlink(s), {len(announce_failures)} deferred "
                 f"announcement(s) failed: {(unlink_failures + announce_failures)[0]}",
+            )
+        if persistently_failing:
+            out["scans_failing"] = len(persistently_failing)
+            return mark_failed(
+                out,
+                f"{len(persistently_failing)} file(s) still have no antivirus verdict "
+                f"{_SCAN_GIVEN_UP_AFTER_H} h after upload (first: {persistently_failing[0]}) - "
+                "check clamd and the worker log for av_scan errors",
             )
         return out
     except Exception:

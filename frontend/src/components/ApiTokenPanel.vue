@@ -169,12 +169,11 @@
   import { defaultTokenExpiryLocal, parseServerDate, siteLocalIsoToUtcIso } from '@/utils/datetime'
   import { TOKEN_SCOPE_GROUPS, scopeLabelKey } from '@/utils/tokenScopes'
 
-  // Token-appropriate durations. The form opens on DEFAULT_EXPIRY_LOCAL (90 days,
+  // Token-appropriate durations. The form opens on defaultTokenExpiryLocal() (90 days,
   // see below); "never" is offered but has to be picked.
   const TOKEN_PRESETS = ['7d', '30d', '90d', '1y', 'never'] as const
 
   /** Shared with AdminApiTokens.vue so the two forms cannot drift apart. */
-  const DEFAULT_EXPIRY_LOCAL = defaultTokenExpiryLocal
 
   const { t } = useI18n()
   const { formatDate } = useSiteDateFormat()
@@ -192,7 +191,7 @@
   // full-access credential - and nothing revokes API tokens on password reset or
   // "sign out other sessions". Both wide options are still one click away, but
   // they have to be chosen.
-  const expiresAtLocal = ref<string | null>(DEFAULT_EXPIRY_LOCAL())
+  const expiresAtLocal = ref<string | null>(defaultTokenExpiryLocal())
   const scopeMode = ref<'full' | 'limited'>('limited')
   const selectedScopes = ref<string[]>([])
   const plaintext = ref<CreateApiTokenResponse | null>(null)
@@ -242,7 +241,7 @@
       plaintext.value = data
       creating.value = false
       newName.value = ''
-      expiresAtLocal.value = DEFAULT_EXPIRY_LOCAL()
+      expiresAtLocal.value = defaultTokenExpiryLocal()
       scopeMode.value = 'limited'
       selectedScopes.value = []
       await refresh()
@@ -260,7 +259,7 @@
     // "never expires" + "full access" - the pre-hardening defaults - so the
     // SECOND time the form was opened it offered a permanent unrestricted
     // credential by default, while the first time did not.
-    expiresAtLocal.value = DEFAULT_EXPIRY_LOCAL()
+    expiresAtLocal.value = defaultTokenExpiryLocal()
     scopeMode.value = 'limited'
     selectedScopes.value = []
     errorMsg.value = null

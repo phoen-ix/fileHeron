@@ -137,7 +137,7 @@ def test_the_public_config_is_fetched_by_the_sign_in_worker_not_the_tk_thread():
     assert login.count("public_config(api)") == 3, "each _attempt returns it"
     ctrl = (SRC / "ui" / "controller.py").read_text(encoding="utf-8")
     signed_in = ctrl[ctrl.index("def _on_signed_in("):ctrl.index("def logout(")]
-    assert "if public_cfg is None:" in signed_in, "the inline fetch is the fallback only"
+    assert "public_config(" not in signed_in, "no fetch on the Tk thread, not even as a fallback"
 
 
 # --- direct uploads refresh an expired token like every other call ------------

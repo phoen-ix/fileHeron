@@ -7,7 +7,7 @@ IMAP server's stable identity - so re-polling never double-ingests, even in the
 be reinstated as one: it is read verbatim off the wire, so a forged value made a
 later genuine mail look like a duplicate, and the poll then advanced its UID
 highwater past it - mail destroyed with nothing admin-visible. See
-``inbound_mail._already_ingested``. Bodies are
+``inbound_mail.ingested_by_uid``. Bodies are
 ``deferred`` so the list + count queries never load them; only the detail
 endpoint pulls them. Inbound HTML is sanitised (nh3) at ingest time.
 """

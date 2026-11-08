@@ -76,7 +76,6 @@ logger = logging.getLogger("fileheron.secret")
 K = settings_svc.Keys
 
 MAX_CONTENT_CHARS = 10_000
-MAX_EMAILS = 20
 _LABEL_MAX = declared_width(Secret.__table__.c.label)
 # The mail to an address with no account, and its mail-log category - listed in
 # `mail_log._AUTH_LINK_CATEGORIES`, so the log never offers to resend a live link.
@@ -1172,6 +1171,10 @@ def links_for_sender(
         .all()
     )
     out = [(r, stored_url(db, r)) for r in rows]
+    if not rows:
+        # Nothing was shown: a page that asks for the links on every open must
+        # not fill the audit log with "0 links shown" (audit 2026-11-08).
+        return out
     record_audit_event(
         db,
         event_type=AuditEventType.secret_link_shown,

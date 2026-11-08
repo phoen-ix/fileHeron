@@ -195,7 +195,9 @@ async def test_imap(
             password=payload.password or stored.password,
             tls_mode=payload.tls_mode,
             mailbox=payload.mailbox or "INBOX",
-            tls_insecure=stored.tls_insecure,
+            tls_insecure=(
+                stored.tls_insecure if payload.tls_insecure is None else payload.tls_insecure
+            ),
         )
     result = await asyncio.to_thread(imap_poll_svc.test_connection, db, override=override)
     return ImapTestResponse(**result)
@@ -216,6 +218,8 @@ async def fetch_now(
         ingested=result.get("ingested"),
         mailbox=result.get("mailbox"),
         total=result.get("total"),
+        backlog=result.get("backlog"),
+        refused_unknown_sender=result.get("refused_unknown_sender"),
     )
 
 

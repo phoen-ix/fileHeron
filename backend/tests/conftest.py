@@ -156,7 +156,7 @@ def _string_width_violations(session) -> list[str]:
 
 
 @event.listens_for(Session, "before_flush")
-def _refuse_overlong_strings(session, _flush_context, _instances):  # noqa: ANN001
+def _refuse_overlong_strings(session, _flush_context, _instances):
     violations = _string_width_violations(session)
     if violations:
         raise AssertionError(
@@ -187,7 +187,7 @@ def engine():
     )
 
     @event.listens_for(eng, "connect")
-    def _fk_pragma(dbapi_conn, _rec):  # noqa: ANN001
+    def _fk_pragma(dbapi_conn, _rec):
         cur = dbapi_conn.cursor()
         cur.execute("PRAGMA foreign_keys=ON")
         cur.close()
@@ -227,7 +227,7 @@ def fk_engine():
     )
 
     @event.listens_for(eng, "connect")
-    def _fk_pragma(dbapi_conn, _rec):  # noqa: ANN001
+    def _fk_pragma(dbapi_conn, _rec):
         cur = dbapi_conn.cursor()
         cur.execute("PRAGMA foreign_keys=ON")
         cur.close()
@@ -258,6 +258,12 @@ def app_with_db(session_factory):
         settings_svc.enable_request_cache(s)
         try:
             yield s
+        except Exception:
+            # As app.dependencies.get_db does: the rollback is what fires the
+            # `run_after_rollback` compensations, so without it a test could
+            # never see one run.
+            s.rollback()
+            raise
         finally:
             s.close()
 

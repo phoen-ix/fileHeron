@@ -972,7 +972,7 @@ class ShareDetailView(ctk.CTkFrame):
             # alive: a sign-out pauses in-flight downloads (pause_all_in_flight)
             # AFTER tearing the screen down, and the row must still say
             # "paused" or the next visit cannot offer Resume.
-            done, total = row.get("last", (0, 0)) if row else (0, 0)
+            done, _total = row.get("last", (0, 0)) if row else (0, 0)
             if isinstance(exc, DownloadPaused):
                 dlreg.set_status(file_id, dlreg.PAUSED, bytes_done=done)
                 if alive(self):

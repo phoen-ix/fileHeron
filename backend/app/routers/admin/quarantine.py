@@ -118,7 +118,7 @@ def av_status(
     info = av_scan_svc.get_version()
     last_reload_at = (
         db.query(AuditLog.created_at)
-        .filter(AuditLog.event_type == AuditEventType.av_reload_triggered)
+        .filter(AuditLog.event_type == AuditEventType.av_reload_triggered.value)
         .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
         .limit(1)
         .scalar()

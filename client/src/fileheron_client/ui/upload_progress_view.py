@@ -69,12 +69,10 @@ class UploadProgressView(ctk.CTkFrame):
     # ---- public-link extraction (mirrors upload_panel._on_created) -------
 
     def _extract_pl_url(self) -> Optional[str]:
-        pl = getattr(self._share, "public_link", None)
-        if isinstance(pl, dict):
-            return pl.get("url")
-        if pl is not None:
-            return getattr(pl, "url", None)
-        return None
+        # `ShareResponse.public_link` is the typed InlinePublicLinkResult; the
+        # dict branch this had was for a shape the model never produces.
+        pl = self._share.public_link
+        return pl.url if pl is not None else None
 
     # ---- layout ---------------------------------------------------------
 

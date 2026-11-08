@@ -11,7 +11,6 @@ import io
 import os
 import random
 import threading
-import zlib
 
 import pytest
 
@@ -161,7 +160,7 @@ def test_the_reader_is_lazy_until_read(plain):
     assert len(calls) == 1
 
 
-def test_the_encrypting_reader_streams_and_describes_its_input(plain):
+def test_the_encrypting_reader_streams_its_input(plain):
     data = plain[: 2 * C + 5]
     key = fc.new_data_key()
     reader = fc.EncryptingReader(io.BytesIO(data), key, len(data))
@@ -169,7 +168,6 @@ def test_the_encrypting_reader_streams_and_describes_its_input(plain):
     while chunk := reader.read(65536):
         out += chunk
     assert bytes(out) == _encrypt_bytes(data, key)
-    assert reader.crc32 == zlib.crc32(data) and reader.plaintext_read == len(data)
 
 
 def test_a_source_of_the_wrong_size_is_refused(plain):

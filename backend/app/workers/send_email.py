@@ -25,14 +25,17 @@ from aiosmtplib.errors import (
 from arq import Retry
 
 from ..database import SessionLocal
-from ..models.audit_log import AuditEventType
+from ..models.audit_log import AuditEventType, AuditLog
 from ..models.email_log import EmailLog, EmailStatus, EmailVia
 from ..services import mail_log
 from ..services.audit import record_audit_event
 from ..services.email import resolve_smtp_config
+from ..utils.columns import declared_width
 from ..utils.emailing import send_email
 
 logger = logging.getLogger("fileheron.workers.send_email")
+
+_AUDIT_TARGET_ID_MAX = declared_width(AuditLog.__table__.c.target_id)
 
 _TRANSIENT_ERRORS = (
     SMTPConnectError,
@@ -96,7 +99,7 @@ def _record_undeliverable_audit(to: str, subject: str, smtp_code: int | None, me
                 # it, so a bounce to a long address was never audited at all and
                 # ops_check never told an admin their mail to that person was dead.
                 # The full address rides in the JSON metadata, which has no bound.
-                target_id=to[:64],
+                target_id=to[:_AUDIT_TARGET_ID_MAX],
                 metadata={
                     "to": to,
                     "subject": subject[:120],
@@ -168,7 +171,7 @@ def _finalize_log(
 def _already_sent(email_log_id: int | None) -> bool:
     """Whether this job's mail-log row is already marked `sent`.
 
-    ARQ is at-least-once and `WorkerSettings.max_tries` is 5, so a job can be
+    ARQ is at-least-once and this job may run `SEND_EMAIL_MAX_TRIES` times, so a job can be
     redelivered after its work completed. This one SENDS AN EMAIL before it
     records anything, so a redelivery re-sent it - and the in-app updater
     restarts the worker on every update, which is exactly the window that
@@ -298,7 +301,7 @@ async def send_email_job(
                 error_message=e.message,
             )
             raise Retry(defer=defer) from e
-        logger.error(
+        logger.error(  # noqa: TRY400 - a refused recipient is an expected outcome, not a bug - no traceback
             "permanent SMTP failure (%s) sending to %s: %s - giving up",
             e.code,
             to,
@@ -328,7 +331,7 @@ async def send_email_job(
         # In other words this is the normal path for a rejected address, not an
         # exotic one.
         code, message = _recipient_refusal_detail(e)
-        logger.error(
+        logger.error(  # noqa: TRY400 - same: the normal path for a rejected address
             "permanent SMTP failure (%s) sending to %s: %s - giving up", code, to, message
         )
         _record_undeliverable_audit(to, subject, code, message)

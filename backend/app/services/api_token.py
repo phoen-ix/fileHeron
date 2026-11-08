@@ -15,6 +15,7 @@ Verify:
 """
 from __future__ import annotations
 
+import base64
 import json
 import secrets
 from datetime import datetime, timezone
@@ -114,8 +115,6 @@ def _gen_prefix() -> str:
 
 def _gen_secret() -> str:
     raw = secrets.token_bytes(TOKEN_SECRET_BYTES)
-    import base64
-
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
 
 

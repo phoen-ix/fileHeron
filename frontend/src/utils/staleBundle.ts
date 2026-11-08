@@ -51,7 +51,7 @@ function sessionStoreOrNull(): SessionStore | null {
   }
 }
 
-export function browserEnv(): ReloadEnv {
+function browserEnv(): ReloadEnv {
   return {
     now: () => Date.now(),
     storage: sessionStoreOrNull(),

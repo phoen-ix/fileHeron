@@ -437,3 +437,26 @@ def test_the_migration_that_does_need_it_still_has_it():
         pathlib.Path(__file__).resolve().parents[1] / "pyproject.toml"
     ).read_text(encoding="utf-8")
     assert "markdown-it-py" in pyproject
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("minutes_ago, lifted", [(5, False), (maintenance_svc.HANDOFF_STALE_MIN + 1, True)])
+async def test_an_aware_handoff_stamp_is_read_like_a_naive_one(db, pending, monkeypatch, minutes_ago, lifted):
+    """The worker parsed the stamp itself, without the tz normalisation the
+    service's parser has, so an aware stamp raised TypeError out of the drain
+    tick (audit 2026-11-08). One parser now: `maintenance.handoff_age_sec`."""
+    from datetime import UTC, timedelta
+
+    from app.utils.timeutil import utc_now
+    from app.workers import drain_pending_update as mod
+
+    _stub_apply(monkeypatch)
+    maintenance_svc.apply_pending_update(db, reason="drain")
+    aware = (utc_now() - timedelta(minutes=minutes_ago)).replace(tzinfo=UTC)
+    maintenance_svc.set_handoff_at(db, aware.isoformat(), actor=None)
+    db.commit()
+    monkeypatch.setattr(mod, "SessionLocal", lambda: db)
+
+    out = await mod.drain_pending_update(None)
+
+    assert out["lifted"] is lifted

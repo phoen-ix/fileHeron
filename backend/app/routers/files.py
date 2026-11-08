@@ -69,10 +69,26 @@ def _get_file_or_404(db: Session, file_id: str) -> File:
     return file
 
 
-# The two state gates live in services/file.py; these names stay for the
-# tests that read them by source.
+# The state gates live in services/file.py; this name stays for the tests that
+# read it by source.
 _assert_previewable_state = file_svc.assert_state_previewable
-_assert_file_state_servable = file_svc.assert_state_servable
+
+
+def _assert_preview_allowed(db: Session, share: Share, file: File) -> None:
+    """Everything the preview mint and the preview serve both refuse on. The
+    two routes carried this block twice, line for line (audit 2026-11-08)."""
+    from ..services import preview as preview_svc
+    from ..services import settings as settings_svc
+
+    _assert_previewable_state(file)
+    if not settings_svc.get_bool(db, settings_svc.Keys.FILE_PREVIEW_ENABLED, default=True):
+        raise AppError(403, "PREVIEW_DISABLED", "In-browser preview is disabled.")
+    if not preview_svc.is_previewable(file.mime_type):
+        raise AppError(415, "PREVIEW_UNSUPPORTED", "This file type can't be previewed.")
+    if share.download_limit is not None and (share.downloads_remaining or 0) <= 0:
+        raise AppError(
+            410, "SHARE_DOWNLOAD_LIMIT_REACHED", "This share has reached its download limit."
+        )
 
 
 def _resolve_download_user(
@@ -150,16 +166,7 @@ def get_download_url(
     share_svc.assert_share_file_access(db, user=user, share=share, file=file)
     from ..services import maintenance as maintenance_svc
     maintenance_svc.refuse_if_maintenance(db, kind="download")
-    if file.state == FileState.uploading:
-        raise AppError(409, "STILL_UPLOADING", "File hasn't finished uploading yet.")
-    if file.state == FileState.deleted:
-        raise AppError(410, "FILE_DELETED", "File has been deleted.")
-    if file.state == FileState.infected:
-        raise AppError(410, "FILE_INFECTED", "File was quarantined.")
-    if file.state == FileState.ready_unscanned:
-        raise AppError(
-            425, "SCAN_IN_PROGRESS", "Antivirus scan still in progress; try again shortly."
-        )
+    file_svc.assert_state_servable(file)
     # v1.1.0: refuse to mint a signed URL for a share whose download
     # budget is exhausted. Saves the user from clicking a working-
     # looking URL that 410s on consume. (Race window between mint and
@@ -193,25 +200,13 @@ def get_preview_url(
     budget - preview never consumes it - but still refuses when the budget is
     already fully spent, so a used-up share serves neither downloads nor
     previews. Reuses the download token (same scope: this user, this file)."""
-    from ..services import preview as preview_svc
-    from ..services import settings as settings_svc
 
     file = _get_file_or_404(db, file_id)
     share = db.query(Share).filter(Share.id == file.share_id).one()
     share_svc.assert_share_file_access(db, user=user, share=share, file=file)
     from ..services import maintenance as maintenance_svc
     maintenance_svc.refuse_if_maintenance(db, kind="download")
-    _assert_previewable_state(file)
-    if not settings_svc.get_bool(
-        db, settings_svc.Keys.FILE_PREVIEW_ENABLED, default=True
-    ):
-        raise AppError(403, "PREVIEW_DISABLED", "In-browser preview is disabled.")
-    if not preview_svc.is_previewable(file.mime_type):
-        raise AppError(415, "PREVIEW_UNSUPPORTED", "This file type can't be previewed.")
-    if share.download_limit is not None and (share.downloads_remaining or 0) <= 0:
-        raise AppError(
-            410, "SHARE_DOWNLOAD_LIMIT_REACHED", "This share has reached its download limit."
-        )
+    _assert_preview_allowed(db, share, file)
 
     from ..services import settings_registry
     ttl = settings_registry.effective(db, settings_registry.K.DOWNLOAD_SIGNED_URL_TTL_SEC)
@@ -234,7 +229,6 @@ def preview_file(
     are served with a server-chosen safe Content-Type + nosniff/CSP hardening
     (see services/preview.py)."""
     from ..services import preview as preview_svc
-    from ..services import settings as settings_svc
     from ..services import settings_registry
     from ..services.storage_backend import serve_response
 
@@ -250,17 +244,7 @@ def preview_file(
     # only on the URL mint left the serve path unguarded, and the mint is a
     # pre-flight convenience - a `?dt=` token can be replayed straight at this
     # route (audit #2 cross-check).
-    _assert_previewable_state(file)
-    if not settings_svc.get_bool(
-        db, settings_svc.Keys.FILE_PREVIEW_ENABLED, default=True
-    ):
-        raise AppError(403, "PREVIEW_DISABLED", "In-browser preview is disabled.")
-    if not preview_svc.is_previewable(file.mime_type):
-        raise AppError(415, "PREVIEW_UNSUPPORTED", "This file type can't be previewed.")
-    if share.download_limit is not None and (share.downloads_remaining or 0) <= 0:
-        raise AppError(
-            410, "SHARE_DOWNLOAD_LIMIT_REACHED", "This share has reached its download limit."
-        )
+    _assert_preview_allowed(db, share, file)
 
     backend = get_storage_backend()
     if not file.storage_path or not backend.exists(file.storage_path):
@@ -332,17 +316,10 @@ def download_file(
         db, request=request, kind="download", file_id=file_id
     )
 
-    if file.state == FileState.uploading:
-        raise AppError(409, "STILL_UPLOADING", "File hasn't finished uploading yet.")
-    if file.state == FileState.deleted:
-        raise AppError(410, "FILE_DELETED", "File has been deleted.")
-    if file.state == FileState.infected:
-        raise AppError(410, "FILE_INFECTED", "File was quarantined.")
-    if file.state == FileState.ready_unscanned:
-        # Phase 5: block downloads until the AV worker has cleared the file.
-        raise AppError(
-            425, "SCAN_IN_PROGRESS", "Antivirus scan still in progress; try again shortly."
-        )
+    # Blocks downloads until the AV worker has cleared the file. The one ladder
+    # (services/file.py); this route and the URL mint above carried their own
+    # copies after the 2026-11-07 fold (audit 2026-11-08).
+    file_svc.assert_state_servable(file)
 
     backend = get_storage_backend()
     if not file.storage_path or not backend.exists(file.storage_path):

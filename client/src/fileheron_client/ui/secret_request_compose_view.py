@@ -114,7 +114,9 @@ class SecretRequestComposeView(ComposeBase):
         label = self.label_var.get().strip()
         note = self.note_box.get("1.0", "end-1c").strip()[:MAX_NOTE] or None
         open_for = preset_seconds(request_open_presets(self._limits), self.open_key)
-        expires_at = until(open_for or 7 * 86400)
+        # request_open_presets never offers "no expiry" - a request always closes.
+        assert open_for is not None
+        expires_at = until(open_for)
         max_views = views_value(bool(self.limit_views_var.get()), self.views_var.get())
         lifetime = preset_seconds(answer_lifetime_options(self._limits), self.lifetime_key)
         passphrase = self.passphrase.values()[0] or None

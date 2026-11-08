@@ -111,7 +111,6 @@ _PERSISTENT_FAILURE_TICKS = 2
 # anchoring is the ``fullmatch``, so a call site that reaches for ``match``
 # silently accepts suffixes again (which is what the third one did).
 RELEASE_TAG_RE = re.compile(r"v\d+\.\d+\.\d+")
-_BACKEND_TAG_RE = RELEASE_TAG_RE
 
 
 def version_key(tag: str | None) -> tuple[int, int, int] | None:
@@ -523,7 +522,7 @@ def html_release_url_for_tag(db: Session, tag: str | None) -> str | None:
 
     Used to link the *running* version to its changelog. The *latest*
     version reuses the cached `latest_url` (GitHub's own `html_url`)."""
-    if not tag or not _BACKEND_TAG_RE.fullmatch(tag):
+    if not tag or not RELEASE_TAG_RE.fullmatch(tag):
         return None
     m = re.search(
         r"https?://api\.github\.com/repos/([^/]+)/([^/]+)", _configured_url(db)

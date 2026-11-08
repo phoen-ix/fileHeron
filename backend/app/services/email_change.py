@@ -151,7 +151,7 @@ def _apply_email_change(
         if oidc_mode == "reset_setpw":
             set_password_token = um_svc.force_password_reset(
                 db, actor=initiated_by, target=user, request=request
-            )
+            ).token
 
     # An email change is an identity-sensitive event (same posture as a
     # password reset): drop every refresh session so the next access is a

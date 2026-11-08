@@ -7,7 +7,8 @@ still found twenty literal clips on persisted values (`subject[:255]`,
 telemetry paths). They all matched their columns on the day, and nothing kept
 them matching (audit 2026-11-07).
 
-A ratchet: the literal slices that remain in `app/services` and `app/routers`
+A ratchet: the literal slices that remain in `app/services`, `app/routers` and
+`app/workers` (since 2026-11-08 - the workers wrote two literal column clips)
 are listed below, each a NON-column use (a hash prefix, a log or JSON message
 cap, a filesystem name, a policy cap on a Text column). A new `[:N]` fails here
 until it is either derived from its column or classified as one of those.
@@ -60,11 +61,18 @@ _KNOWN_NON_COLUMN_CLIPS: set[tuple[str, str]] = {
     ('services/storage_backend.py', '"message": f"stored file {ref} failed authentication: {exc}"[:500],'),
     ('services/storage_backend.py', 'metadata={"error": str(exc)[:200]},'),
     ('services/zip_writer.py', 'return h.hexdigest()[:32]'),
+    # app/workers: JSON payload / result-dict caps and a batch cap, no column.
+    ('workers/auto_update.py', 'return {CRON_FAILED_KEY: True, "error": f"{type(exc).__name__}: {exc}"[:500]}'),
+    ('workers/disk_check.py', '"detail": str(stats.get("error"))[:200],'),
+    ('workers/ops_check.py', 'payload = {"reason": reason, "detail": detail[:500], "at": utc_now().isoformat()}'),
+    ('workers/rescan_inbound_attachments.py', 'q = q.filter(InboundAttachment.id.notin_(list(deferred)[:1000]))'),
+    ('workers/send_email.py', '"subject": subject[:120],'),
+    ('workers/send_email.py', '"smtp_message": (message or "")[:300],'),
 }
 
 
 def _literal_clips():
-    for sub in ("services", "routers"):
+    for sub in ("services", "routers", "workers"):
         for path in sorted((_APP / sub).rglob("*.py")):
             for text in path.read_text().splitlines():
                 stripped = text.strip()

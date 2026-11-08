@@ -7,6 +7,8 @@ only inside its own section.
 """
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, File, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
@@ -21,6 +23,8 @@ from ....schemas.branding_settings import (
 )
 from ....services import settings as settings_svc
 from ....services.audit import record_audit_event
+
+logger = logging.getLogger("fileheron.admin.branding")
 
 router = APIRouter()
 
@@ -189,6 +193,23 @@ async def upload_branding_logo(
     # Header-sized PNG rendition for the desktop client (best-effort - a
     # transcode failure must not block the upload; web/email use the original).
     png_locator = _store_client_png(backend, content)
+
+    # The bytes landed before the rows that point at them. A rollback from
+    # here on (a failed commit, an error in the audit write) used to leave both
+    # blobs with nothing referencing them and no sweeper that would ever look -
+    # the same compensation direct uploads and inbound attachments register
+    # (audit 2026-11-08).
+    from ....database import run_after_rollback
+
+    def _drop_new_blobs() -> None:
+        for loc in (locator, png_locator):
+            if loc:
+                try:
+                    backend.delete(loc)
+                except Exception:
+                    logger.warning("branding logo: could not drop orphaned blob %s", loc)
+
+    run_after_rollback(db, _drop_new_blobs)
 
     previous = settings_svc.get(db, settings_svc.Keys.BRANDING_LOGO_LOCATOR)
     previous_png = settings_svc.get(db, settings_svc.Keys.BRANDING_LOGO_PNG_LOCATOR)

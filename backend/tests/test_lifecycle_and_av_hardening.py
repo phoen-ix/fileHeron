@@ -241,9 +241,9 @@ def test_the_download_path_still_serves_an_unscanned_file():
     downloadable."""
     import inspect
 
-    from app.routers import files as files_router
+    from app.services import file as file_svc
 
-    src = inspect.getsource(files_router._assert_file_state_servable)
+    src = inspect.getsource(file_svc.assert_state_servable)
     assert "FILE_NOT_SCANNED" not in src
 
 

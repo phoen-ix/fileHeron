@@ -123,7 +123,7 @@ def _decrypt_or_503(totp: UserTOTP) -> str:
     try:
         return decrypt_totp_secret(totp.secret_encrypted)
     except SecretUndecryptableError:
-        logger.error(
+        logger.error(  # noqa: TRY400 - same: the message names the cause, the traceback is the cryptography library's
             "totp: secret for user_id=%s could not be decrypted; "
             "JWT_SECRET was probably rotated without re-encrypting",
             totp.user_id,

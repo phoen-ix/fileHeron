@@ -240,7 +240,7 @@ def test_a_config_import_burns_every_active_secret(db):
     enable(tgt)
     s = send(tgt, sender, users=(reader,)).secret
 
-    preview = cb.preview_backup(tgt, cb.parse_backup(raw, passphrase=None))
+    preview = cb.preview_backup(tgt, cb.parse_backup(raw, passphrase=None), actor=actor)
     assert preview.secrets_to_burn == 1
     summary = cb.apply_backup(tgt, parsed=cb.parse_backup(raw, passphrase=None), actor=actor, request=None)
     assert summary.secrets_to_burn == 1
@@ -426,7 +426,7 @@ def test_a_config_import_cancels_every_open_request(db):
     enable(tgt)
     req = ask(tgt, asker, users=(asked,), link=True).request
 
-    preview = cb.preview_backup(tgt, cb.parse_backup(raw, passphrase=None))
+    preview = cb.preview_backup(tgt, cb.parse_backup(raw, passphrase=None), actor=actor)
     assert preview.secret_requests_to_cancel == 1
     summary = cb.apply_backup(tgt, parsed=cb.parse_backup(raw, passphrase=None), actor=actor, request=None)
     assert summary.secret_requests_to_cancel == 1

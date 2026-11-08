@@ -77,3 +77,28 @@ async def test_rescan_requeues_stuck_unscanned(make_user, db, monkeypatch):
         "is, which is what made ready_unscanned permanent for it"
     )
     assert result["rescans_requeued"] == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("minutes_ago, failed", [(90, False), (7 * 60, True)])
+async def test_a_scan_that_keeps_failing_fails_the_run(make_user, db, monkeypatch, minutes_ago, failed):
+    """`av_scan_file` returning `{"state": "error"}` is not a cron, so nothing
+    ever surfaced a file the sweep kept re-enqueueing for hours (audit
+    2026-11-08). Six hours without a verdict makes this tracked run report
+    failed; an ordinary 90-minute-old straggler does not."""
+    from app.services import job_queue
+    from app.services.cron_tracker import CRON_FAILED_KEY
+    from app.workers.cleanup_stale_uploads import cleanup_stale_uploads
+
+    sender = make_user(email="hr@test.local", role=UserRole.admin)
+    _seed_stuck(db, sender, fid="stuck", size_bytes=1000, finalized_minutes_ago=minutes_ago)
+
+    async def _spy(_jobs):
+        return None
+
+    monkeypatch.setattr(job_queue, "aenqueue_many", _spy)
+    result = await cleanup_stale_uploads(None)
+
+    assert bool(result.get(CRON_FAILED_KEY)) is failed, result
+    if failed:
+        assert result["scans_failing"] == 1

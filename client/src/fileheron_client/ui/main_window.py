@@ -10,7 +10,7 @@ app no longer quits on logout)."""
 from __future__ import annotations
 
 import tkinter as tk
-from typing import Optional
+from typing import Callable, Optional
 
 import customtkinter as ctk
 
@@ -48,7 +48,7 @@ class MainWindow:
         api: ApiClient,
         me: MeResponse,
         *,
-        on_signed_out: Optional[callable] = None,
+        on_signed_out: Optional[Callable[[], None]] = None,
     ) -> None:
         from .. import __version__
         self._version = __version__
@@ -132,8 +132,7 @@ class MainWindow:
         # panel so newly-created/expired shares show up without a
         # manual click. CTk's API surface is a bit awkward - the
         # tab-change signal is fired via a configure of the segmented
-        # button - we poll via a simple StringVar trace.
-        self._active_tab = tk.StringVar(value=TAB_INBOX)
+        # button, so the callback below wraps that.
         # v0.4.22: WRAP CTk's segmented-button command instead of
         # overwriting it. Earlier code just did
         #     self.tabs._segmented_button.configure(command=our_cb)

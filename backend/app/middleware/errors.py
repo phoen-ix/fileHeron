@@ -269,7 +269,10 @@ async def http_exception_handler(request: Request, exc: Exception) -> JSONRespon
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     request_id = getattr(request.state, "request_id", None)
-    logger.exception("unhandled exception", extra={"request_id": request_id})
+    # exc_info from the argument, not from `.exception()`: that reads
+    # sys.exc_info(), which is set only because Starlette happens to call this
+    # handler inside its own `except` (ruff LOG004).
+    logger.error("unhandled exception", exc_info=exc, extra={"request_id": request_id})
     _maybe_enqueue_error_event(
         request, status_code=500, code="INTERNAL_ERROR", exc=exc
     )

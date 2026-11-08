@@ -71,6 +71,9 @@ def answer(
     db: Session = Depends(get_db),
 ) -> AnswerSecretRequestResponse:
     _throttle(request)
+    # Only to learn WHICH request to lock. `answer_request` resolves the token
+    # again under that lock - the read that counts - so this is not a
+    # redundant lookup to fold away.
     target = request_svc.target_by_token(db, payload.token)
     request_svc.answer_request(
         db,

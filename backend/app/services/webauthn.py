@@ -77,7 +77,9 @@ def has_passkeys(db: Session, user_id: int) -> bool:
 
 
 def _redis() -> aioredis.Redis:
-    # Bounded like the sync client (redis_client.py sets socket_timeout=2): a
+    # A fresh client per call on purpose, as in services/hibp.py: an asyncio
+    # client is bound to the loop that first used it. Bounded like the sync
+    # client (redis_client.py sets socket_timeout=2): a
     # Redis stall must not hang a login ceremony for the TCP default.
     return aioredis.Redis(
         host=settings.REDIS_HOST,

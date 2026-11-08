@@ -303,3 +303,25 @@ def test_a_real_backup_with_every_category_still_validates(db):
     )
     parsed = cb.parse_backup(raw, passphrase=None)
     cb._validate_backup_payload(parsed.payload, _admin(db))
+
+
+def test_preview_refuses_a_corrupt_backup_like_the_import_does(db):
+    """Preview read the same rows as Import without the up-front check, so a
+    hand-edited backup answered 500 there and 400 BACKUP_CORRUPT on Import
+    (audit 2026-11-08)."""
+    actor = _admin(db)
+    parsed = cb.ParsedBackup(
+        secret_mode="exclude",
+        categories=["settings_branding"],
+        include_env=False,
+        payload=_minimal_payload(settings_branding={"app_settings": [{"value": "x"}]}),
+        app_version=None,
+        git_sha=None,
+        alembic_revision=None,
+        created_at=None,
+    )
+    with pytest.raises(AppError) as exc:
+        cb.preview_backup(db, parsed, actor=actor)
+    assert exc.value.status_code == 400
+    assert exc.value.code == "BACKUP_CORRUPT"
+

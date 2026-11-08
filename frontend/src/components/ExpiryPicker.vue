@@ -59,7 +59,7 @@
     'update:relative': [seconds: number | null]
   }>()
 
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
 
   const DAY = 24 * 60 * 60 * 1000
   type PresetId = '1h' | '1d' | '7d' | '14d' | '30d' | '60d' | '90d' | '1y' | 'never'
@@ -195,11 +195,6 @@
     if (hours < 24) return t('expiry.in_hours', { n: hours }, hours)
     const days = Math.round(hours / 24)
     return t('expiry.in_days', { n: days }, days)
-  })
-
-  // Re-evaluate the locale-side label when language flips.
-  watch(locale, () => {
-    /* triggers re-render of hintText via t() */
   })
 
   // Manual edits on the picker invalidate the active preset highlight.

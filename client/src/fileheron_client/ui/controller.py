@@ -97,7 +97,7 @@ class AppController:
         self,
         api: ApiClient,
         me: MeResponse,
-        public_cfg: dict[str, Any] | None = None,
+        public_cfg: dict[str, Any],
     ) -> None:
         trace(f"_on_signed_in (role={me.role}, locale={me.locale!r})")
         # v0.8.0: apply + cache the server-side locale so the main window
@@ -133,10 +133,10 @@ class AppController:
             from ..formatters import set_display_timezone
             from .upload_worker import set_direct_upload_limit
 
-            if public_cfg is None:
-                from ..api.site import public_config
-
-                public_cfg = public_config(api)
+            # Fetched by the sign-in worker, never here: this runs on the Tk
+            # thread. `api.site.public_config` never raises, so it always
+            # arrives; the inline fallback "for a caller that predates" it was
+            # unreachable (audit 2026-11-08).
             set_display_timezone(public_cfg.get("site_timezone"))
             set_direct_upload_limit(public_cfg.get("max_direct_upload_bytes"))
         except Exception as exc:

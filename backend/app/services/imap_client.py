@@ -88,8 +88,6 @@ class ImapSession:
                 continue
             for item in data:
                 raw = item if isinstance(item, bytes) else str(item).encode()
-                if raw is None:
-                    continue
                 if raw.strip().isdigit():
                     return int(raw.strip())
                 m = re.search(rb"UIDVALIDITY\s+(\d+)", raw)
@@ -309,7 +307,17 @@ def open_session(cfg: ImapConfig) -> Iterator[ImapSession]:
         else:
             conn = imaplib.IMAP4(cfg.host, cfg.port, timeout=_TIMEOUT)
             if cfg.tls_mode == "starttls":
-                conn.starttls(ssl_context=ctx)
+                try:
+                    conn.starttls(ssl_context=ctx)
+                except BaseException:
+                    # The socket is open; a server that refuses STARTTLS (an
+                    # imaplib.IMAP4.error, not an OSError) used to leave it so
+                    # (audit 2026-11-08).
+                    try:
+                        conn.shutdown()
+                    except Exception:
+                        pass
+                    raise
     except ssl.SSLError:
         # A TLS failure already names itself precisely (certificate, hostname,
         # protocol); rewriting it as a generic connect error would lose that.

@@ -1,9 +1,9 @@
 """Runtime settings store.
 
-Generic key/value over MariaDB with optional Fernet-at-rest. Phase 9
-used this for OIDC configuration; Phase 10 moved OIDC into a dedicated
-``oidc_providers`` table, so right now this module is generic plumbing
-that future settings can use.
+Key/value over MariaDB (`app_settings`) with optional Fernet-at-rest for the
+secret keys. Every admin-editable setting that is not a registry tunable lives
+here, one key each (`Keys`); the registry tunables (`settings_registry`) store
+their overrides in the same table.
 """
 from __future__ import annotations
 
@@ -23,8 +23,7 @@ from .audit import record_audit_event
 logger = logging.getLogger("fileheron.settings")
 
 
-# Keys we store. OIDC moved to its own table in Phase 10; the only
-# remaining kv keys today are the API-token policy (post-Phase 10).
+# Every key this table holds, by feature.
 class Keys:
     # Set once, when the first admin is created. Never cleared: it is what
     # keeps the anonymous /setup wizard from re-opening if the instance ever

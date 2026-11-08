@@ -1,11 +1,7 @@
 """Shared Pydantic base classes."""
 from __future__ import annotations
 
-from typing import Generic, TypeVar
-
 from pydantic import BaseModel, ConfigDict
-
-T = TypeVar("T")
 
 
 class APIBaseModel(BaseModel):
@@ -28,10 +24,3 @@ class SignedUrlResponse(APIBaseModel):
     SPA mints one of these first (see utils/download_token)."""
     url: str
 
-
-class PaginatedResponse(APIBaseModel, Generic[T]):
-    items: list[T]
-    total: int
-    page: int
-    page_size: int
-    has_more: bool

@@ -127,7 +127,7 @@ async def preview_import(
     file: UploadFile = File(...),
     passphrase: str | None = Form(None),
     db: Session = Depends(get_db),
-    _admin: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_admin),
 ) -> BackupImportSummaryResponse:
     # These handlers must be `async def` to await the upload, but everything
     # after that is blocking: an scrypt KDF, a json.loads of up to 50 MB, and a
@@ -139,7 +139,7 @@ async def preview_import(
 
     raw = await _read_upload(file)
     parsed = await run_in_threadpool(cb.parse_backup, raw, passphrase=passphrase)
-    return _to_response(await run_in_threadpool(cb.preview_backup, db, parsed))
+    return _to_response(await run_in_threadpool(cb.preview_backup, db, parsed, actor=admin))
 
 
 @router.post("/backup/import", response_model=BackupImportSummaryResponse)

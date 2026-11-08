@@ -110,6 +110,13 @@ def create_link(
     is not in `active` state or already has a link.
 
     Caller commits."""
+    # First, before anything is deleted: it used to run after the revoked
+    # predecessor was already gone (audit 2026-11-08). The API schema refuses
+    # it too (gt=0); service callers have no schema in front of them.
+    if download_limit is not None and download_limit <= 0:
+        raise AppError(
+            400, "INVALID_DOWNLOAD_LIMIT", "download_limit must be a positive integer."
+        )
     if not is_allowed_to_create(db, actor):
         raise AppError(
             403,
@@ -184,10 +191,6 @@ def create_link(
     if existing is not None:
         db.delete(existing)
         db.flush()
-    if download_limit is not None and download_limit <= 0:
-        raise AppError(
-            400, "INVALID_DOWNLOAD_LIMIT", "download_limit must be a positive integer."
-        )
 
     plaintext = random_token(32)
     record = PublicLink(

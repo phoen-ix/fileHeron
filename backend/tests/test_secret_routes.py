@@ -335,3 +335,19 @@ def test_a_partial_policy_put_leaves_the_rest_alone(db, people):
 
     assert secret_svc.resolve_external_policy(db)[0] == "admins_only"
     assert secret_svc.passphrase_failure_mode(db) == "burn"
+
+
+@pytest.mark.asyncio
+async def test_reading_back_no_links_writes_no_audit_row(db, people, client, login_as):
+    """A secret sent only to accounts has no links; asking for them showed
+    nothing, yet each read wrote a `secret_link_shown` row (audit 2026-11-08)."""
+    enable(db)
+    a, b, _admin = people
+    sid = send(db, a, users=(b,)).secret.id
+    ta, _ = await login_as(a.email, PW)
+
+    resp = await client.get(f"/api/secrets/{sid}/links", headers=h(ta))
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["items"] == []
+    assert db.query(AuditLog).filter(AuditLog.event_type == "secret_link_shown").count() == 0

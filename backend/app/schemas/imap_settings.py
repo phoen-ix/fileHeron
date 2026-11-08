@@ -66,6 +66,10 @@ class TestImapRequest(APIBaseModel):
     password: str | None = None
     tls_mode: str = Field(default="implicit", pattern="^(implicit|starttls|none)$")
     mailbox: str = Field(default="INBOX", max_length=255)
+    # The on-screen "accept any certificate" toggle. None = the stored value, for
+    # a client one release behind; the button used to test the STORED toggle
+    # while every other field came from the form (audit 2026-11-08).
+    tls_insecure: bool | None = None
     # The CALLER's own password, re-confirmed. Distinct from `password` above,
     # which is the IMAP ACCOUNT's - conflating the two would be a security bug
     # with a very quiet failure mode. Required only when the request would send
@@ -91,6 +95,11 @@ class ImapFetchNowResponse(APIBaseModel):
     ingested: int | None = None
     mailbox: str | None = None
     total: int | None = None
+    # Mail left for the next runs (a run takes at most MAX_MESSAGES_PER_RUN),
+    # and messages the known-sender rule refused - both were dropped from this
+    # reply, so an admin could not see mail being refused (audit 2026-11-08).
+    backlog: int | None = None
+    refused_unknown_sender: int | None = None
 
 
 # ---- Inbox -----------------------------------------------------------------

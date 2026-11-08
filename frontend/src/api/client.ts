@@ -427,10 +427,9 @@ api.interceptors.response.use(
       //
       // Replaying one is worse than useless: the refresh always succeeds, so
       // the request goes again with the same wrong secret and every visible
-      // attempt spends the per-IP budget twice. change-password and
-      // change-email share one 3-per-15-min bucket, so the user's SECOND typo
-      // surfaces as 429 RATE_LIMITED rather than "current password is
-      // incorrect". This is the hazard step_up.py answers 403 to avoid. And
+      // attempt spends the per-IP budget twice. change-password's bucket is
+      // 3 per 15 min, so the user's SECOND typo would surface as 429
+      // RATE_LIMITED rather than "current password is incorrect". This is the hazard step_up.py answers 403 to avoid. And
       // since the interceptor now fires onAuthLost on a replay that 401s again,
       // a missing entry no longer just wastes a round trip - it SIGNS THE USER
       // OUT for a typo. 2fa/enable was exactly that: it 401s INVALID_TOTP

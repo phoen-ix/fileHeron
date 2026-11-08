@@ -117,6 +117,12 @@ select = [
     # unused arguments, cross-module private access, redundant list building,
     # ternaries that are `or`, and the two logging shapes that lose the traceback.
     "ARG", "SLF", "FURB", "PERF", "PIE", "RET", "PLR1714", "TRY004", "TRY401", "G201",
+    # Added 2026-11-08: `logger.error` inside an `except` drops the traceback
+    # (12 sites); `.exception` outside a handler logs `NoneType: None`.
+    "TRY400", "LOG004",
+    # A `noqa` for a rule that no longer fires (or was never enabled) is a
+    # comment pretending to be a suppression; 17 had accumulated.
+    "RUF100",
 ]
 ignore = [
     "S101",   # assert used (tests + defensive invariants)
@@ -132,8 +138,6 @@ ignore = [
               # + str() behaviour the code relies on; StrEnum would change serialization
     "ASYNC240", # pathlib in async fns: the stack has no anyio/trio Path; sync pathlib in
                 # the ARQ workers is intentional, so this rule is inapplicable here
-    "UP046",  # keep explicit `Generic[T]` on the Pydantic base model (PaginatedResponse) -
-              # PEP-695 type params interact awkwardly with Pydantic v2 generic models
 ]
 
 [tool.ruff.lint.per-file-ignores]

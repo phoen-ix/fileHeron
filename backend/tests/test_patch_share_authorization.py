@@ -91,3 +91,24 @@ async def test_admin_can_still_patch(client, make_user, login_as, share_of):
     resp = await _patch(client, token, share.id, {"expires_at_clear": True})
 
     assert resp.status_code == 200, resp.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"download_limit": 5, "download_limit_clear": True},
+        {"expires_at": "2099-01-01T00:00:00", "expires_at_clear": True},
+    ],
+)
+async def test_a_value_and_its_clear_flag_together_are_refused(client, make_user, login_as, share_of, body):
+    """The expiry pair was already a 400; the limit pair let the clear win
+    silently, so the caller's limit was dropped without a word (audit 2026-11-08)."""
+    owner = make_user(email="owner@test.local", role=UserRole.employee)
+    share = share_of(owner.id)
+    token, _ = await login_as("owner@test.local", "TestPassword123!")
+
+    resp = await _patch(client, token, share.id, body)
+
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["code"] == "INVALID_INPUT"

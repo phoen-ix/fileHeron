@@ -98,7 +98,11 @@ def assert_public_http_url(
     try:
         infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
     except socket.gaierror as e:
-        raise AppError(400, "URL_BLOCKED", f"Could not resolve host: {host}") from e
+        # `details.reason` lets a caller tell "may resolve later" from "will
+        # never be allowed" without matching the message text.
+        raise AppError(
+            400, "URL_BLOCKED", f"Could not resolve host: {host}", details={"reason": "unresolved"}
+        ) from e
 
     _assert_addresses_allowed(infos, allow_private=allow_private)
 

@@ -28,12 +28,12 @@ from pathlib import Path
 if __package__ in (None, ""):  # plain `python scripts/unblock_ip.py`
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import ipaddress  # noqa: E402
+import ipaddress
 
-from app.database import SessionLocal  # noqa: E402
-from app.models.ip_block import IpBlock  # noqa: E402
-from app.services import scan_guard as guard_svc  # noqa: E402
-from app.utils.timeutil import utc_now  # noqa: E402
+from app.database import SessionLocal
+from app.models.ip_block import IpBlock
+from app.services import scan_guard as guard_svc
+from app.utils.timeutil import utc_now
 
 
 def _live_matches(db, live, subject: str) -> list[IpBlock]:

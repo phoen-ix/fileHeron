@@ -436,8 +436,6 @@ class _EncryptedFileResponse(FileResponse):
     is never used: it would hand the server the CIPHERTEXT path.
     """
 
-    chunk_size = 1024 * 1024
-
     def __init__(
         self,
         *,
@@ -653,7 +651,7 @@ def serve_response(
         try:
             stored = backend.size(locator)
         except Exception as e:
-            logger.error("encrypted file %s: cannot stat %s: %s", file_id, locator, e)
+            logger.exception("encrypted file %s: cannot stat %s", file_id, locator)
             raise AppError(500, "FILE_UNREADABLE", "This file cannot be read.") from e
         if stored != file_crypto.ciphertext_size(cipher.plaintext_size):
             logger.error(

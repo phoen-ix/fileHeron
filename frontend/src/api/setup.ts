@@ -10,6 +10,8 @@ export interface CompleteSetupRequest {
   password: string
   display_name: string
   setup_token?: string | null
+  /** The language the wizard was shown in; the first admin's account locale. */
+  locale?: 'en' | 'de'
 }
 
 export interface CompleteSetupResponse {

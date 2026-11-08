@@ -35,7 +35,6 @@ TEMPLATE_SLUG = "share_link_external"
 # The mail-log category, and the key `mail_log._AUTH_LINK_CATEGORIES` lists so
 # the log never offers to resend a live link.
 MAIL_CATEGORY = TEMPLATE_SLUG
-MAX_PER_SHARE = 20
 
 
 def is_enabled(db: Session) -> bool:

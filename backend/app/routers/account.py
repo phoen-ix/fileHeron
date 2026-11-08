@@ -51,9 +51,12 @@ from ..services import jwt_session, settings_registry
 from ..services import rate_limit as rate_limit_svc
 from ..services import totp as totp_svc
 from ..utils.client_ip import get_client_ip
+from ..utils.columns import declared_width
 from ..utils.timeutil import utc_now
 
 router = APIRouter(prefix="/api/account", tags=["account"])
+
+_DISPLAY_NAME_MAX = declared_width(User.__table__.c.display_name)
 
 # Routes that MUST stay reachable while the 2FA policy is blocking the user,
 # or they could never satisfy it: read /me to learn the requirement, run the
@@ -163,11 +166,11 @@ def update_display_name(
             "INVALID_DISPLAY_NAME",
             "Display name must contain at least one non-whitespace character.",
         )
-    if len(name) > 120:
+    if len(name) > _DISPLAY_NAME_MAX:
         raise AppError(
             422,
             "INVALID_DISPLAY_NAME",
-            "Display name must be at most 120 characters.",
+            f"Display name must be at most {_DISPLAY_NAME_MAX} characters.",
         )
     # `.strip()` only removes SURROUNDING whitespace, so "Bob\nEvil" survived.
     # Three notification subjects interpolate the sender's display name, and
@@ -370,7 +373,9 @@ async def change_email(
         )
     ip = get_client_ip(request) or ""
     if not rate_limit_svc.check_ip_allowed(
-        "change_password", ip,
+        # Its own bucket: sharing change-password's meant a mistyped password
+        # on one form spent the other's budget (audit 2026-11-08).
+        "change_email", ip,
         settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER),
     ):
         raise AppError(429, "RATE_LIMITED", "Too many attempts; try again shortly.")

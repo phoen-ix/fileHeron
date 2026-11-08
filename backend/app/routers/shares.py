@@ -75,7 +75,7 @@ def _effective_subject(share, files) -> str:
     return ""
 
 
-def _to_share_response(db: Session, share, *, viewer: User | None = None) -> ShareResponse:
+def _to_share_response(db: Session, share, *, viewer: User) -> ShareResponse:
     """Build a fully-hydrated ShareResponse: file list + user recipients +
     group recipients (resolved to id/name/is_company_inbox). `viewer` (the
     requesting user) populates `viewer_can_approve` for the Approve/Reject UI."""
@@ -114,7 +114,7 @@ def _to_share_response(db: Session, share, *, viewer: User | None = None) -> Sha
     # asymmetry is the feature: with content review off an approver may open the
     # share and cast the vote, but a filename is content and stays hidden.
     # "Aligning" this line to the view predicate is the leak.
-    if files_pending and viewer is not None:
+    if files_pending:
         may_see_pending = (
             viewer.id == share.created_by_id
             or share_approval_svc.can_review_added_files(db, viewer)
@@ -126,10 +126,6 @@ def _to_share_response(db: Session, share, *, viewer: User | None = None) -> Sha
                 for f in files
                 if f.approval_state != FileApprovalState.pending_review
             ]
-    elif files_pending and viewer is None:
-        files = [
-            f for f in files if f.approval_state != FileApprovalState.pending_review
-        ]
     return ShareResponse(
         id=share.id,
         kind=share.kind,
@@ -337,7 +333,7 @@ def create_share(
 def list_shares(
     box: str = Query("outbox", pattern="^(outbox|inbox)$"),
     q: str = Query("", max_length=255),
-    state: list[str] = Query(default_factory=list),  # noqa: B008
+    state: list[str] = Query(default_factory=list),
     recipient_user_id: int | None = Query(None, ge=1),
     recipient_group_id: int | None = Query(None, ge=1),
     sender_user_id: int | None = Query(None, ge=1),
@@ -704,7 +700,8 @@ def patch_share(
 
     For expires_at: supply a datetime to set, or `expires_at_clear: true`
     to remove the expiry (share becomes never-expire). The two are
-    mutually exclusive - sending both is a 400.
+    mutually exclusive - sending both is a 400. Same for download_limit and
+    `download_limit_clear` (the clear used to win silently).
     """
     share = share_svc.get_share_or_404(db, share_id)
     # Authorize BEFORE branching. The owner-or-admin check used to live only
@@ -719,6 +716,12 @@ def patch_share(
             400,
             "INVALID_INPUT",
             "Cannot supply both expires_at and expires_at_clear; they are mutually exclusive.",
+        )
+    if payload.download_limit_clear and payload.download_limit is not None:
+        raise AppError(
+            400,
+            "INVALID_INPUT",
+            "Cannot supply both download_limit and download_limit_clear; they are mutually exclusive.",
         )
     if payload.expires_at_clear:
         share_svc.update_share_expiry(

@@ -188,7 +188,6 @@ class Prepared:
     # Columns the swap sets: the new locator plus enc_version/key_encrypted.
     values: dict[str, Any]
     lease_id: int
-    crc32: int | None
 
 
 def check_space(db: Session, backend: StorageBackend, needed: int) -> None:
@@ -290,7 +289,6 @@ def prepare_rewrite(
                 with backend.open(target.locator) as src:
                     reader = file_crypto.EncryptingReader(src, dek, target.size, cancel=cancel)
                     backend.write_stream(new_locator, reader)
-                crc: int | None = reader.crc32
                 values: dict[str, Any] = {
                     target.locator_col.key: new_locator,
                     "enc_version": file_crypto.FORMAT_VERSION,
@@ -305,7 +303,6 @@ def prepare_rewrite(
                     raise file_crypto.FileIntegrityError(
                         f"decrypted {counting.count} bytes, expected {target.size}"
                     )
-                crc = None
                 values = {target.locator_col.key: new_locator, "enc_version": None, "key_encrypted": None}
         written = backend.size(new_locator)
         if written != out_size:
@@ -314,7 +311,7 @@ def prepare_rewrite(
         db.rollback()
         _make_due(db, lease_id)
         raise
-    return Prepared(target, new_locator, values, lease_id, crc)
+    return Prepared(target, new_locator, values, lease_id)
 
 
 def _make_due(db: Session, lease_id: int) -> None:

@@ -91,7 +91,7 @@ def _interesting_offsets(zs: SizedZipStream) -> list[int]:
     an off-by-one in the layout arithmetic would hide."""
     offs: set[int] = {0, 1, len(zs) - 1}
     pos = 0
-    for e in zs._entries:  # noqa: SLF001 - the layout IS what is under test
+    for e in zs._entries:  # the layout IS what is under test
         n = len(e.name_bytes)
         for step in (
             _LOCAL_HEADER + n + _LOCAL_ZIP64_EXTRA,
@@ -101,7 +101,7 @@ def _interesting_offsets(zs: SizedZipStream) -> list[int]:
             offs.update({pos, pos + 1, max(0, pos + step - 1)})
             pos += step
     cd = pos
-    for e in zs._entries:  # noqa: SLF001
+    for e in zs._entries:
         offs.update({pos, pos + 1})
         pos += _CENTRAL_HEADER + len(e.name_bytes) + _CENTRAL_ZIP64_EXTRA
     offs.update({cd, pos, pos + _EOCD64, pos + _EOCD64 + _EOCD64_LOCATOR})
@@ -222,7 +222,7 @@ def test_the_default_timestamp_is_fixed():
     production only when a download straddles a two-second boundary."""
     from app.services.zip_writer import _DOS_EPOCH
 
-    assert SizedZipStream()._mtime == _DOS_EPOCH  # noqa: SLF001
+    assert SizedZipStream()._mtime == _DOS_EPOCH
     assert _full(mtime=None) == _full(mtime=_DOS_EPOCH)
 
 

@@ -159,24 +159,24 @@ def run_with_progress(
     UI would freeze until the transfer finished. We keep only the latest
     (done, total) with at most one flush queued, capping redraws to ~the poll
     rate while always delivering the final value."""
-    _state: dict[str, Any] = {"latest": None, "pending": False}
-    _state_lock = threading.Lock()
+    state: dict[str, Any] = {"latest": None, "pending": False}
+    state_lock = threading.Lock()
 
     def _flush() -> None:
-        with _state_lock:
-            latest = _state["latest"]
-            _state["pending"] = False
+        with state_lock:
+            latest = state["latest"]
+            state["pending"] = False
         if latest is not None and on_progress is not None:
             on_progress(*latest)
 
     def _tick(done: int, total: int) -> None:
         if on_progress is None:
             return
-        with _state_lock:
-            _state["latest"] = (done, total)
-            if _state["pending"]:
+        with state_lock:
+            state["latest"] = (done, total)
+            if state["pending"]:
                 return  # a flush is already queued; it'll pick up this value
-            _state["pending"] = True
+            state["pending"] = True
         _enqueue(_flush, ())
 
     def _runner() -> None:

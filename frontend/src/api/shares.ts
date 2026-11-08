@@ -5,6 +5,7 @@ import type {
   ShareListResponse,
   ShareRecipientsRequest,
   ShareResponse,
+  UpdateShareRequest,
 } from '@/types/api'
 
 export function createShare(payload: {
@@ -31,7 +32,7 @@ export function createShare(payload: {
 /** v1.1.4: pass `clear: true` to remove the expiry (share becomes
  *  never-expire); otherwise pass a new datetime. */
 export function updateShareExpiry(shareId: string, opts: { expires_at?: string; clear?: boolean }) {
-  const body: Record<string, unknown> = {}
+  const body: UpdateShareRequest = {}
   if (opts.clear) body.expires_at_clear = true
   else if (opts.expires_at) body.expires_at = opts.expires_at
   return api.patch<ShareResponse>(`/shares/${shareId}`, body)
@@ -43,10 +44,11 @@ export function updateShareDownloadLimit(
   shareId: string,
   opts: { limit?: number | null; clear?: boolean },
 ) {
-  return api.patch<ShareResponse>(`/shares/${shareId}`, {
+  const body: UpdateShareRequest = {
     download_limit: opts.limit ?? null,
     download_limit_clear: opts.clear ?? false,
-  })
+  }
+  return api.patch<ShareResponse>(`/shares/${shareId}`, body)
 }
 
 export function expireShareNow(shareId: string) {

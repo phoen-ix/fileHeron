@@ -30,6 +30,7 @@ class SecretRecipientsRequest(APIBaseModel):
     group_ids: list[int] = Field(default_factory=list, max_length=1000)
     # Addresses with no account; each gets its own link by email. Bounded low:
     # each one is an outbound mail to an arbitrary address.
+    # The one copy of the per-secret cap (services/secret had an unused second).
     emails: list[EmailLike] = Field(default_factory=list, max_length=20)
 
     @field_validator("user_ids", "group_ids")

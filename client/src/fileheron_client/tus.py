@@ -75,7 +75,6 @@ def upload_tus(
     tus_endpoint: str,
     upload_metadata_header: str,
     file_path: Path,
-    bearer: Optional[str] = None,
     chunk_size: int = DEFAULT_CHUNK,
     on_progress: Optional[Callable[[int, int], None]] = None,
     timeout: float = 120.0,
@@ -92,8 +91,10 @@ def upload_tus(
         "Tus-Resumable": TUS_VERSION,
         "Upload-Metadata": upload_metadata_header,
     }
-    if bearer:
-        base_headers["Authorization"] = f"Bearer {bearer}"
+    # No Authorization header: nginx proxies /uploads/ straight to tusd, which
+    # forwards only Upload-Metadata to the hooks, and the signed envelope in it
+    # is the authorisation (backend tus_signing). A bearer here only handed the
+    # access token to tusd for nothing (audit 2026-11-08).
 
     create_url = _absolute(server_url, tus_endpoint)
 

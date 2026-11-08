@@ -61,6 +61,7 @@ async def complete_setup(
         password=payload.password,
         display_name=payload.display_name,
         setup_token=payload.setup_token,
+        locale=payload.locale,
     )
     db.commit()
     return CompleteSetupResponse(user_id=user.id, email=user.email)

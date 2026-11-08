@@ -183,3 +183,47 @@ async def test_webhook_deliver_skips_inactive(db, monkeypatch):
     wh = _mk_webhook(db, events=["share_created"], active=False)
     res = await wd.webhook_deliver(None, wh.id, "share_created", {})
     assert res["skipped"] is True
+
+
+@pytest.mark.asyncio
+async def test_a_retry_after_the_webhook_was_switched_off_closes_its_row(db, monkeypatch):
+    """The first attempt left a `pending` row and a queued retry; the admin
+    then switched the webhook off. The retry skipped and left the row pending
+    forever (audit 2026-11-08)."""
+    from app.workers import webhook_deliver as wd
+
+    wh = _mk_webhook(db, events=["share_created"])
+    monkeypatch.setattr(wd.httpx, "AsyncClient", lambda *a, **kw: _FakeClient(code=500))
+    _public_dns(monkeypatch)
+    res = await wd.webhook_deliver(None, wh.id, "share_created", {})
+    assert res["status"] == "retry"
+
+    wh.active = False
+    db.commit()
+    res2 = await wd.webhook_deliver(None, wh.id, "share_created", {}, delivery_id=res["delivery_id"], attempt=2)
+
+    assert res2["skipped"] is True
+    db.expire_all()
+    row = db.query(WebhookDelivery).filter(WebhookDelivery.id == res["delivery_id"]).one()
+    assert row.status == WebhookDeliveryStatus.failed
+    assert "deactivated" in row.error
+
+
+@pytest.mark.asyncio
+async def test_an_unresolvable_host_is_retried_not_blocked(db, monkeypatch):
+    """Keyed on the guard's structured `details.reason`, not on its message
+    text: a DNS blip must not terminally fail a legitimate webhook."""
+    import socket
+
+    from app.workers import webhook_deliver as wd
+
+    wh = _mk_webhook(db, events=["share_created"])
+
+    def _no_dns(*_a, **_k):
+        raise socket.gaierror("temporary failure")
+
+    monkeypatch.setattr("app.utils.net.socket.getaddrinfo", _no_dns)
+    monkeypatch.setattr(wd.httpx, "AsyncClient", lambda *a, **kw: _FakeClient(raise_exc=OSError("dns")))
+    res = await wd.webhook_deliver(None, wh.id, "share_created", {})
+
+    assert res["status"] == "retry", res

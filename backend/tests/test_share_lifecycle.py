@@ -165,3 +165,45 @@ async def test_revoke_only_by_sender_or_admin(make_user, db):
     db.commit()
     db.expire_all()
     assert share.state == ShareState.revoked
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ended", [ShareState.expired, ShareState.revoked, ShareState.failed])
+async def test_a_share_that_already_ended_cannot_be_revoked(make_user, db, ended):
+    """Expired -> revoked relabelled how the share ended and re-stamped
+    terminated_at, restarting the orphan reclaim's grace window
+    (audit 2026-11-08). A rejected share stays revocable: that is the SPA's
+    Discard."""
+    sender = make_user(email="hr@test.local", role=UserRole.admin)
+    recipient = make_user(email="customer@test.local")
+    share = share_svc.create_share(
+        db, created_by=sender, kind=ShareKind.outbound,
+        recipient_user_ids=[recipient.id], expires_at=_future(),
+    )
+    share.state = ended
+    stamped = datetime(2026, 1, 1)
+    share.terminated_at = stamped
+    db.commit()
+
+    with pytest.raises(AppError) as exc:
+        share_svc.revoke_share(db, user=sender, share=share)
+
+    assert exc.value.code == "SHARE_NOT_ACTIVE"
+    db.refresh(share)
+    assert share.state == ended and share.terminated_at == stamped
+
+
+@pytest.mark.asyncio
+async def test_a_rejected_share_can_still_be_discarded(make_user, db):
+    sender = make_user(email="hr@test.local", role=UserRole.admin)
+    recipient = make_user(email="customer@test.local")
+    share = share_svc.create_share(
+        db, created_by=sender, kind=ShareKind.outbound,
+        recipient_user_ids=[recipient.id], expires_at=_future(),
+    )
+    share.state = ShareState.rejected
+    db.commit()
+
+    share_svc.revoke_share(db, user=sender, share=share)
+
+    assert share.state == ShareState.revoked

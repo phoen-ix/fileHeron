@@ -56,7 +56,7 @@ from .routers import (
 )
 from .services.admin_bootstrap import bootstrap_admin_if_configured
 from .services.twofa_enforcement import require_2fa_complete
-from .utils.logger import configure_logging  # noqa: F401
+from .utils.logger import configure_logging
 from .version import VERSION as _APP_VERSION
 
 

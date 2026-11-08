@@ -107,7 +107,6 @@ def start_upload(
                 tus_endpoint=init.tus_endpoint,
                 upload_metadata_header=init.upload_metadata_header,
                 file_path=file_path,
-                bearer=api.bearer,
                 on_progress=tick,
             )
             return init.file_id

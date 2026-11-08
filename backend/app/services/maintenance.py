@@ -259,8 +259,11 @@ def report_handoff_outcome(db: Session) -> str | None:
     set_handoff_job(db, None)
     db.commit()
     try:
-        notify_admins(
+        from . import admin_alerts
+
+        admin_alerts.notify_admins(
             db,
+            link_url="/admin/system",
             payload={
                 "reason": "update_completed" if healthy else "update_failed",
                 "target_tag": tag,
@@ -318,18 +321,28 @@ def _transfer_is_in_flight(file_id: str) -> bool:
     return transfer_activity.was_download_recent(file_id)
 
 
-def _handoff_is_stale(stamp: str) -> bool:
+def handoff_age_sec(stamp: str | None) -> float | None:
+    """Seconds since a hand-off stamp, or None when it cannot be parsed.
+
+    The one parse for both readers: the drain worker had its own copy without
+    the tz normalisation below, so an aware stamp raised TypeError in the
+    worker while this one accepted it (audit 2026-11-08)."""
     from datetime import datetime
 
     try:
-        when = datetime.fromisoformat(stamp)
+        when = datetime.fromisoformat(stamp or "")
     except (TypeError, ValueError):
-        return True
+        return None
     if when.tzinfo is not None:
         from ..utils.timeutil import to_naive_utc
 
         when = to_naive_utc(when)
-    return (utc_now() - when).total_seconds() > _HANDOFF_MAX_AGE_SEC
+    return (utc_now() - when).total_seconds()
+
+
+def _handoff_is_stale(stamp: str) -> bool:
+    age = handoff_age_sec(stamp)
+    return age is None or age > _HANDOFF_MAX_AGE_SEC
 
 
 def clear_maintenance_after_update(db: Session) -> bool:
@@ -480,7 +493,15 @@ def apply_pending_update(
     # notification failure must not unwind an update that has already been
     # handed to the executor.
     try:
-        _dispatch_update_started_to_admins(db, tag=pending["target_tag"], via=reason)
+        # The same ops_alert the direct /system/update route sends, so an admin
+        # sees one consistent event whichever way the update was triggered.
+        from . import admin_alerts
+
+        admin_alerts.notify_admins(
+            db,
+            payload={"reason": "update_triggered", "target_tag": pending["target_tag"], "via": reason},
+            link_url="/admin/system",
+        )
         # `dispatch` is caller-commits: it writes the in-app Notification row
         # and the queued mail_log row, and defers the SSE publish and the
         # send-email job to `run_after_commit`. Neither caller commits after
@@ -492,25 +513,6 @@ def apply_pending_update(
         logger.exception("pending update: admin ops alert failed (update proceeds)")
     logger.info("pending update applied: tag=%s via=%s", pending["target_tag"], reason)
     return result
-
-
-def _dispatch_update_started_to_admins(db: Session, *, tag: str, via: str) -> None:
-    """Same ops_alert fan-out the direct /system/update route performs.
-
-    Lives here rather than in routers/admin/system.py because the postponed and
-    forced paths run from the worker, which has no router to import from. The
-    router keeps its own copy for the click-through path; both hit the same
-    NotificationCategory.ops_alert, so an admin sees one consistent event
-    whichever way the update was triggered."""
-    notify_admins(db, payload={"reason": "update_triggered", "target_tag": tag, "via": via})
-
-
-def notify_admins(db: Session, *, payload: dict) -> None:
-    """An ops_alert to every enabled admin. Caller commits (dispatch is
-    caller-commits)."""
-    from . import admin_alerts
-
-    admin_alerts.notify_admins(db, payload=payload, link_url="/admin/system")
 
 
 def cancel_pending_update(db: Session, *, actor: User | None, request=None) -> bool:

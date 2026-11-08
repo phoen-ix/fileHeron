@@ -91,6 +91,7 @@ async def complete_setup(
     password: str,
     display_name: str,
     setup_token: str | None = None,
+    locale: str | None = None,
 ) -> User:
     """Create the first admin via the web wizard. Race-safe via the
     is_setup_complete check + the unique email constraint - second
@@ -128,7 +129,7 @@ async def complete_setup(
         password_hash=argon2_hash(password),
         display_name=display_name.strip()[:_DISPLAY_NAME_MAX],
         role=UserRole.admin,
-        locale=Locale.en,
+        locale=Locale(locale) if locale else Locale.en,
         email_verified=True,
         is_disabled=False,
     )

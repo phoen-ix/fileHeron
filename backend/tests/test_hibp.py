@@ -65,3 +65,17 @@ async def test_zero_count_not_breached(monkeypatch):
 
     monkeypatch.setattr(hibp_svc, "_fetch_range", fake_fetch)
     assert await hibp_svc.is_password_breached(pw) is False
+
+
+@pytest.mark.asyncio
+async def test_a_garbled_count_fails_open(monkeypatch):
+    """`int()` on an unexpected count raised out of every password-setting
+    route as a 500, against the documented fail-open (audit 2026-11-08)."""
+    pw = "password123"
+    suffix = hashlib.sha1(pw.encode(), usedforsecurity=False).hexdigest().upper()[5:]
+
+    async def fake_fetch(prefix5):
+        return f"{suffix}:<html>\n"
+
+    monkeypatch.setattr(hibp_svc, "_fetch_range", fake_fetch)
+    assert await hibp_svc.is_password_breached(pw) is False

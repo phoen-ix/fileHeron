@@ -16,9 +16,7 @@
 
   const props = defineProps<{ item: NItem }>()
   const emit = defineEmits<{ click: [] }>()
-  const { t, locale } = useI18n()
-
-  const { te } = useI18n()
+  const { t, te, locale } = useI18n()
 
   const SUB_TEMPLATE_FIELD: Partial<Record<string, string>> = {
     ops_alert: 'reason',

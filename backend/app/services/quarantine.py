@@ -136,10 +136,10 @@ def quarantine_file(
             file.storage_path = dest_loc
             db.commit()
             moved = True
-        except OSError as e:
+        except OSError:
             db.rollback()
-            logger.error(
-                "quarantine move failed for %s (already marked infected): %s", file.id, e
+            logger.exception(
+                "quarantine move failed for %s (already marked infected)", file.id
             )
     release_bytes(user_id=file.uploaded_by_id, bytes_to_free=file.size_bytes)
 

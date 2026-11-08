@@ -8,7 +8,7 @@
   import { useApiError } from '@/composables/useApiError'
   import { useAuthStore } from '@/stores/auth'
 
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const route = useRoute()
   const router = useRouter()
   const { describe } = useApiError()
@@ -56,6 +56,7 @@
         password: password.value,
         display_name: displayName.value.trim(),
         setup_token: setupToken.value.trim() || null,
+        locale: locale.value === 'de' ? 'de' : 'en',
       })
       // Auto-login the new admin so they go straight into the app.
       await auth.login(email.value.trim(), password.value)

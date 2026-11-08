@@ -261,3 +261,48 @@ async def test_admin_erase_self_refused(make_user, client, login_as):
     )
     assert resp.status_code == 400
     assert resp.json()["code"] == "CANNOT_ERASE_SELF"
+
+
+@pytest.mark.asyncio
+async def test_disabling_a_user_ends_their_access_tokens_too(make_user, db, client, login_as):
+    """Through jwt_session.revoke_all_user_refresh_tokens, which stamps
+    sessions_invalidated_at: the direct UPDATE revoked the refresh rows only,
+    bypassing the one chokepoint every other revoke goes through (audit
+    2026-11-08)."""
+    from app.models.refresh_token import RefreshToken
+
+    make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
+    target = make_user(email="t@test.local", role=UserRole.client, password="Pass12345678!")
+    await login_as("t@test.local", "Pass12345678!")
+    token, _ = await login_as("admin@test.local", "Pass12345678!")
+
+    resp = await client.patch(
+        f"/api/admin/users/{target.id}",
+        json={"is_disabled": True},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    db.expire_all()
+    db.refresh(target)
+    assert target.sessions_invalidated_at is not None
+    live = db.query(RefreshToken).filter(RefreshToken.user_id == target.id, RefreshToken.revoked_at.is_(None))
+    assert live.count() == 0
+
+
+@pytest.mark.asyncio
+async def test_force_reset_answers_the_records_own_expiry(make_user, db, client, login_as):
+    from app.models.password_reset_token import PasswordResetToken
+
+    make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
+    target = make_user(email="t@test.local", role=UserRole.client)
+    token, _ = await login_as("admin@test.local", "Pass12345678!")
+
+    resp = await client.post(
+        f"/api/admin/users/{target.id}/force-password-reset",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    record = db.query(PasswordResetToken).filter(PasswordResetToken.user_id == target.id).one()
+    assert resp.json()["expires_at"].startswith(record.expires_at.isoformat()[:19])

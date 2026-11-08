@@ -608,10 +608,10 @@ def purge_expired_bytes(
             continue  # infected: bytes are in quarantine, quota already released
         try:
             backend.delete(locator)
-        except Exception as e:
-            logger.error(
-                "post-commit byte purge failed locator=%s: %s - recording for "
-                "reclaim", locator, e,
+        except Exception:
+            logger.exception(
+                "post-commit byte purge failed locator=%s - recording for "
+                "reclaim", locator,
             )
             record_orphan_locator(db, locator=locator, reason=reason)
         # Released either way: the row is already `deleted`, so the quota must

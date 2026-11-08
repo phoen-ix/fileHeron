@@ -116,9 +116,9 @@ async def quota_reconcile(_ctx) -> dict:
                 except Exception as e:
                     errors += 1
                     first_error = first_error or exc_summary(e)
-                    logger.error(
-                        "quota_reconcile: redis CAS failed user=%d: %s",
-                        user_id, e,
+                    logger.exception(
+                        "quota_reconcile: redis CAS failed user=%d",
+                        user_id,
                     )
         if fixed:
             logger.info("quota_reconcile: checked %d users, fixed %d", checked, fixed)

@@ -29,7 +29,6 @@ from __future__ import annotations
 import contextlib
 import os
 import threading
-import zlib
 from collections.abc import Callable, Iterator
 from typing import BinaryIO, Protocol
 
@@ -144,8 +143,11 @@ class EncryptingReader:
     be handed to `shutil.copyfileobj` or S3's `upload_fileobj`. It insists that
     `src` holds exactly `size` bytes (it reads one byte past the end to be
     sure): encrypting a file that is not the size its row records would make
-    every later read fail. `crc32` and `plaintext_read` describe the plaintext
-    it consumed. `cancel` stops it between chunks.
+    every later read fail. `cancel` stops it between chunks.
+
+    It used to also run `zlib.crc32` over every plaintext byte and count them;
+    nothing ever read either (audit 2026-11-08), and this is the hottest loop
+    the encryption lanes have.
     """
 
     def __init__(
@@ -164,8 +166,6 @@ class EncryptingReader:
         self._tail_checked = False
         self._buf = bytearray(HEADER)
         self._cancel = cancel
-        self.crc32 = 0
-        self.plaintext_read = 0
 
     def readable(self) -> bool:
         return True
@@ -185,8 +185,6 @@ class EncryptingReader:
         data = _read_exactly(self._src, want)
         if len(data) != want:
             raise FileIntegrityError("the source is shorter than its recorded size")
-        self.crc32 = zlib.crc32(data, self.crc32)
-        self.plaintext_read += len(data)
         self._buf += _seal(self._aes, self._next, self._n, data)
         self._next += 1
 

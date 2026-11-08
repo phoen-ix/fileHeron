@@ -47,8 +47,12 @@ _MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
 MAX_ATTACHMENTS_PER_MESSAGE = 50
 
 
-def _already_ingested(db: Session, *, uidvalidity: int, uid: int) -> bool:
+def ingested_by_uid(db: Session, *, uidvalidity: int, uid: int) -> bool:
     """Whether this mailbox slot has already been ingested.
+
+    The one dedup check: a second helper asked the same question, and the
+    poll's "do we own this message" re-query asked it a third time about a
+    result that could only be yes (audit 2026-11-08).
 
     Keyed on `(uidvalidity, imap_uid)` ONLY. That pair is assigned by the IMAP
     server, is stable for the life of the mailbox, and is what actually makes
@@ -82,25 +86,12 @@ def message_id_seen_before(db: Session, *, message_id: str | None) -> bool:
     """Whether this Message-ID has been ingested before, under any UID.
 
     Advisory only - a caller may record or surface the collision, but must not
-    drop the message on the strength of it. See `_already_ingested`."""
+    drop the message on the strength of it. See `ingested_by_uid`."""
     if not message_id:
         return False
     return (
         db.query(InboundMessage.id)
         .filter(InboundMessage.message_id == message_id)
-        .first()
-        is not None
-    )
-
-
-def ingested_by_uid(db: Session, *, uidvalidity: int, uid: int) -> bool:
-    """True if THIS exact (uidvalidity, imap_uid) was already ingested - a genuine
-    re-poll of the same server message (safe to re-apply the server-side action),
-    as distinct from a Message-ID collision with a DIFFERENT message (which must
-    NOT be deleted/moved, or a legitimate distinct mail is destroyed unread)."""
-    return (
-        db.query(InboundMessage.id)
-        .filter(InboundMessage.uidvalidity == uidvalidity, InboundMessage.imap_uid == uid)
         .first()
         is not None
     )
@@ -295,7 +286,7 @@ def ingest(
             "it does not decide whether mail is dropped.",
             uid, uidvalidity, parsed.message_id,
         )
-    if _already_ingested(db, uidvalidity=uidvalidity, uid=uid):
+    if ingested_by_uid(db, uidvalidity=uidvalidity, uid=uid):
         return None
 
     sender_user_id = None

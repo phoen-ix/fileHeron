@@ -259,3 +259,23 @@ def test_install_generates_the_setup_token_before_the_stack_comes_up(tmp_path):
     )
     env = (tmp_path / ".env").read_text()
     assert re.fullmatch(r"SETUP_TOKEN=[0-9a-f]{64}\n", env), env
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("sent, stored", [("de", "de"), (None, "en")])
+async def test_the_first_admin_gets_the_wizards_language(client, db, sent, stored):
+    """The first admin was always created `en`, and every account an admin
+    creates inherits its creator's locale - so a German install mailed in
+    English until someone found the setting (audit 2026-11-08). An older SPA
+    that sends no locale still gets `en`."""
+    from app.models.user import User
+
+    body = {"email": "first.admin@test.local", "password": "AdminPassword123!", "display_name": "First Admin"}
+    if sent is not None:
+        body["locale"] = sent
+    r = await client.post("/api/setup/admin", json=body)
+
+    assert r.status_code == 200, r.text
+    db.expire_all()
+    user = db.query(User).filter(User.email == "first.admin@test.local").one()
+    assert user.locale.value == stored

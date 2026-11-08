@@ -211,7 +211,7 @@ def health_server():
     state = {"status": 200}
 
     class Handler(http.server.BaseHTTPRequestHandler):
-        def do_GET(self):  # noqa: N802 - the stdlib's name
+        def do_GET(self):  # the stdlib's name
             self.send_response(state["status"] if self.path == "/api/health" else 404)
             self.end_headers()
 

@@ -48,7 +48,7 @@ def _to_invite_item(invite, inviter_name: str | None) -> AdminInviteItem:
 @router.get("/invites", response_model=AdminInviteListResponse)
 def list_invites(
     state: str = Query("all", pattern=r"^(pending|expired|all)$"),
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=1000),  # the bound every other list has
     page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     _admin: User = Depends(get_current_admin),

@@ -69,6 +69,10 @@
       } else {
         ui.pushToast(data.error || t('admin_imap.fetch_failed'), 'warn')
       }
+      const refused = data.refused_unknown_sender ?? 0
+      if (refused > 0) ui.pushToast(t('admin_inbox.fetch_refused', { n: refused }, refused), 'warn')
+      const backlog = data.backlog ?? 0
+      if (backlog > 0) ui.pushToast(t('admin_inbox.fetch_backlog', { n: backlog }, backlog), 'info')
       resetAndLoad()
     } catch (err) {
       ui.pushToast(describe(err), 'warn')

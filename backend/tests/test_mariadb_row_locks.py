@@ -94,7 +94,7 @@ def test_record_failure_locks_the_row_on_the_read(mariadb, locked_user):
     conn = mariadb.connect()
     try:
         @sa.event.listens_for(conn, "before_cursor_execute")
-        def _capture(_c, _cur, stmt, _p, _ctx, _many):  # noqa: ANN001
+        def _capture(_c, _cur, stmt, _p, _ctx, _many):
             statements.append(stmt)
 
         with Session(bind=conn) as db:
@@ -196,7 +196,7 @@ def test_a_secret_reveal_locks_the_secret_row(mariadb, locked_user):
     conn = mariadb.connect()
     try:
         @sa.event.listens_for(conn, "before_cursor_execute")
-        def _capture(_c, _cur, stmt, _p, _ctx, _many):  # noqa: ANN001
+        def _capture(_c, _cur, stmt, _p, _ctx, _many):
             statements.append(stmt)
 
         with Session(bind=conn) as db:
@@ -242,7 +242,7 @@ def test_answering_a_secret_request_locks_the_request_row(mariadb, locked_user):
     conn = mariadb.connect()
     try:
         @sa.event.listens_for(conn, "before_cursor_execute")
-        def _capture(_c, _cur, stmt, _p, _ctx, _many):  # noqa: ANN001
+        def _capture(_c, _cur, stmt, _p, _ctx, _many):
             statements.append(stmt)
 
         with Session(bind=conn) as db:

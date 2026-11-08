@@ -39,7 +39,7 @@ from pathlib import Path
 
 from fileheron_client._trace import init as init_trace
 from fileheron_client._trace import report, trace, write_crash
-from fileheron_client.config import load_config
+from fileheron_client.config import load_config, log_dir
 from fileheron_client.i18n import set_locale
 from fileheron_client.ui._async import init_async
 from fileheron_client.ui.app import build_root
@@ -47,7 +47,6 @@ from fileheron_client.ui.controller import AppController
 
 
 def _log_dir() -> Path:
-    from fileheron_client.config import log_dir
     return log_dir()
 
 
@@ -99,8 +98,6 @@ def _selfcheck() -> int:
     `Start-Process -Wait`). Importing the packages + checking their bundled
     data dirs on disk is enough to catch a missing-collect regression and
     always terminates quickly."""
-    from pathlib import Path
-
     import customtkinter
     import tkinterdnd2
 

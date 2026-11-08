@@ -114,6 +114,7 @@
         password: form.value.use_smtp_credentials ? null : form.value.password || null,
         tls_mode: form.value.tls_mode,
         mailbox: form.value.mailbox,
+        tls_insecure: form.value.tls_insecure,
         ...(confirmPassword.value ? { confirm_password: confirmPassword.value } : {}),
       })
       testResult.value = data

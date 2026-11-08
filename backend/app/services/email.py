@@ -235,7 +235,6 @@ def _wrap_layout(
         fragment=fragment,
         email_subject=subject,
         app_name=app_name or settings.APP_NAME,
-        app_url=settings.APP_URL,
         locale=locale_code,
         site_timezone=site_timezone or DEFAULT_TIMEZONE,
         now=ctx.get("now"),
@@ -575,7 +574,12 @@ async def send_resolved(
     is deliberately NOT the user's current one - the post-apply notice to the
     OLD address being the whole reason this parameter exists. That row used to
     land with recipient_user_id=NULL, so it appeared under nobody in the admin
-    panel (audit 2026-07-30, flow-emailchange-1)."""
+    panel (audit 2026-07-30, flow-emailchange-1).
+
+    Two short sessions on purpose - one to read the config, one to log the
+    result - rather than one held across `send_email`: the SMTP round trip
+    can take seconds (or the full timeout), and a session kept open through it
+    pins a pooled DB connection for nothing."""
     db = SessionLocal()
     try:
         cfg = resolve_smtp_config(db)
@@ -587,7 +591,7 @@ async def send_resolved(
         await send_email(
             cfg=cfg, to=to, subject=subject, text_body=text_body, html_body=html_body
         )
-    except Exception as exc:  # noqa: BLE001 - re-raised below after logging
+    except Exception as exc:  # re-raised below after logging
         err = exc
 
     if category is not None:
@@ -750,7 +754,7 @@ async def test_send(
         await send_email(
             cfg=cfg, to=to, subject=subject, text_body=text, html_body=html
         )
-    except Exception as exc:  # noqa: BLE001 - surface every error to the admin
+    except Exception as exc:  # surface every error to the admin
         _log_test_send(to, subject, text, html, exc=exc)
         return smtp_error_payload(exc)
     _log_test_send(to, subject, text, html, exc=None)

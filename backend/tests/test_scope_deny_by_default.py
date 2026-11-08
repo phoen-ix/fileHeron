@@ -103,11 +103,11 @@ def test_backstop_actually_fires_on_an_unguarded_route():
     sub = APIRouter()
 
     @sub.get("/_probe_unguarded")
-    def _unguarded(user=Depends(get_actor)):  # noqa: ANN001
+    def _unguarded(user=Depends(get_actor)):
         return {}
 
     @sub.get("/_probe_guarded")
-    def _guarded(user=Depends(require_scope("shares:read"))):  # noqa: ANN001
+    def _guarded(user=Depends(require_scope("shares:read"))):
         return {}
 
     probe.include_router(sub)

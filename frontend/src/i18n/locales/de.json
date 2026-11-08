@@ -1141,6 +1141,8 @@
     "fetch_now": "Jetzt abrufen",
     "fetch_done": "{n} neue Nachricht abgerufen | {n} neue Nachrichten abgerufen",
     "fetch_empty": "Keine neue Mail - {mailbox} hat {total} Nachricht(en)",
+    "fetch_refused": "{n} Nachricht abgelehnt - der Absender ist kein bekannter Nutzer | {n} Nachrichten abgelehnt - die Absender sind keine bekannten Nutzer",
+    "fetch_backlog": "{n} weitere Nachricht folgt beim nächsten Lauf | {n} weitere Nachrichten folgen bei den nächsten Läufen",
     "search_placeholder": "Betreff oder Absender suchen…",
     "class_all": "Alle Typen",
     "class_normal": "Antworten",

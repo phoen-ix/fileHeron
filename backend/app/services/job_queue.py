@@ -134,8 +134,8 @@ def enqueue(name: str, *args: Any, **kwargs: Any) -> None:
     if loop is None:
         try:
             asyncio.run(aenqueue(name, *args, **kwargs))
-        except Exception as e:
-            logger.error("failed to enqueue %s [%s]: %s", name, _redact(args, kwargs), e)
+        except Exception:
+            logger.exception("failed to enqueue %s [%s]", name, _redact(args, kwargs))
         return
 
     task = loop.create_task(aenqueue(name, *args, **kwargs))
@@ -171,8 +171,8 @@ def enqueue_many(jobs: list[tuple[str, tuple, dict]]) -> None:
     if loop is None:
         try:
             asyncio.run(aenqueue_many(jobs))
-        except Exception as e:
-            logger.error("failed to enqueue batch [%s]: %s", shape, e)
+        except Exception:
+            logger.exception("failed to enqueue batch [%s]", shape)
         return
 
     task = loop.create_task(aenqueue_many(jobs))

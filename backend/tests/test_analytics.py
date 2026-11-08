@@ -149,3 +149,24 @@ async def test_analytics_csv_export(make_user, db, client, login_as):
     assert r.status_code == 200, r.text
     assert r.headers["content-type"].startswith("text/csv")
     assert r.text.splitlines()[0] == "section,key,value"
+
+
+def test_today_is_the_site_day_on_both_ends(db, monkeypatch):
+    """23:30 UTC is already tomorrow in Vienna. The day series were bucketed by
+    the site day while the storage snapshot and `range.to` used the UTC date,
+    so around midnight the page ended a day early and the snapshot landed in
+    yesterday's bucket (audit 2026-11-08)."""
+    from app.models.analytics_snapshot import AnalyticsSnapshot
+    from app.services import settings as settings_svc
+
+    settings_svc.set_value(db, key=settings_svc.Keys.SITE_TIMEZONE, value="Europe/Vienna", actor=None)
+    db.commit()
+    fixed = datetime(2026, 11, 8, 23, 30)
+    monkeypatch.setattr(analytics_svc, "utc_now", lambda: fixed)
+
+    analytics_svc.snapshot_storage_today(db)
+    db.commit()
+    out = analytics_svc.compute_analytics(db, days=7)
+
+    assert db.query(AnalyticsSnapshot.snapshot_date).scalar().isoformat() == "2026-11-09"
+    assert out["range"] == {"from": "2026-11-03", "to": "2026-11-09"}

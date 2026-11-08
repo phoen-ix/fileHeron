@@ -1417,6 +1417,10 @@ export interface ImapFetchNowResponse {
   ingested: number | null
   mailbox: string | null
   total: number | null
+  /** Mail left for the next runs (a run takes a bounded batch). */
+  backlog: number | null
+  /** Messages the known-sender rule refused this run. */
+  refused_unknown_sender: number | null
 }
 
 export type InboxClass = 'normal' | 'bounce' | 'auto_reply'

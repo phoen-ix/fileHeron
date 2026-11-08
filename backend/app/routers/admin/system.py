@@ -41,7 +41,7 @@ from ...schemas.system import (
     UpdaterJob,
     UpdaterStatus,
 )
-from ...services import cron_schedule, cron_tracker
+from ...services import admin_alerts, cron_schedule, cron_tracker
 from ...utils.timeutil import utc_now
 
 router = APIRouter()
@@ -400,15 +400,6 @@ def _refuse_downgrade(target_tag: str) -> None:
         )
 
 
-def _dispatch_ops_to_admins(db: Session, payload: dict, link_url: str) -> None:
-    """Fan out an `ops_alert` notification to every non-disabled admin so
-    every admin sees the in-app bell + email about a triggered update,
-    not just the admin who clicked. Dispatch never blocks the update."""
-    from ...services import admin_alerts
-
-    admin_alerts.notify_admins(db, payload=payload, link_url=link_url)
-
-
 @router.get("/system/update-status", response_model=UpdaterStatus)
 def update_status(
     db: Session = Depends(get_db), _admin: User = Depends(get_current_admin)
@@ -531,7 +522,7 @@ def apply_update(
         metadata={"target_tag": payload.target_tag, "backup": backup},
         request=request,
     )
-    _dispatch_ops_to_admins(
+    admin_alerts.notify_admins(
         db,
         payload={
             "reason": "update_triggered",
@@ -571,7 +562,7 @@ def apply_rollback(
         metadata={"target_tag": result.get("target_tag")},
         request=request,
     )
-    _dispatch_ops_to_admins(
+    admin_alerts.notify_admins(
         db,
         payload={
             "reason": "rollback_triggered",

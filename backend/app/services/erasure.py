@@ -289,9 +289,9 @@ def _erase_user_locked(
             db.commit()
             deleted_bytes += f_bytes
             deleted_count += 1
-        except OSError as e:
+        except OSError:
             db.rollback()
-            logger.error("erasure: hard_delete failed file=%s: %s", f_id, e)
+            logger.exception("erasure: hard_delete failed file=%s", f_id)
             failed_files.append(f_id)
     if failed_files:
         raise AppError(

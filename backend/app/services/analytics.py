@@ -42,8 +42,12 @@ _DAILY_CHUNK = 2000
 
 def snapshot_storage_today(db: Session) -> AnalyticsSnapshot:
     """Upsert today's storage/file-state row. Idempotent on `snapshot_date`
-    (a re-run overwrites today). Caller commits."""
-    today = utc_now().date()
+    (a re-run overwrites today). Caller commits.
+
+    "Today" is the SITE day, like every series the analytics page draws: keyed
+    by the UTC date, a snapshot taken after local midnight but before UTC
+    midnight landed on yesterday's bucket (audit 2026-11-08)."""
+    today = _site_today(_site_tz(db))
     storage = int(
         db.query(func.coalesce(func.sum(File.size_bytes), 0))
         .filter(File.state.in_(_STORED_STATES))
@@ -84,10 +88,14 @@ def _site_tz(db) -> ZoneInfo:
         return ZoneInfo("UTC")
 
 
+def _site_today(tz: ZoneInfo) -> date:
+    return utc_now().replace(tzinfo=timezone.utc).astimezone(tz).date()
+
+
 def _cutoff(days: int, tz: ZoneInfo) -> tuple[date, datetime]:
     # "Today" and the day buckets are in the site timezone; the fetch lower bound
     # is that local start-of-day expressed in UTC (stored timestamps are naive UTC).
-    site_today = utc_now().replace(tzinfo=timezone.utc).astimezone(tz).date()
+    site_today = _site_today(tz)
     start_date = site_today - timedelta(days=days - 1)
     start_utc = datetime.combine(start_date, time.min, tzinfo=tz).astimezone(timezone.utc)
     return start_date, start_utc.replace(tzinfo=None)
@@ -236,7 +244,8 @@ def compute_analytics(db: Session, days: int = 30) -> dict:
 
     return {
         "days": days,
-        "range": {"from": start_date.isoformat(), "to": utc_now().date().isoformat()},
+        # The site day the buckets end on, not the UTC date (audit 2026-11-08).
+        "range": {"from": start_date.isoformat(), "to": (start_date + timedelta(days=days - 1)).isoformat()},
         "storage_trend": storage_trend,
         "storage_as_of": storage_trend[-1]["date"] if storage_trend else None,
         "shares_created": shares_created,

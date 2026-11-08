@@ -1,8 +1,10 @@
 import api, { createBareClient } from './client'
 import type {
   AdminSecretRequestListResponse,
+  AnswerSecretRequestRequest,
   AnswerSecretRequestResponse,
   CreateSecretRequestRequest,
+  PublicAnswerSecretRequestRequest,
   PublicSecretRequestPeekResponse,
   SecretRequestLinksResponse,
   SecretRequestListResponse,
@@ -33,10 +35,8 @@ export function getSecretRequest(id: string) {
 }
 
 export function answerSecretRequest(id: string, content: string, passphrase: string | null) {
-  return api.post<AnswerSecretRequestResponse>(`/secret-requests/${id}/answer`, {
-    content,
-    passphrase,
-  })
+  const body: AnswerSecretRequestRequest = { content, passphrase }
+  return api.post<AnswerSecretRequestResponse>(`/secret-requests/${id}/answer`, body)
 }
 
 export function cancelSecretRequest(id: string) {
@@ -65,11 +65,8 @@ export function answerPublicSecretRequest(
   content: string,
   passphrase: string | null,
 ) {
-  return publicClient.post<AnswerSecretRequestResponse>('/api/public/secret-requests/answer', {
-    token,
-    content,
-    passphrase,
-  })
+  const body: PublicAnswerSecretRequestRequest = { token, content, passphrase }
+  return publicClient.post<AnswerSecretRequestResponse>('/api/public/secret-requests/answer', body)
 }
 
 /* Admin: metadata only, plus Cancel. */

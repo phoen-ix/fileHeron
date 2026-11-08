@@ -33,7 +33,10 @@ HTTP_TIMEOUT_SEC = 4.0
 
 
 def _redis() -> aioredis.Redis:
-    # Bounded like the sync client (redis_client.py sets socket_timeout=2); the
+    # A fresh client per call, deliberately: an asyncio client is bound to the
+    # event loop that first used it, and this runs on the API's loop, the
+    # worker's, and in to_thread-spawned loops. One lookup per password change
+    # is not worth a cross-loop failure. Bounded like the sync client (redis_client.py sets socket_timeout=2); the
     # cache is best-effort and a stalled Redis must not hold up a password
     # change for the TCP default.
     return aioredis.Redis(
@@ -137,8 +140,14 @@ async def is_password_breached(password: str, db=None) -> bool:
         except ValueError:
             continue
         if sfx.upper() == suffix:
-            count = int(count_str.strip())
-            return count > 0
+            # An unexpected count is a garbled response, and the documented
+            # posture is fail-open: `int()` raising here escaped out of
+            # register, reset and change-password as a 500 (audit 2026-11-08).
+            try:
+                return int(count_str.strip()) > 0
+            except ValueError:
+                logger.warning("HIBP: unparseable count for a matching suffix; failing open")
+                return False
     return False
 
 

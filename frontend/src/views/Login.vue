@@ -474,10 +474,6 @@
     justify-content: center;
   }
 
-  .recovery-toggle {
-    font-size: var(--fh-text-body-sm);
-  }
-
   .actions {
     display: flex;
     align-items: baseline;

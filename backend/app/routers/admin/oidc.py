@@ -212,8 +212,6 @@ def delete_provider(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ) -> Response:
-    from ...middleware.errors import AppError
-
     p = oidc_admin_svc.get_provider(db, provider_id)
     linked = _user_count_for_provider(db, p.id)
     if linked > 0:

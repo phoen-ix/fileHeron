@@ -268,3 +268,15 @@ async def test_admin_only_routes_refuse_non_admins(
             path, headers={"Authorization": f"Bearer {token}"}
         )
         assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_status_filter_is_a_422_not_every_token(make_user, client, login_as):
+    """An unknown value fell through every branch of the filter and listed ALL
+    tokens, which reads as "this status matches everything" (audit 2026-11-08)."""
+    make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
+    token, _ = await login_as("admin@test.local", "Pass12345678!")
+
+    r = await client.get("/api/admin/api-tokens?status=actve", headers={"Authorization": f"Bearer {token}"})
+
+    assert r.status_code == 422, r.text

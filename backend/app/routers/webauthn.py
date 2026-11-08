@@ -19,8 +19,9 @@ A passkey replaces TOTP only when the authenticator reports USER
 VERIFICATION (PIN / biometric): password + UV-verified passkey is two
 factors. A bare-touch assertion is possession alone, so an account with TOTP
 enabled gets a pending token from /complete and is asked for its code.
-Because a passkey can stand in for the second factor, registering one is
-gated on the current password (step-up), exactly like disabling TOTP.
+Because a passkey can stand in for the second factor, registering one AND
+removing one are gated on the current password (step-up), exactly like
+disabling TOTP.
 """
 from __future__ import annotations
 
@@ -43,6 +44,7 @@ from ..schemas.webauthn import (
     WebAuthnAuthCompleteRequest,
     WebAuthnCredentialItem,
     WebAuthnCredentialListResponse,
+    WebAuthnDeleteRequest,
     WebAuthnRegisterBeginRequest,
     WebAuthnRegisterBeginResponse,
     WebAuthnRegisterCompleteRequest,
@@ -144,10 +146,18 @@ async def register_complete(
 )
 def delete_credential(
     credential_db_id: int,
+    payload: WebAuthnDeleteRequest,
     request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> None:
+    # Step-up, like register/begin: while passkey sign-in is on, this may be
+    # the account's only second factor, and a session alone must not be able
+    # to remove it. Asked unconditionally - the switch can be turned on later,
+    # and a passkey added as a plain second factor is one then too.
+    from ..services.step_up import verify_password_or_403
+
+    verify_password_or_403(db, user, payload.password, request=request)
     webauthn_svc.delete_credential(
         db, user=user, credential_db_id=credential_db_id
     )

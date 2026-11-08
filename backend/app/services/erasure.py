@@ -670,6 +670,20 @@ def _erase_user_locked(
 
     pii_purged["audit_log_scrubbed"] = scrubbed
 
+    # The rows stay, the person's address goes: every audited action the
+    # subject took carries their client IP (`audit.record_audit_event` stamps
+    # it from the request), and that is the one personal datum the
+    # download_log and error_log scrubs above exist to remove - it was never
+    # removed here. Actor rows only: a row where the subject is the TARGET
+    # carries the admin's address, not theirs. `request_id` is kept; it is a
+    # per-request random correlation key, not a trait of the person
+    # (audit 2026-11-08).
+    pii_purged["audit_log_ip_scrubbed"] = (
+        db.query(AuditLog)
+        .filter(AuditLog.actor_user_id == target.id, AuditLog.ip.isnot(None))
+        .update({AuditLog.ip: None}, synchronize_session=False)
+    )
+
     # Deliberately retained: `share_recipients` rows reference the (now
     # anonymised) user by integer FK only - no plaintext PII - so the
     # sender's recipient list stays intact. `audit_log` is the append-only

@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, or_, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, contains_eager
 
 from ..config import settings
 from ..middleware.errors import AppError
@@ -312,6 +312,71 @@ def account_reach(db: Session, secret: Secret, user_id: int) -> AccountReach:
         .all()
     ]
     return AccountReach(direct=direct, groups=groups)
+
+
+def account_reach_many(
+    db: Session, secret_ids: list[str], user_id: int
+) -> dict[str, AccountReach]:
+    """`account_reach` for ONE person across many secrets - two queries for a
+    page of the received box instead of two per row (audit 2026-11-08)."""
+    out: dict[str, AccountReach] = {
+        sid: AccountReach(direct=None, groups=[]) for sid in secret_ids
+    }
+    if not secret_ids:
+        return out
+    for rec in db.query(SecretRecipient).filter(
+        SecretRecipient.secret_id.in_(secret_ids),
+        SecretRecipient.kind == SecretRecipientKind.user,
+        SecretRecipient.recipient_user_id == user_id,
+    ):
+        out[rec.secret_id].direct = rec
+    group_rows = (
+        db.query(SecretGroupMember.user_id, SecretRecipient)
+        .join(SecretRecipient, SecretRecipient.id == SecretGroupMember.recipient_id)
+        .join(
+            GroupMember,
+            and_(
+                GroupMember.group_id == SecretRecipient.recipient_group_id,
+                GroupMember.user_id == SecretGroupMember.user_id,
+            ),
+        )
+        .filter(
+            SecretRecipient.secret_id.in_(secret_ids),
+            SecretRecipient.kind == SecretRecipientKind.group,
+            SecretGroupMember.user_id == user_id,
+        )
+        .order_by(SecretRecipient.id)
+        .all()
+    )
+    for _uid, rec in group_rows:
+        out[rec.secret_id].groups.append(rec)
+    return out
+
+
+def user_states_many(
+    db: Session, secret_ids: list[str], user_id: int
+) -> dict[str, SecretUserState]:
+    if not secret_ids:
+        return {}
+    rows = db.query(SecretUserState).filter(
+        SecretUserState.secret_id.in_(secret_ids), SecretUserState.user_id == user_id
+    )
+    return {st.secret_id: st for st in rows}
+
+
+def recipients_many(db: Session, secret_ids: list[str]) -> dict[str, list[SecretRecipient]]:
+    """Every recipient row of every listed secret, grouped, in one query - for
+    the sent box's per-row summary."""
+    out: dict[str, list[SecretRecipient]] = {sid: [] for sid in secret_ids}
+    if not secret_ids:
+        return out
+    for rec in (
+        db.query(SecretRecipient)
+        .filter(SecretRecipient.secret_id.in_(secret_ids))
+        .order_by(SecretRecipient.id)
+    ):
+        out[rec.secret_id].append(rec)
+    return out
 
 
 def all_account_reach(db: Session, secret: Secret) -> dict[int, AccountReach]:
@@ -1210,7 +1275,13 @@ def viewer_role(db: Session, secret: Secret, user: User) -> str | None:
 
 def _list_query(db: Session, *, states: list[SecretState] | None, q: str):
     # OUTER: an answer to a request written without an account has no sender.
-    query = db.query(Secret).outerjoin(User, User.id == Secret.created_by_id)
+    # The join is also the sender the list renders (`sender_ref`), so load the
+    # relationship from it rather than one lazy SELECT per row.
+    query = (
+        db.query(Secret)
+        .outerjoin(User, User.id == Secret.created_by_id)
+        .options(contains_eager(Secret.created_by))
+    )
     if states:
         query = query.filter(Secret.state.in_(states))
     term = q.strip()

@@ -328,6 +328,11 @@ def list_secrets(
         page=page,
         page_size=page_size,
     )
+    # Per page, not per row: 50 rows used to cost 100 (sent) to 150 (received)
+    # extra SELECTs (audit 2026-11-08).
+    ids = [s.id for s in rows]
+    recipients_by_id = secret_svc.recipients_many(db, ids) if box == "sent" else {}
+    standing_by_id = secret_reveal.standings(db, rows, user) if box != "sent" else {}
     items = []
     for s in rows:
         item = SecretListItem(
@@ -347,9 +352,9 @@ def list_secrets(
             answered_by_email=s.answered_by_email,
         )
         if box == "sent":
-            item.recipient_summary = summary(_recipients(db, s))
+            item.recipient_summary = summary(recipients_by_id[s.id])
         else:
-            item.my_views_left = secret_reveal.standing(db, s, user).views_left
+            item.my_views_left = standing_by_id[s.id].views_left
         items.append(item)
     return SecretListResponse(items=items, total=total, page=page, page_size=page_size)
 

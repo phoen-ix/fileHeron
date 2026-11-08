@@ -229,10 +229,11 @@ set_kv() {
 set_kv APP_URL "$APP_URL"
 set_kv FH_TAG "$FH_TAG"
 
-# A fresh .env from .env.example is DEVELOPMENT-mode: insecure cookies, /docs
-# exposed, and a seeded test account with a known password. Harden it for
-# production on first install. On a re-run we leave the operator's .env alone
-# (only APP_URL/FH_TAG above are refreshed from the install args).
+# Harden a fresh .env for production on first install: the example ships
+# ENVIRONMENT=production since 2026-11-08 (and compose refuses a .env without
+# the key), but COOKIE_SECURE, the WebAuthn RP id and the dev-only seed
+# credentials still need setting. On a re-run we leave the operator's .env
+# alone (only APP_URL/FH_TAG above are refreshed from the install args).
 if [ "$created_env" = 1 ]; then
     # WebAuthn RP ID = the bare host of APP_URL (no scheme, port, or path);
     # passkeys break if it doesn't match the domain the browser sees.

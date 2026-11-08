@@ -411,6 +411,53 @@ async def test_content_review_gate(make_user, db, client, login_as, monkeypatch)
 
 
 @pytest.mark.asyncio
+async def test_an_approvers_preview_is_one_review_row_however_many_range_requests(
+    make_user, db, client, login_as, monkeypatch
+):
+    """A PDF/video viewer fetches a preview in Range continuations. Each one
+    used to come back through the route and write another `review` audit row
+    (with its own commit), so one look at a pending file read as dozens of
+    accesses. Same narrow exemption as the public preview: only a ranged
+    continuation of a preview already recorded for THIS approver is skipped;
+    a fresh unranged look is a new access, and a ranged request with no
+    recorded preview behind it still writes (the trail fails towards writing)."""
+    from app.models.audit_log import AuditLog
+
+    make_user(email="admin@test.local", role=UserRole.admin, password=PW)
+    creator = make_user(email="emp@test.local", role=UserRole.employee, password=PW)
+    rec = make_user(email="rec@test.local", role=UserRole.employee, password=PW)
+    _enable(db, content_review=True)
+    share = _make_share(db, creator, rec)
+    db.commit()
+    file_row = _attach_clean_file(db, monkeypatch, share, creator.id)
+    admin_token, _ = await login_as("admin@test.local", PW)
+    h = {"Authorization": f"Bearer {admin_token}"}
+
+    def review_rows():
+        return (
+            db.query(AuditLog)
+            .filter(AuditLog.target_id == file_row.id, AuditLog.event_type == "file_downloaded")
+            .all()
+        )
+
+    url = (await client.get(f"/api/files/{file_row.id}/preview-url", headers=h)).json()["url"]
+
+    # A ranged request with nothing recorded behind it is NOT exempt.
+    assert (await client.get(url, headers={"Range": "bytes=2-"})).status_code == 206
+    assert len(review_rows()) == 1
+    assert review_rows()[0].extra == {"via": "preview", "share_id": share.id, "review": True}
+
+    # The continuations of that preview add nothing.
+    for start in (5, 9, 12):
+        assert (await client.get(url, headers={"Range": f"bytes={start}-"})).status_code == 206
+    assert len(review_rows()) == 1
+
+    # A fresh, unranged look is a second access and says so.
+    assert (await client.get(url)).status_code == 200
+    assert len(review_rows()) == 2
+
+
+@pytest.mark.asyncio
 async def test_owner_can_upload_to_pending(make_user, db, client, login_as):
     make_user(email="admin@test.local", role=UserRole.admin, password=PW)
     creator = make_user(email="emp@test.local", role=UserRole.employee, password=PW)

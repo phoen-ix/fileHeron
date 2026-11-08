@@ -60,3 +60,33 @@ async def test_dispatch_seeds_unseen_without_enqueue(db, monkeypatch):
     await cd.cron_dispatch(None)
     assert enqueued == []
     assert cs.get_last_run(db, "prune_history") is not None
+
+
+@pytest.mark.asyncio
+async def test_a_tick_reads_the_schedules_in_a_constant_number_of_queries(db, monkeypatch, counting):
+    """`effective` + `get_last_run` per registry entry was three SELECTs a job,
+    ~70 a minute for 23 jobs, every minute, forever. One `snapshot` per tick
+    answers all of them in two - the same read the Scheduled-tasks page makes
+    (audit 2026-11-08). Seed every job first so the second tick has nothing to
+    write, then count: the same statements for the whole registry as for two."""
+    from app.workers import cron_dispatch as cd
+
+    async def _fake_aenqueue(_name, **_kw):
+        return None
+
+    monkeypatch.setattr(cd.job_queue, "aenqueue", _fake_aenqueue)
+
+    async def _tick_selects() -> int:
+        await cd.cron_dispatch(None)  # seeds last_run_at for every job it has not seen
+        counting.clear()
+        await cd.cron_dispatch(None)
+        return len([q for q in counting if q.lstrip().upper().startswith("SELECT") and "app_settings" in q.lower()])
+
+    full = await _tick_selects()
+    small = dict(list(cs.REGISTRY.items())[:2])
+    monkeypatch.setattr(cs, "REGISTRY", small)
+    two = await _tick_selects()
+
+    assert full == two, f"the dispatcher's settings reads grow with the registry: {full} vs {two}"
+    assert full <= 3, full  # the snapshot's prefix read + its source-worker default + the site timezone
+

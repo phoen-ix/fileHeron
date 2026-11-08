@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { computed, onMounted, ref, watch } from 'vue'
+  import { computed, onMounted, ref } from 'vue'
   import { useI18n } from 'vue-i18n'
 
   import { ADMIN_LOG_MAX_PAGE, exportAuditCsv, listAuditLog } from '@/api/admin'
@@ -7,6 +7,7 @@
   import Pager from '@/components/Pager.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+  import { usePaginatedList } from '@/composables/usePaginatedList'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
   import { useUiStore } from '@/stores/ui'
   import type { AdminAuditRow } from '@/types/api'
@@ -15,21 +16,14 @@
 
   const { t } = useI18n()
   const { formatDate } = useSiteDateFormat()
-  const { describe, describeBlob } = useApiError()
+  const { describeBlob } = useApiError()
   const ui = useUiStore()
 
-  const items = ref<AdminAuditRow[]>([])
-  const total = ref(0)
-  const page = ref(1)
-  const pageSize = ref(50)
   const eventType = ref('')
   const targetType = ref('')
   const targetId = ref('')
   const fromTs = ref('')
   const toTs = ref('')
-
-  const loading = ref(true)
-  const errorMsg = ref<string | null>(null)
 
   // Row ids whose metadata is expanded. `audit_log.metadata_json` is where the
   // DETAIL of a system-originated event lives - `ip_blocked` carries the blocked
@@ -78,42 +72,17 @@
     return p
   })
 
-  // Out-of-order guard. Typing in the filter fires a request per keystroke
-  // (debounced, not serialised), and whichever response arrived LAST won - so a
-  // slow early request could overwrite the results of a newer, narrower one and
-  // leave the table showing rows that do not match what is in the search box
-  // (audit 2026-07-30, fe-correct-11). Same `seq` pattern usePaginatedList uses.
-  let loadSeq = 0
-
-  async function load() {
-    const mine = ++loadSeq
-    loading.value = true
-    errorMsg.value = null
-    try {
-      const { data } = await listAuditLog({
-        ...filterParams.value,
-        page: page.value,
-        page_size: pageSize.value,
-      })
-      if (mine !== loadSeq) return
-      items.value = data.items
-      total.value = data.total
+  const { items, total, page, pageSize, loading, errorMsg, load, resetAndLoad } =
+    usePaginatedList<AdminAuditRow>(
+      ({ page, pageSize }) =>
+        listAuditLog({ ...filterParams.value, page, page_size: pageSize }).then((r) => r.data),
       // Ids are page-scoped; keeping them would re-expand an unrelated row.
-      expanded.value = new Set()
-    } catch (err) {
-      if (mine !== loadSeq) return
-      errorMsg.value = describe(err)
-    } finally {
-      if (mine === loadSeq) loading.value = false
-    }
-  }
+      { onLoaded: () => (expanded.value = new Set()) },
+    )
 
-  // Filters reset to page 1 then reload (debounced); page changes reload directly.
-  useDebouncedSearch(filterParams, () => {
-    page.value = 1
-    void load()
-  })
-  watch(page, load)
+  // A filter change goes back to page 1 and reloads once (debounced); a page
+  // change reloads through the composable's own watcher.
+  useDebouncedSearch(filterParams, resetAndLoad)
 
   const exporting = ref(false)
   async function onExportCsv() {

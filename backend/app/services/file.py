@@ -11,6 +11,7 @@ distinct filesystems inside the container, hence the fallback.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import timedelta
 from pathlib import Path
 
@@ -415,7 +416,7 @@ def hard_delete(
 
 
 def purge_locators(
-    db: Session, locators: list[str | None], *, reason: str
+    db: Session, locators: Sequence[str | None], *, reason: str
 ) -> list[str]:
     """Unlink bytes AFTER the caller's commit. Returns the locators that could
     NOT be unlinked.

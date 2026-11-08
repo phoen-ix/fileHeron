@@ -36,7 +36,7 @@
   const status = ref<TokenStatus | ''>('')
   const busyTokenId = ref<number | null>(null)
 
-  const { items, total, page, pageSize, loading, errorMsg, load } =
+  const { items, total, page, pageSize, loading, errorMsg, load, resetAndLoad } =
     usePaginatedList<AdminApiTokenItem>(({ page, pageSize }) =>
       adminListApiTokens({
         q: q.value || undefined,
@@ -46,15 +46,8 @@
       }).then((r) => r.data),
     )
 
-  useDebouncedSearch(q, () => {
-    page.value = 1
-    void load()
-  })
-  watch(status, () => {
-    page.value = 1
-    void load()
-  })
-  watch(page, load)
+  useDebouncedSearch(q, resetAndLoad)
+  watch(status, resetAndLoad)
 
   async function onDisable(item: AdminApiTokenItem) {
     busyTokenId.value = item.id

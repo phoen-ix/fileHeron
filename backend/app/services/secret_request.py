@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from sqlalchemy import and_, or_, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, contains_eager
 
 from ..config import settings
 from ..middleware.errors import AppError
@@ -851,7 +851,13 @@ def _asked_request_ids(db: Session, user_id: int):
 
 
 def _list_query(db: Session, *, states: list[SecretRequestState] | None, q: str):
-    query = db.query(SecretRequest).join(User, User.id == SecretRequest.requester_id)
+    # The join is also the requester the list renders, so load the relationship
+    # from it rather than one lazy SELECT per row.
+    query = (
+        db.query(SecretRequest)
+        .join(User, User.id == SecretRequest.requester_id)
+        .options(contains_eager(SecretRequest.requester))
+    )
     if states:
         query = query.filter(SecretRequest.state.in_(states))
     term = q.strip()
@@ -916,6 +922,36 @@ def answer_of(db: Session, req: SecretRequest) -> Secret | None:
         .order_by(Secret.created_at, Secret.id)
         .first()
     )
+
+
+def answers_many(db: Session, request_ids: list[str]) -> dict[str, Secret]:
+    """`answer_of` for a page of requests in one query - the FIRST answer per
+    request, by the same (created_at, id) order (audit 2026-11-08)."""
+    out: dict[str, Secret] = {}
+    if not request_ids:
+        return out
+    for sec in (
+        db.query(Secret)
+        .filter(Secret.request_id.in_(request_ids))
+        .order_by(Secret.created_at, Secret.id)
+    ):
+        if sec.request_id is not None:
+            out.setdefault(sec.request_id, sec)
+    return out
+
+
+def targets_many(db: Session, request_ids: list[str]) -> dict[str, list[SecretRequestTarget]]:
+    """Every target row of every listed request, grouped, in one query."""
+    out: dict[str, list[SecretRequestTarget]] = {rid: [] for rid in request_ids}
+    if not request_ids:
+        return out
+    for t in (
+        db.query(SecretRequestTarget)
+        .filter(SecretRequestTarget.request_id.in_(request_ids))
+        .order_by(SecretRequestTarget.id)
+    ):
+        out[t.request_id].append(t)
+    return out
 
 
 def summary(targets: Iterable[SecretRequestTarget]) -> dict[str, int | bool]:

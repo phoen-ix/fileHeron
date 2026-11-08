@@ -33,7 +33,6 @@ const EMPTY_LEGAL: PublicLegal = { imprint_enabled: false, privacy_enabled: fals
 
 export const useSiteStore = defineStore('site', () => {
   const appName = ref<string>('file:Heron')
-  const defaultLocale = ref<'en' | 'de'>('en')
   const providers = ref<PublicProvider[]>([])
   const motd = ref<{ text: string } | null>(null)
   const timezone = ref<string>(DEFAULT_TIMEZONE)
@@ -50,7 +49,6 @@ export const useSiteStore = defineStore('site', () => {
 
   function _apply(cfg: PublicConfigResponse) {
     appName.value = cfg.app_name
-    defaultLocale.value = cfg.default_locale
     providers.value = cfg.providers
     motd.value = cfg.motd ?? null
     timezone.value = cfg.site_timezone || DEFAULT_TIMEZONE
@@ -75,7 +73,6 @@ export const useSiteStore = defineStore('site', () => {
 
   return {
     appName,
-    defaultLocale,
     providers,
     motd,
     timezone,

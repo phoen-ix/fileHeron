@@ -113,8 +113,8 @@
 
   import { listSecretRequests } from '@/api/secretRequests'
   import Pager from '@/components/Pager.vue'
-  import { useApiError } from '@/composables/useApiError'
   import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+  import { usePaginatedList } from '@/composables/usePaginatedList'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
   import type {
     SecretRecipientSummary,
@@ -126,7 +126,6 @@
   defineProps<{ canRequest: boolean }>()
 
   const { t } = useI18n()
-  const { describe } = useApiError()
   const { formatDate, formatExpiry } = useSiteDateFormat()
   const router = useRouter()
 
@@ -139,42 +138,20 @@
   const box = ref<'mine' | 'asked'>('mine')
   const stateFilter = ref<StateFilter>('open')
   const q = ref('')
-  const page = ref(1)
-  const pageSize = 50
-  const items = ref<SecretRequestListItem[]>([])
-  const total = ref(0)
-  const loading = ref(true)
-  const errorMsg = ref<string | null>(null)
 
-  async function load() {
-    loading.value = true
-    errorMsg.value = null
-    try {
-      const { data } = await listSecretRequests({
+  const { items, total, page, pageSize, loading, errorMsg, load, resetAndLoad } =
+    usePaginatedList<SecretRequestListItem>(({ page, pageSize }) =>
+      listSecretRequests({
         box: box.value,
         state: STATES[stateFilter.value],
         q: q.value || undefined,
-        page: page.value,
+        page,
         page_size: pageSize,
-      })
-      items.value = data.items
-      total.value = data.total ?? data.items.length
-    } catch (err) {
-      errorMsg.value = describe(err)
-    } finally {
-      loading.value = false
-    }
-  }
+      }).then((r) => r.data),
+    )
 
-  watch([box, stateFilter], () => {
-    page.value = 1
-    void load()
-  })
-  watch(page, () => void load())
-  useDebouncedSearch(q, () => {
-    page.value = 1
-    void load()
-  })
+  watch([box, stateFilter], resetAndLoad)
+  useDebouncedSearch(q, resetAndLoad)
 
   function open(r: SecretRequestListItem) {
     router.push({ name: 'secret-request-detail', params: { id: r.id } })

@@ -125,7 +125,6 @@ class PublicConfigResponse(APIBaseModel):
     which every consumer already treats the same way (both are falsy, and the
     SPA type declares them optional)."""
     app_name: str
-    default_locale: str
     providers: list[PublicProvider]
     site_timezone: str
     max_direct_upload_bytes: int

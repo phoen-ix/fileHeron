@@ -37,7 +37,12 @@
               }}
             </span>
           </div>
-          <button type="button" class="fh-btn-text danger" :disabled="busy" @click="onDelete(c.id)">
+          <button
+            type="button"
+            class="fh-btn-text danger"
+            :disabled="busy"
+            @click="openRemove(c.id)"
+          >
             {{ t('webauthn.remove') }}
           </button>
         </li>
@@ -81,14 +86,16 @@
 
     <!-- Re-auth: a passkey that verifies its user counts as the second factor
          at login, so adding one is gated on the password, the way turning TOTP
-         off is. -->
+         off is - and so is removing one, which under passkey sign-in may be the
+         account's only second factor. One dialog, two modes. -->
     <StepUpDialog
       :open="stepUpOpen"
-      :message="t('webauthn.password_help')"
-      :confirm-label="t('webauthn.register')"
+      :message="stepUpMode === 'remove' ? t('webauthn.remove_help') : t('webauthn.password_help')"
+      :confirm-label="stepUpMode === 'remove' ? t('webauthn.remove') : t('webauthn.register')"
+      :danger="stepUpMode === 'remove'"
       :busy="busy"
       :error="stepUpError"
-      @confirm="onRegister"
+      @confirm="onStepUpConfirm"
       @cancel="stepUpOpen = false"
     />
   </section>
@@ -130,6 +137,8 @@
   const newName = ref('')
   const stepUpOpen = ref(false)
   const stepUpError = ref<string | null>(null)
+  const stepUpMode = ref<'register' | 'remove'>('register')
+  const removeTarget = ref<number | null>(null)
 
   function cancelAdd() {
     adding.value = false
@@ -138,7 +147,21 @@
   function openStepUp() {
     errorMsg.value = null
     stepUpError.value = null
+    stepUpMode.value = 'register'
     stepUpOpen.value = true
+  }
+
+  function openRemove(id: number) {
+    errorMsg.value = null
+    stepUpError.value = null
+    stepUpMode.value = 'remove'
+    removeTarget.value = id
+    stepUpOpen.value = true
+  }
+
+  function onStepUpConfirm(password: string) {
+    if (stepUpMode.value === 'remove') void onRemove(password)
+    else void onRegister(password)
   }
 
   async function load() {
@@ -214,15 +237,21 @@
     }
   }
 
-  async function onDelete(id: number) {
-    if (!(await ui.confirm({ message: t('webauthn.remove_confirm'), danger: true }))) return
+  async function onRemove(password: string) {
+    const id = removeTarget.value
+    if (id === null) return
+    stepUpError.value = null
     busy.value = true
     try {
-      await deleteCredential(id)
+      await deleteCredential(id, password)
+      stepUpOpen.value = false
+      removeTarget.value = null
       credentials.value = credentials.value.filter((c) => c.id !== id)
       ui.pushToast(t('webauthn.removed_toast'), 'success')
     } catch (err) {
-      ui.pushToast(describe(err), 'error')
+      // A wrong password (403 INVALID_PASSWORD) stays in the dialog, like the
+      // register path; so does any other failure, so retrying is one click.
+      stepUpError.value = describe(err)
     } finally {
       busy.value = false
     }

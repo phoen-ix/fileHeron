@@ -1,49 +1,28 @@
 <script setup lang="ts">
   /* /approvals - the approver's work queue: shares awaiting this user's
    * approval. Click through to the share detail to review + approve/reject. */
-  import { onMounted, ref, watch } from 'vue'
+  import { onMounted } from 'vue'
   import { useI18n } from 'vue-i18n'
 
   import Pager from '@/components/Pager.vue'
   import { listPendingApprovals } from '@/api/shares'
-  import { useApiError } from '@/composables/useApiError'
+  import { usePaginatedList } from '@/composables/usePaginatedList'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
   import type { ShareListItem } from '@/types/api'
   import { formatBytes } from '@/utils/bytes'
 
   const { t } = useI18n()
-  const { describe } = useApiError()
   const { formatDate } = useSiteDateFormat()
 
-  const items = ref<ShareListItem[]>([])
-  const total = ref(0)
-  const page = ref(1)
-  const pageSize = ref(25)
-  const loading = ref(true)
-  const errorMsg = ref<string | null>(null)
+  // Was a single hard-coded page of 100 with `total` discarded, so the 101st
+  // pending share was invisible with nothing on screen to suggest more
+  // existed - in the one queue whose entire purpose is that nothing sits in
+  // it unnoticed (audit 2026-07-30, fe-correct-9).
+  const { items, total, page, pageSize, loading, errorMsg, load } = usePaginatedList<ShareListItem>(
+    ({ page, pageSize }) => listPendingApprovals({ page, page_size: pageSize }).then((r) => r.data),
+    { pageSize: 25 },
+  )
 
-  async function load() {
-    loading.value = true
-    errorMsg.value = null
-    try {
-      // Was a single hard-coded page of 100 with `total` discarded, so the 101st
-      // pending share was invisible with nothing on screen to suggest more
-      // existed - in the one queue whose entire purpose is that nothing sits in
-      // it unnoticed (audit 2026-07-30, fe-correct-9).
-      const { data } = await listPendingApprovals({
-        page: page.value,
-        page_size: pageSize.value,
-      })
-      items.value = data.items
-      total.value = data.total
-    } catch (err) {
-      errorMsg.value = describe(err)
-    } finally {
-      loading.value = false
-    }
-  }
-
-  watch(page, load)
   onMounted(load)
 </script>
 

@@ -37,8 +37,16 @@ export function registerComplete(name: string, credential: unknown) {
   })
 }
 
-export function deleteCredential(id: number) {
-  return api.delete(`/account/webauthn/${id}`)
+export interface WebAuthnDeleteRequest {
+  password: string
+}
+
+/** Step-up, mirror image of registerBegin: while passkey sign-in is on, a
+ *  passkey can be the account's only second factor, so removing one costs the
+ *  current password too. */
+export function deleteCredential(id: number, password: string) {
+  const data: WebAuthnDeleteRequest = { password }
+  return api.delete(`/account/webauthn/${id}`, { data })
 }
 
 /* The login flow is anonymous-until-completion, so it uses the bare client

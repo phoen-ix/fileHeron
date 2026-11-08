@@ -28,10 +28,13 @@ const KNOWN_UNLABELLED: readonly string[] = [
 ]
 
 function lookup(obj: unknown, path: string): unknown {
-  return path.split('.').reduce<unknown>(
-    (acc, k) => (acc && typeof acc === 'object' ? (acc as Record<string, unknown>)[k] : undefined),
-    obj,
-  )
+  return path
+    .split('.')
+    .reduce<unknown>(
+      (acc, k) =>
+        acc && typeof acc === 'object' ? (acc as Record<string, unknown>)[k] : undefined,
+      obj,
+    )
 }
 
 describe('ADMIN_SEARCH_INDEX', () => {
@@ -55,14 +58,22 @@ describe('ADMIN_SEARCH_INDEX', () => {
       // missing one.
       expect(indexed.has(key), `${key} is allowlisted but not in the index`).toBe(true)
       // The label landed: shorten the allowlist rather than leave it lying.
-      expect(lookup(en, key), `${key} now resolves in en - remove it from KNOWN_UNLABELLED`).toBeUndefined()
-      expect(lookup(de, key), `${key} now resolves in de - remove it from KNOWN_UNLABELLED`).toBeUndefined()
+      expect(
+        lookup(en, key),
+        `${key} now resolves in en - remove it from KNOWN_UNLABELLED`,
+      ).toBeUndefined()
+      expect(
+        lookup(de, key),
+        `${key} now resolves in de - remove it from KNOWN_UNLABELLED`,
+      ).toBeUndefined()
     }
   })
 
   it('points every entry at a route the sidebar knows', () => {
     for (const entry of ADMIN_SEARCH_INDEX) {
-      expect(ADMIN_ROUTE_NAMES.has(entry.routeName), `${entry.labelKey} → ${entry.routeName}`).toBe(true)
+      expect(ADMIN_ROUTE_NAMES.has(entry.routeName), `${entry.labelKey} → ${entry.routeName}`).toBe(
+        true,
+      )
     }
   })
 
@@ -90,5 +101,78 @@ describe('ADMIN_SEARCH_INDEX', () => {
         expect(kw, `${entry.labelKey}: "${kw}" has surrounding whitespace`).toBe(kw.trim())
       }
     }
+  })
+})
+
+/* A hash is only useful if the route's view renders `id="<hash>"`. Four
+ * entries kept pointing `#file-preview` and `#share-defaults` at General after
+ * those sections moved to Transfers, so the search landed on a page without
+ * the anchor; the shape check above (`#\S+`) could not see it. Resolve each
+ * routeName to its view through the router source and read the view's ids -
+ * one level of `@/components/...` imports included, for a view that renders a
+ * section through a child. Sources come in through `import.meta.glob` (typed
+ * by vite/client, resolves under vue-tsc), like adminNav.test.ts. */
+const SOURCES = import.meta.glob(
+  ['/src/router/index.ts', '/src/views/*.vue', '/src/components/**/*.vue'],
+  { query: '?raw', import: 'default', eager: true },
+) as Record<string, string>
+
+function viewSourceFor(routeName: string): string {
+  const router = SOURCES['/src/router/index.ts']
+  // The route DEFINITION (name, then component), not a `redirect: { name }`
+  // that happens to mention the route first.
+  const m = router.match(
+    new RegExp(
+      `name: '${routeName}',\\s*\\n\\s*component: \\(\\) => import\\('@/views/([\\w.-]+\\.vue)'\\)`,
+    ),
+  )
+  expect(
+    m,
+    `route ${routeName} has no name-then-component definition in router/index.ts`,
+  ).not.toBeNull()
+  const source = SOURCES[`/src/views/${m![1]}`]
+  expect(source, `no source for /src/views/${m![1]}`).toBeDefined()
+  return source
+}
+
+function idsRenderedBy(source: string): Set<string> {
+  const ids = new Set<string>()
+  if (source.includes('TunableFields')) ids.add('__tunable_fields__')
+  for (const m of source.matchAll(/\bid="([^"]+)"/g)) ids.add(m[1])
+  for (const m of source.matchAll(/from '@\/components\/([\w./-]+\.vue)'/g)) {
+    const child = SOURCES[`/src/components/${m[1]}`]
+    expect(child, `no source for /src/components/${m[1]}`).toBeDefined()
+    for (const idm of child.matchAll(/\bid="([^"]+)"/g)) ids.add(idm[1])
+  }
+  return ids
+}
+
+describe('ADMIN_SEARCH_INDEX anchors', () => {
+  it('names an id the target view actually renders', () => {
+    const cache = new Map<string, Set<string>>()
+    let checked = 0
+    for (const entry of ADMIN_SEARCH_INDEX) {
+      if (entry.hash === undefined) continue
+      let ids = cache.get(entry.routeName)
+      if (!ids) {
+        ids = idsRenderedBy(viewSourceFor(entry.routeName))
+        cache.set(entry.routeName, ids)
+      }
+      if (entry.hash.startsWith('#tunable-')) {
+        // Rendered dynamically by TunableFields (`:id="\`tunable-${key}\`"`); which
+        // page shows which key is pinned by backend/tests/test_admin_search_index_pin.py.
+        expect(
+          ids.has('__tunable_fields__'),
+          `${entry.labelKey}: ${entry.routeName} does not render TunableFields`,
+        ).toBe(true)
+        continue
+      }
+      expect(
+        ids.has(entry.hash.slice(1)),
+        `${entry.labelKey}: ${entry.routeName} renders no id="${entry.hash.slice(1)}"`,
+      ).toBe(true)
+      checked++
+    }
+    expect(checked).toBeGreaterThan(10)
   })
 })

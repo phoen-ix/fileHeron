@@ -146,8 +146,11 @@ async def test_disable_requires_password_and_code(make_user, client):
         headers=headers,
         json={"password": "wrong", "code_or_recovery": codes[0]},
     )
-    assert bad_pw.status_code == 401
-    assert bad_pw.json()["code"] == "INVALID_CREDENTIALS"
+    # 403, not 401: the caller IS signed in, and a 401 would send the SPA's
+    # interceptor off to refresh and replay the same wrong password. The
+    # throttle and audit behind it are pinned in test_twofa_step_up.py.
+    assert bad_pw.status_code == 403
+    assert bad_pw.json()["code"] == "INVALID_PASSWORD"
 
     # Right password + recovery code: works.
     good = await client.post(

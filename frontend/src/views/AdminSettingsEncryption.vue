@@ -62,6 +62,7 @@
     if (stopped === 'budget') return t('admin_encryption.stopped_budget')
     if (stopped === 'insufficient_space') return t('admin_encryption.stopped_insufficient_space')
     if (stopped === 'disabled') return t('admin_encryption.stopped_disabled')
+    if (stopped === 'redis_unavailable') return t('admin_encryption.stopped_redis_unavailable')
     return null
   })
 

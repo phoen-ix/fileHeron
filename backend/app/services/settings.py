@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterable
 
+from sqlalchemy import event
 from sqlalchemy.orm import Session
 
 from ..models.app_setting import AppSetting
@@ -389,24 +390,87 @@ _ENCRYPTED_KEYS: set[str] = {Keys.SMTP_PASSWORD, Keys.IMAP_PASSWORD}
 
 
 
+# --- the request-scoped read cache -------------------------------------------
+#
+# A request reads settings one key at a time through dozens of independent
+# helpers (`/api/account/me` ~30 SELECTs, `/api/config-public` ~14,
+# `/admin/settings/advanced` ~150), each a round trip for a table of ~150 rows.
+# A Session that opts in (`enable_request_cache`, called by the request-scoped
+# `get_db`) loads the whole table ONCE on its first read and answers every
+# `get`/`get_many` from that dict. Workers and scripts never opt in: a
+# long-running job that re-reads a switch per object (the encryption backfill,
+# the decrypt script's race) must keep seeing the live row.
+#
+# The cache is valid for one transaction span. `set_value` updates it in
+# place; any flush that touches an `AppSetting` row some other way
+# (config-backup import adds rows directly), and every commit or rollback,
+# drops it, so the next read reloads - one more SELECT, never a stale value
+# (audit 2026-11-08).
+_CACHE_FLAG = "settings_cache_enabled"
+_CACHE_KEY = "settings_cache"
+
+
+def enable_request_cache(db: Session) -> None:
+    """Opt this Session into the one-read cache. Request sessions only."""
+    db.info[_CACHE_FLAG] = True
+
+
+def _cached(db: Session) -> dict[str, tuple[str, bool]] | None:
+    """key -> (stored value, is_encrypted) for the whole table, or None when
+    this Session has not opted in."""
+    if not db.info.get(_CACHE_FLAG):
+        return None
+    cache = db.info.get(_CACHE_KEY)
+    if cache is None:
+        cache = {row.key: (row.value, row.is_encrypted) for row in db.query(AppSetting).all()}
+        db.info[_CACHE_KEY] = cache
+    return cache
+
+
+def _drop_cache(db: Session) -> None:
+    db.info.pop(_CACHE_KEY, None)
+
+
+@event.listens_for(Session, "after_flush")
+def _invalidate_after_flush(session: Session, _ctx) -> None:
+    if _CACHE_KEY not in session.info:
+        return
+    for bucket in (session.new, session.dirty, session.deleted):
+        if any(isinstance(obj, AppSetting) for obj in bucket):
+            _drop_cache(session)
+            return
+
+
+@event.listens_for(Session, "after_commit")
+@event.listens_for(Session, "after_rollback")
+def _invalidate_at_transaction_end(session: Session) -> None:
+    _drop_cache(session)
+
+
+def _decode(key: str, value: str, is_encrypted: bool, *, where: str) -> str | None:
+    if not is_encrypted:
+        return value
+    try:
+        return decrypt_setting(value)
+    except Exception:
+        # Decryption failure (e.g. JWT_SECRET was rotated without
+        # re-encrypting). Treat as missing rather than crashing -
+        # the env fallback will kick in.
+        logger.warning("settings.%s: decryption failed for key=%s", where, key)
+        return None
+
+
 def get(db: Session, key: str) -> str | None:
     """Return the stored value for `key`, or None if no override exists.
     Decrypts if the row is marked encrypted."""
+    cache = _cached(db)
+    if cache is not None:
+        hit = cache.get(key)
+        return None if hit is None else _decode(key, hit[0], hit[1], where="get")
     row = db.query(AppSetting).filter(AppSetting.key == key).one_or_none()
     if row is None:
         return None
-    if row.is_encrypted:
-        try:
-            return decrypt_setting(row.value)
-        except Exception:
-            # Decryption failure (e.g. JWT_SECRET was rotated without
-            # re-encrypting). Treat as missing rather than crashing -
-            # the env fallback will kick in.
-            logger.warning(
-                "settings.get: decryption failed for key=%s", key
-            )
-            return None
-    return row.value
+    return _decode(key, row.value, row.is_encrypted, where="get")
 
 
 def set_value(
@@ -422,7 +486,7 @@ def set_value(
     if value is None:
         if row is not None:
             db.delete(row)
-            db.flush()
+            db.flush()  # the after_flush hook drops the read cache
         return
 
     encrypted = key in _ENCRYPTED_KEYS
@@ -441,7 +505,7 @@ def set_value(
         row.is_encrypted = encrypted
         row.updated_at = utc_now()
         row.updated_by_id = actor.id if actor else None
-    db.flush()
+    db.flush()  # the after_flush hook drops the read cache; the next read reloads once
 
 
 def audit_settings_change(
@@ -474,23 +538,19 @@ def get_many(db: Session, *, prefix: str) -> dict[str, str]:
     refresh, on the event loop - twenty round trips every fifteen seconds per
     process, whether or not the feature was even enabled.
     """
-    rows = (
-        db.query(AppSetting)
-        .filter(AppSetting.key.startswith(prefix))
-        .all()
-    )
+    cache = _cached(db)
+    if cache is not None:
+        pairs = [(k, v, enc) for k, (v, enc) in cache.items() if k.startswith(prefix)]
+    else:
+        pairs = [
+            (row.key, row.value, row.is_encrypted)
+            for row in db.query(AppSetting).filter(AppSetting.key.startswith(prefix)).all()
+        ]
     out: dict[str, str] = {}
-    for row in rows:
-        if row.is_encrypted:
-            try:
-                decrypted = decrypt_setting(row.value)
-            except Exception:
-                logger.warning("settings.get_many: decryption failed for key=%s", row.key)
-                continue
-            if decrypted is not None:
-                out[row.key] = decrypted
-            continue
-        out[row.key] = row.value
+    for key, value, is_encrypted in pairs:
+        decoded = _decode(key, value, is_encrypted, where="get_many")
+        if decoded is not None:
+            out[key] = decoded
     return out
 
 

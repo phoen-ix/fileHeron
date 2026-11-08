@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { computed, onMounted, ref, watch } from 'vue'
+  import { computed, onMounted, ref } from 'vue'
   import { useI18n } from 'vue-i18n'
 
   import api from '@/api/client'
@@ -30,8 +30,8 @@
     busy: boolean
   } | null>(null)
 
-  const { items, total, page, pageSize, loading, errorMsg, load } = usePaginatedList<AdminFileItem>(
-    ({ page, pageSize }) =>
+  const { items, total, page, pageSize, loading, errorMsg, load, resetAndLoad } =
+    usePaginatedList<AdminFileItem>(({ page, pageSize }) =>
       adminListFiles({
         q: q.value || undefined,
         state: 'infected',
@@ -40,13 +40,9 @@
         page,
         page_size: pageSize,
       }).then((r) => r.data),
-  )
+    )
 
-  useDebouncedSearch(q, () => {
-    page.value = 1
-    void load()
-  })
-  watch(page, load)
+  useDebouncedSearch(q, resetAndLoad)
 
   async function onDownload(file: AdminFileItem) {
     try {

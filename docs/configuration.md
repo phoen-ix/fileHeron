@@ -18,7 +18,7 @@ via `/admin/settings/advanced`.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `ENVIRONMENT` | `development` | `production` forces `COOKIE_SECURE=true` and fail-fasts on placeholder secrets / `AV_SKIP=true`. |
+| `ENVIRONMENT` | - (required; `.env.example` ships `production`) | Compose refuses to start without it. `production` forces `COOKIE_SECURE=true` and fail-fasts on placeholder secrets / `AV_SKIP=true`. |
 | `LOG_LEVEL` | `INFO` | Python log level. |
 | `APP_URL` | `http://localhost:8080` | Public URL baked into links when no `site.url` is set; WebAuthn/OIDC origin fallback. |
 | `APP_NAME` | `fileHeron` | Brand name. ↻ (`branding.app_name`). Use the `file:Heron` spelling. |

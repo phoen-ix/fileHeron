@@ -9,15 +9,14 @@
   import { listSecrets } from '@/api/secrets'
   import Pager from '@/components/Pager.vue'
   import SecretRequestList from '@/components/SecretRequestList.vue'
-  import { useApiError } from '@/composables/useApiError'
   import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+  import { usePaginatedList } from '@/composables/usePaginatedList'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
   import { useAuthStore } from '@/stores/auth'
   import type { SecretListItem, SecretRecipientSummary, SecretState } from '@/types/api'
   import { secretStatePill } from '@/utils/statePill'
 
   const { t } = useI18n()
-  const { describe } = useApiError()
   const { formatDate, formatExpiry } = useSiteDateFormat()
   const route = useRoute()
   const router = useRouter()
@@ -37,51 +36,27 @@
   }
   const stateFilter = ref<StateFilter>('active')
   const q = ref('')
-  const page = ref(1)
-  const pageSize = 50
-  const items = ref<SecretListItem[]>([])
-  const total = ref(0)
-  const loading = ref(true)
-  const errorMsg = ref<string | null>(null)
 
-  async function load() {
-    if (box.value === 'requests') return
-    loading.value = true
-    errorMsg.value = null
-    try {
-      const { data } = await listSecrets({
-        box: box.value === 'sent' ? 'sent' : 'received',
-        state: STATES[stateFilter.value],
-        q: q.value || undefined,
-        page: page.value,
-        page_size: pageSize,
-      })
-      items.value = data.items
-      total.value = data.total ?? data.items.length
-    } catch (err) {
-      errorMsg.value = describe(err)
-    } finally {
-      loading.value = false
-    }
-  }
+  const { items, total, page, pageSize, loading, errorMsg, load, resetAndLoad } =
+    usePaginatedList<SecretListItem>(({ page, pageSize }) =>
+      // The Requests tab is its own component with its own list.
+      box.value === 'requests'
+        ? Promise.resolve({ items: [], total: 0 })
+        : listSecrets({
+            box: box.value === 'sent' ? 'sent' : 'received',
+            state: STATES[stateFilter.value],
+            q: q.value || undefined,
+            page,
+            page_size: pageSize,
+          }).then((r) => r.data),
+    )
 
   function setBox(next: Box) {
     if (next !== box.value) router.replace({ name: 'secrets', query: { box: next } })
   }
 
-  watch(box, () => {
-    page.value = 1
-    void load()
-  })
-  watch(stateFilter, () => {
-    page.value = 1
-    void load()
-  })
-  watch(page, () => void load())
-  useDebouncedSearch(q, () => {
-    page.value = 1
-    void load()
-  })
+  watch([box, stateFilter], resetAndLoad)
+  useDebouncedSearch(q, resetAndLoad)
 
   function open(s: SecretListItem) {
     router.push({ name: 'secret-detail', params: { id: s.id } })

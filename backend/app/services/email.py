@@ -521,8 +521,13 @@ def resolve_smtp_config(db: Session) -> SmtpConfig:
     """
     from . import settings as settings_svc
 
+    # One read for the eight keys, not eight: this runs once per dispatched
+    # notification and once per direct send, from workers too, where the
+    # request cache does not apply (audit 2026-11-08).
+    stored = settings_svc.get_many(db, prefix="smtp.")
+
     def _eff(key: str, env_val: str) -> str:
-        v = settings_svc.get(db, key)
+        v = stored.get(key)
         return v if v is not None else env_val
 
     port_str = _eff(settings_svc.Keys.SMTP_PORT, str(settings.SMTP_PORT))

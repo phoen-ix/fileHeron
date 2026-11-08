@@ -33,7 +33,7 @@ from ..models.public_link_attempt import PublicLinkAttempt
 from ..models.share import Share, ShareState
 from ..models.share_external_recipient import ShareExternalRecipient
 from ..models.webhook import WebhookDelivery
-from ..services.cron_tracker import exc_summary, mark_failed, track_cron
+from ..services.cron_tracker import mark_failed, track_cron
 from ..utils.dbresult import updated_rows
 from ..utils.timeutil import utc_now
 
@@ -259,15 +259,21 @@ def _prune_ended_secret_requests(days: int) -> int:
 
 
 async def _prune_inbound(days: int) -> tuple[int, list[str]]:
-    """Prune inbound messages older than ``days`` - deleting their attachment
-    blobs from the storage backend first (the DB cascade only removes rows).
-    Returns ``(rows pruned, blobs that could not be deleted)``: the rows go
-    either way, so an undeleted blob is orphaned and only this report says so."""
+    """Prune inbound messages older than ``days``: the rows, then their
+    attachment blobs (the DB cascade only removes rows). Returns
+    ``(rows pruned, blobs that could not be deleted)``.
+
+    Rows first, bytes after - the order every deferred purge in the codebase
+    keeps - and the unlink goes through `file.purge_locators`, so a blob that
+    will not unlink leaves a `file_purge_failed` audit row. Until 2026-11-08
+    the bytes went first and a failure was reported only in this run's result:
+    no sweeper walks inbound locators, so that was the only trace of bytes that
+    are now orphaned for good."""
     if days <= 0:
         return 0, []
     from ..models.inbound_attachment import InboundAttachment
     from ..models.inbound_message import InboundMessage
-    from ..services import storage_backend as storage_svc
+    from ..services import file as file_svc
 
     cutoff = utc_now() - timedelta(days=days)
     db: Session = SessionLocal()
@@ -281,16 +287,14 @@ async def _prune_inbound(days: int) -> tuple[int, list[str]]:
         ]
     finally:
         db.close()
-    undeleted: list[str] = []
-    if keys:
-        backend = storage_svc.get_storage_backend()
-        for k in keys:
-            try:
-                backend.delete(k)
-            except Exception as exc:
-                undeleted.append(f"{k}: {exc_summary(exc)}")
-                logger.warning("prune_history: failed to delete inbound blob %s", k)
     pruned = await _prune_table(
         "inbound_messages", days, InboundMessage.created_at, InboundMessage
     )
+    undeleted: list[str] = []
+    if keys:
+        db = SessionLocal()
+        try:
+            undeleted = file_svc.purge_locators(db, keys, reason="prune_history_inbound")
+        finally:
+            db.close()
     return pruned, undeleted

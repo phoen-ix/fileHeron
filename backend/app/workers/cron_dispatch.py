@@ -28,12 +28,16 @@ async def cron_dispatch(_ctx) -> dict:
     try:
         tz = site_svc.get_site_timezone(db)
         now = utc_now()
+        # One snapshot per tick (two SELECTs), not `effective` + `get_last_run`
+        # per registry entry (three each, ~70 a minute for 23 jobs) - the same
+        # two-query read the admin Scheduled-tasks page uses (audit 2026-11-08).
+        snap = cs.snapshot(db)
         for name in cs.REGISTRY:
             try:
-                res = cs.effective(db, name)
+                res = snap.schedules[name]
                 if not res.enabled:
                     continue
-                last = cs.get_last_run(db, name)
+                last = snap.last_runs[name]
                 if last is None:
                     # First sight: seed the clock so jobs don't all fire at once
                     # on startup. Interval jobs run after one interval; daily jobs

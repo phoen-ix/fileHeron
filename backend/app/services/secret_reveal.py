@@ -301,6 +301,26 @@ def standing(db: Session, secret: Secret, user: User) -> UserStanding:
     )
 
 
+def standings(db: Session, secrets: list[Secret], user: User) -> dict[str, UserStanding]:
+    """`standing` for one reader across a page of secrets: three queries
+    however long the page, instead of three per row (audit 2026-11-08)."""
+    ids = [s.id for s in secrets]
+    states = secret_svc.user_states_many(db, ids, user.id)
+    reaches = secret_svc.account_reach_many(db, ids, user.id)
+    out: dict[str, UserStanding] = {}
+    for s in secrets:
+        state = states.get(s.id)
+        reach = reaches[s.id]
+        left = secret_svc.views_left_for_user(s, state, reach) if state is not None else 0
+        out[s.id] = UserStanding(
+            state=state,
+            reach=reach,
+            views_left=left,
+            burned=state is not None and state.burned_at is not None,
+        )
+    return out
+
+
 def can_reveal(secret: Secret, st: UserStanding) -> bool:
     return (
         _effective_state(secret) == SecretState.active

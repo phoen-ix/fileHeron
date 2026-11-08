@@ -151,7 +151,11 @@ services:
       DB_ROOT_PASSWORD: ""
       BACKUP_RESTIC_REPO: ""
       BACKUP_RESTIC_PASSWORD: ""
-      ENVIRONMENT: ${ENVIRONMENT:-development}
+      # No `development` fallback: a .env without the key - an old hand-kept one,
+      # or a copy of the example with the line dropped - used to run a public
+      # instance with dev seeding, /docs exposed and token-bearing mail bodies
+      # in the container log. The dev/e2e/docs overrides set it explicitly.
+      ENVIRONMENT: ${ENVIRONMENT:?ENVIRONMENT is required - production, or development for a local stack}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       DB_HOST: db
       DB_PORT: 3306
@@ -320,7 +324,11 @@ services:
       DB_ROOT_PASSWORD: ""
       BACKUP_RESTIC_REPO: ""
       BACKUP_RESTIC_PASSWORD: ""
-      ENVIRONMENT: ${ENVIRONMENT:-development}
+      # No `development` fallback: a .env without the key - an old hand-kept one,
+      # or a copy of the example with the line dropped - used to run a public
+      # instance with dev seeding, /docs exposed and token-bearing mail bodies
+      # in the container log. The dev/e2e/docs overrides set it explicitly.
+      ENVIRONMENT: ${ENVIRONMENT:?ENVIRONMENT is required - production, or development for a local stack}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       DB_HOST: db
       DB_PORT: 3306

@@ -11,7 +11,16 @@ import en from '@/i18n/locales/en.json'
 
 vi.mock('@/api/webauthn', () => ({
   listCredentials: vi.fn(async () => ({ data: { items: [] } })),
-  registerBegin: vi.fn(async () => ({ data: { options: { challenge: 'c', rp: { id: 'x', name: 'x' }, user: { id: 'u', name: 'u', displayName: 'u' }, pubKeyCredParams: [] } } })),
+  registerBegin: vi.fn(async () => ({
+    data: {
+      options: {
+        challenge: 'c',
+        rp: { id: 'x', name: 'x' },
+        user: { id: 'u', name: 'u', displayName: 'u' },
+        pubKeyCredParams: [],
+      },
+    },
+  })),
   registerComplete: vi.fn(),
   deleteCredential: vi.fn(),
 }))
@@ -24,7 +33,10 @@ vi.mock('@/composables/useWebAuthn', () => ({
 import WebAuthnPanel from '@/components/WebAuthnPanel.vue'
 
 async function register(w: ReturnType<typeof mount>, password = 'pw') {
-  await w.findAll('button').find((b) => b.text() === en.webauthn.add_cta)!.trigger('click')
+  await w
+    .findAll('button')
+    .find((b) => b.text() === en.webauthn.add_cta)!
+    .trigger('click')
   const inputs = w.findAll('.add-form input')
   expect(inputs).toHaveLength(1) // the name; the password is asked in the dialog
   await inputs[0].setValue('YubiKey')
@@ -52,7 +64,9 @@ describe('WebAuthnPanel registration errors', () => {
   })
 
   it("shows another browser-side failure's own message", async () => {
-    performRegistration.mockRejectedValueOnce(new DOMException('The operation timed out.', 'TimeoutError'))
+    performRegistration.mockRejectedValueOnce(
+      new DOMException('The operation timed out.', 'TimeoutError'),
+    )
     const w = makeWrapper()
     await flushPromises()
     await register(w)
@@ -86,6 +100,72 @@ describe('WebAuthnPanel asks for the password in a dialog', () => {
     expect(dialog.exists()).toBe(true)
     expect(dialog.find('[role="alert"]').exists()).toBe(true)
     expect(performRegistration).not.toHaveBeenCalled()
+  })
+})
+
+describe('WebAuthnPanel removes a passkey behind the password', () => {
+  async function mountWithOne() {
+    const api = await import('@/api/webauthn')
+    vi.mocked(api.listCredentials).mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 7,
+            name: 'Phone',
+            transports: [],
+            created_at: '2026-10-01T00:00:00',
+            last_used_at: null,
+            discoverable: true,
+          },
+        ],
+      },
+    } as never)
+    vi.mocked(api.deleteCredential).mockReset()
+    const w = makeWrapper()
+    await flushPromises()
+    return { w, api }
+  }
+
+  it('asks for the password in the dialog and sends it with the delete', async () => {
+    const { w, api } = await mountWithOne()
+    expect(w.find('[data-testid="step-up-dialog"]').exists()).toBe(false)
+
+    await w
+      .findAll('button')
+      .find((b) => b.text() === en.webauthn.remove)!
+      .trigger('click')
+    const dialog = w.find('[data-testid="step-up-dialog"]')
+    expect(dialog.exists()).toBe(true)
+    expect(dialog.text()).toContain(en.webauthn.remove_help)
+
+    await w.find('[data-testid="step-up-password"]').setValue('secret')
+    await w.find('[data-testid="step-up-dialog"] form').trigger('submit')
+    await flushPromises()
+
+    expect(api.deleteCredential).toHaveBeenCalledWith(7, 'secret')
+    expect(w.find('[data-testid="step-up-dialog"]').exists()).toBe(false)
+    expect(w.text()).toContain(en.webauthn.empty)
+  })
+
+  it('a wrong password stays in the dialog and the passkey stays listed', async () => {
+    const { w, api } = await mountWithOne()
+    vi.mocked(api.deleteCredential).mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 403, data: { code: 'INVALID_PASSWORD', error: 'Password incorrect.' } },
+    })
+
+    await w
+      .findAll('button')
+      .find((b) => b.text() === en.webauthn.remove)!
+      .trigger('click')
+    await w.find('[data-testid="step-up-password"]').setValue('nope')
+    await w.find('[data-testid="step-up-dialog"] form').trigger('submit')
+    await flushPromises()
+
+    const dialog = w.find('[data-testid="step-up-dialog"]')
+    expect(dialog.exists()).toBe(true)
+    expect(dialog.find('[role="alert"]').exists()).toBe(true)
+    expect(w.text()).toContain('Phone')
   })
 })
 

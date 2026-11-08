@@ -55,8 +55,8 @@
    *  offer a way out of it. */
   const historyTotal = ref(0)
 
-  const { items, total, page, pageSize, loading, errorMsg, load } = usePaginatedList<IpBlockRow>(
-    async ({ page: p, pageSize: ps }) => {
+  const { items, total, page, pageSize, loading, errorMsg, load, resetAndLoad } =
+    usePaginatedList<IpBlockRow>(async ({ page: p, pageSize: ps }) => {
       const filters = {
         reason: reason.value || undefined,
         source: (source.value || undefined) as 'auto' | 'manual' | undefined,
@@ -74,8 +74,7 @@
           ? await countOutsideStatusFilter(filters)
           : 0
       return { items: data.items, total: data.total }
-    },
-  )
+    })
 
   /** The page defaults to "in force", which is the right first answer for a
    *  page about enforcement - but on an instance whose blocks have all expired or
@@ -103,16 +102,8 @@
     }
   }
 
-  function refilter() {
-    // `page` has a watcher, so assigning 1 from any other page already reloads.
-    // Doing both fired two identical requests; harmless thanks to
-    // usePaginatedList's sequence token, but two round trips per keystroke.
-    if (page.value !== 1) page.value = 1
-    else void load()
-  }
-  useDebouncedSearch(search, refilter)
-  watch([status, reason, source, networkOnly], refilter)
-  watch(page, () => void load())
+  useDebouncedSearch(search, resetAndLoad)
+  watch([status, reason, source, networkOnly], resetAndLoad)
 
   // --- allowlist -------------------------------------------------------------
   const allowEntries = ref<string[]>([])

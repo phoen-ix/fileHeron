@@ -412,21 +412,16 @@
     return 'pill danger'
   }
 
-  /** True when the cron returned a soft-failure dict (the function caught
-   * an error and returned `{ok: false, ...}` instead of raising). Today
-   * only `release_check` does this; the convention generalizes to any
-   * future cron that swallows transient errors but wants the UI to know. */
-  function softFailed(c: SystemStatusResponse['crons'][number]): boolean {
-    const r = c.last_run?.result_summary as { ok?: boolean } | null | undefined
-    return r?.ok === false
-  }
-
+  // `last_24h.failure` only, the same sum the Overview shows. A cron that
+  // swallows its own error reports it through `cron_tracker.mark_failed`, which
+  // records a FAILED run (so it is in this count) and stores no
+  // result_summary; the old extra "result_summary.ok === false" term could
+  // therefore never see a real failure any more, and what it did count was
+  // imap_poll's tolerated transient blip - a success - so this headline
+  // disagreed with the Scheduled-tasks table underneath it.
   const headlineFailures = computed(() => {
     if (!status.value) return 0
-    return status.value.crons.reduce(
-      (acc, c) => acc + c.last_24h.failure + (softFailed(c) ? 1 : 0),
-      0,
-    )
+    return status.value.crons.reduce((acc, c) => acc + c.last_24h.failure, 0)
   })
 </script>
 

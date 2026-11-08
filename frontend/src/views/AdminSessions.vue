@@ -25,7 +25,7 @@
 
   const sort = useTableSort({ defaultBy: 'last_used_at', defaultDir: 'asc' })
 
-  const { items, total, page, pageSize, loading, errorMsg, load } =
+  const { items, total, page, pageSize, loading, errorMsg, load, resetAndLoad } =
     usePaginatedList<AdminSessionRow>(({ page, pageSize }) =>
       adminListSessions({
         q: q.value || undefined,
@@ -37,15 +37,10 @@
       }).then((r) => r.data),
     )
 
-  useDebouncedSearch(q, () => {
-    page.value = 1
-    void load()
-  })
-  watch(includeInactive, () => {
-    page.value = 1
-    void load()
-  })
-  watch([sort.sortBy, sort.sortDir, page], load)
+  useDebouncedSearch(q, resetAndLoad)
+  // A new sort order or filter starts from page 1 - page N of a different
+  // ordering is not "the same rows, re-sorted".
+  watch([includeInactive, sort.sortBy, sort.sortDir], resetAndLoad)
 
   async function onRevoke(s: AdminSessionRow) {
     if (revokingId.value) return

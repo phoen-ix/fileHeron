@@ -580,7 +580,11 @@ class ShareDetailView(ctk.CTkFrame):
                 "bar": bar, "info_var": info_var, "info_lbl": info_lbl,
                 "action_cell": action_cell,
                 "filename": f.original_filename,
-                "downloadable": f.state in ("clean", "ready_unscanned"),
+                # `clean` only: every byte route answers 425 SCAN_IN_PROGRESS for
+                # `ready_unscanned` (services/file.assert_state_servable), so an
+                # offered download of one always failed - the SPA's FileRow
+                # already gates on `clean`; this half did not (audit 2026-11-08).
+                "downloadable": f.state == "clean",
                 # Set when a download is spawned or a resumable partial is found.
                 "dest": None,
                 "cancel": None,
@@ -640,10 +644,7 @@ class ShareDetailView(ctk.CTkFrame):
         if not self._share:
             return
         top = self.winfo_toplevel()
-        downloadable = [
-            f for f in self._share.files
-            if f.state in ("clean", "ready_unscanned")
-        ]
+        downloadable = [f for f in self._share.files if f.state == "clean"]
         if not downloadable:
             self._toast(t("share_detail.nothing_to_save_body"), kind="info")
             return

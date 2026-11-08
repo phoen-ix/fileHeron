@@ -217,7 +217,7 @@ A single scrollable page (left quick-nav with scroll-spy):
 - **Password** - checked against HaveIBeenPwned (k-anonymity, no plaintext sent).
 - **Sessions** - every active session (browser + last-seen IP, 24-h timestamps); revoke any. Per-user cap (default 10): an 11th sign-in evicts your oldest and notifies you.
 - **Two-factor (TOTP)** - QR + secret, confirm, get 10 one-time recovery codes.
-- **Recovery codes** / **Passkeys** - regenerate codes; register/remove WebAuthn authenticators. While passkey sign-in is on, a passkey kept on the device is marked **Signs in without a password** - keep a second one, or an authenticator app, in case you lose that device.
+- **Recovery codes** / **Passkeys** - regenerate codes; register/remove WebAuthn authenticators (both ask for your password: a passkey can be your second factor). While passkey sign-in is on, a passkey kept on the device is marked **Signs in without a password** - keep a second one, or an authenticator app, in case you lose that device.
 - **SSO connections** - connect/disconnect OIDC providers (refuses on email mismatch).
 - **Email address** - change your sign-in email (if the admin's [email-change policy](admin-guide.md#policies--settings) allows it), via a confirm-by-email flow.
 - **Notifications** - per-category channel (off / email / in-app / both). Security-critical types (password reset, sign-in alerts) are shown but **locked on**.

@@ -255,7 +255,6 @@ def public_config(db: Session = Depends(get_db)) -> dict:
 
     body: dict = {
         "app_name": site_svc.get_app_name(db),
-        "default_locale": "en",
         "providers": providers,
         # No `running_version` here. /api/health hides the build identifiers
         # from anonymous callers because they map one-to-one onto a public

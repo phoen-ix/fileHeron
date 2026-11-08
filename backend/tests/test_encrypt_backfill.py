@@ -151,6 +151,22 @@ def test_a_recently_served_file_waits_for_a_later_run(db, stored):
     assert f.enc_version is None
 
 
+def test_a_redis_outage_stops_the_run_and_fails_it(db, stored, monkeypatch):
+    """`was_download_recent` fails OPEN for serving, so with Redis down every
+    candidate counted as "recently served": the run encrypted nothing and
+    reported a green success. It must stop and report instead - swapping a
+    file under a download it cannot see is the one thing the check prevents."""
+    _enable(db)
+    f = stored()
+    monkeypatch.setattr(transfer_activity, "recent_download_mark", lambda _id: None)
+    out = lanes.run_backfill(db)
+    assert (out["encrypted"], out["stopped"]) == (0, "redis_unavailable")
+    assert out[CRON_FAILED_KEY] is True
+    assert out["remaining"] == 1
+    db.refresh(f)
+    assert f.enc_version is None
+
+
 @pytest.fixture
 def broken_writes(monkeypatch):
     """Breaks writes; `.mend()` restores ONLY them - `monkeypatch.undo()` would

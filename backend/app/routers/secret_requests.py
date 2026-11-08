@@ -191,6 +191,11 @@ def list_requests(
     rows, total = request_svc.list_for_user(
         db, user=user, box=box, states=state or None, q=q, page=page, page_size=page_size
     )
+    # Per page, not per row: two SELECTs a row for the "mine" box, 100 on a
+    # 50-row page (audit 2026-11-08).
+    ids = [req.id for req in rows]
+    targets_by_id = request_svc.targets_many(db, ids) if box == "mine" else {}
+    answers_by_id = request_svc.answers_many(db, ids) if box == "mine" else {}
     items = []
     for req in rows:
         reason = request_svc.closed_reason(req)
@@ -206,8 +211,8 @@ def list_requests(
             has_passphrase=req.public_key is not None,
         )
         if box == "mine":
-            item.target_summary = _summary(_targets(db, req))
-            answer = request_svc.answer_of(db, req)
+            item.target_summary = _summary(targets_by_id[req.id])
+            answer = answers_by_id.get(req.id)
             item.answer_secret_id = answer.id if answer is not None else None
         else:
             item.can_answer = reason is None

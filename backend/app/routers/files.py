@@ -273,17 +273,30 @@ def preview_file(
     # the review screen actually offers - recorded nothing at all (audit #2
     # cross-check). No budget is spent: preview is "look", and that has not
     # changed.
+    #
+    # One row per preview, not one per HTTP request: a PDF or video viewer
+    # fetches the file in Range continuations, and each one came back through
+    # here and wrote another `review` row with a commit, so one look at a
+    # pending 20 MB PDF appeared in the audit log as dozens of accesses. Same
+    # narrow exemption the public preview route uses (`routers/public.py`): a
+    # ranged continuation of a preview this approver has already been recorded
+    # for, and only the recorded request marks, so a continuation cannot
+    # extend its own exemption (audit 2026-11-08).
     if share.state == ShareState.pending_approval:
-        record_audit_event(
-            db,
-            event_type=AuditEventType.file_downloaded,
-            actor_user_id=user.id,
-            target_type="file",
-            target_id=file.id,
-            metadata={"via": "preview", "share_id": file.share_id, "review": True},
-            request=request,
-        )
-        db.commit()
+        trace_key = f"user:{user.id}:review-preview:{file.id}"
+        already_traced = transfer_activity.was_download_paid(trace_key)
+        if not (is_partial_continuation(request) and already_traced):
+            record_audit_event(
+                db,
+                event_type=AuditEventType.file_downloaded,
+                actor_user_id=user.id,
+                target_type="file",
+                target_id=file.id,
+                metadata={"via": "preview", "share_id": file.share_id, "review": True},
+                request=request,
+            )
+            db.commit()
+            transfer_activity.mark_download_paid(trace_key)
 
     ttl = settings_registry.effective(db, settings_registry.K.DOWNLOAD_SIGNED_URL_TTL_SEC)
     return serve_response(

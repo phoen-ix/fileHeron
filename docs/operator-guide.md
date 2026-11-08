@@ -107,8 +107,8 @@ the leftmost XFF for audit/rate-limit IPs.
 
 ## Production hardening checklist
 
-`install.sh` produces a production-ready `.env` (sets `ENVIRONMENT=production`,
-`COOKIE_SECURE=true`, derives `WEBAUTHN_RP_ID`, blanks the dev test account). If you
+`install.sh` produces a production-ready `.env` (keeps `ENVIRONMENT=production`, which
+`.env.example` ships and compose requires, sets `COOKIE_SECURE=true`, derives `WEBAUTHN_RP_ID`, blanks the dev test account). If you
 write `.env` by hand, confirm each of these before going live:
 
 - **`ENVIRONMENT=production`** - forces secure cookies, disables `/docs` +

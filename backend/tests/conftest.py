@@ -250,7 +250,12 @@ def fk_db(fk_engine):
 @pytest.fixture
 def app_with_db(session_factory):
     def _get_db():
+        from app.services import settings as settings_svc
+
         s = session_factory()
+        # Like the real dependency: the request Session serves settings from
+        # one read, so the whole suite exercises the cache.
+        settings_svc.enable_request_cache(s)
         try:
             yield s
         finally:

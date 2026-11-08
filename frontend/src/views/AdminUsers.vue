@@ -18,6 +18,7 @@
   import PasswordStrength from '@/components/PasswordStrength.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+  import { usePaginatedList } from '@/composables/usePaginatedList'
   import { useInviteForm } from '@/composables/useInviteForm'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
   import { useUiStore } from '@/stores/ui'
@@ -30,53 +31,21 @@
   const { describe } = useApiError()
   const ui = useUiStore()
 
-  const items = ref<AdminUserItem[]>([])
-  const total = ref(0)
-  const page = ref(1)
-  const pageSize = ref(50)
   const q = ref('')
   const role = ref<UserRole | ''>('')
-  const loading = ref(true)
-  const errorMsg = ref<string | null>(null)
 
-  // Out-of-order guard. Typing in the filter fires a request per keystroke
-  // (debounced, not serialised), and whichever response arrived LAST won - so a
-  // slow early request could overwrite the results of a newer, narrower one and
-  // leave the table showing rows that do not match what is in the search box
-  // (audit 2026-07-30, fe-correct-11). Same `seq` pattern usePaginatedList uses.
-  let loadSeq = 0
-
-  async function load() {
-    const mine = ++loadSeq
-    loading.value = true
-    errorMsg.value = null
-    try {
-      const { data } = await listUsers({
+  const { items, total, page, pageSize, loading, errorMsg, load, resetAndLoad } =
+    usePaginatedList<AdminUserItem>(({ page, pageSize }) =>
+      listUsers({
         q: q.value || undefined,
         role: role.value || undefined,
-        page: page.value,
-        page_size: pageSize.value,
-      })
-      if (mine !== loadSeq) return
-      items.value = data.items
-      total.value = data.total
-    } catch (err) {
-      if (mine !== loadSeq) return
-      errorMsg.value = describe(err)
-    } finally {
-      if (mine === loadSeq) loading.value = false
-    }
-  }
+        page,
+        page_size: pageSize,
+      }).then((r) => r.data),
+    )
 
-  useDebouncedSearch(q, () => {
-    page.value = 1
-    void load()
-  })
-  watch(role, () => {
-    page.value = 1
-    void load()
-  })
-  watch(page, load)
+  useDebouncedSearch(q, resetAndLoad)
+  watch(role, resetAndLoad)
 
   function open(u: AdminUserItem) {
     router.push({ name: 'admin-user-detail', params: { id: u.id } })

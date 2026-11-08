@@ -7,6 +7,7 @@
   import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
   import Pager from '@/components/Pager.vue'
   import { useApiError } from '@/composables/useApiError'
+  import { usePaginatedList } from '@/composables/usePaginatedList'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
   import { useUiStore } from '@/stores/ui'
   import type { InboxClass, InboxListItem } from '@/types/api'
@@ -17,13 +18,7 @@
   const ui = useUiStore()
   const router = useRouter()
 
-  const loading = ref(true)
   const fetching = ref(false)
-  const errorMsg = ref<string | null>(null)
-  const items = ref<InboxListItem[]>([])
-  const total = ref(0)
-  const page = ref(1)
-  const pageSize = 50
 
   const q = ref('')
   const classification = ref('')
@@ -35,40 +30,18 @@
     auto_reply: 'auto',
   }
 
-  // Out-of-order guard. Typing in the filter fires a request per keystroke
-  // (debounced, not serialised), and whichever response arrived LAST won - so a
-  // slow early request could overwrite the results of a newer, narrower one and
-  // leave the table showing rows that do not match what is in the search box
-  // (audit 2026-07-30, fe-correct-11). Same `seq` pattern usePaginatedList uses.
-  let loadSeq = 0
-
-  async function load() {
-    const mine = ++loadSeq
-    loading.value = true
-    errorMsg.value = null
-    try {
-      const { data } = await listInbox({
+  const { items, total, page, pageSize, loading, errorMsg, load, resetAndLoad } =
+    usePaginatedList<InboxListItem>(({ page, pageSize }) =>
+      listInbox({
         q: q.value || undefined,
         classification: classification.value || undefined,
         status: status.value || undefined,
-        page: page.value,
+        page,
         page_size: pageSize,
-      })
-      if (mine !== loadSeq) return
-      items.value = data.items
-      total.value = data.total
-    } catch (err) {
-      if (mine !== loadSeq) return
-      errorMsg.value = describe(err)
-    } finally {
-      if (mine === loadSeq) loading.value = false
-    }
-  }
+      }).then((r) => r.data),
+    )
 
-  function applyFilters() {
-    page.value = 1
-    load()
-  }
+  const applyFilters = resetAndLoad
 
   function open(id: number) {
     router.push({ name: 'admin-inbox-detail', params: { id } })
@@ -96,8 +69,7 @@
       } else {
         ui.pushToast(data.error || t('admin_imap.fetch_failed'), 'warn')
       }
-      page.value = 1
-      await load()
+      resetAndLoad()
     } catch (err) {
       ui.pushToast(describe(err), 'warn')
     } finally {
@@ -206,15 +178,9 @@
 
     <Pager
       v-if="!loading && total > pageSize"
-      :page="page"
+      v-model:page="page"
       :total="total"
       :page-size="pageSize"
-      @update:page="
-        (n) => {
-          page = n
-          load()
-        }
-      "
     />
   </div>
 </template>

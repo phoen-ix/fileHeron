@@ -81,7 +81,9 @@ async def test_removing_a_passkey_audits_webauthn_credential_removed(
     db.commit()
     headers = await _headers(login_as, "a@test.local")
 
-    r = await client.delete(f"/api/account/webauthn/{cred.id}", headers=headers)
+    r = await client.request(
+        "DELETE", f"/api/account/webauthn/{cred.id}", json={"password": PW}, headers=headers
+    )
     assert r.status_code == 204, r.text
 
     rows = (

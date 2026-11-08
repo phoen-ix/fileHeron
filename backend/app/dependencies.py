@@ -11,11 +11,15 @@ from .database import SessionLocal
 from .middleware.errors import AppError
 from .models.user import User, UserRole
 from .services import rate_limit as rate_limit_svc
+from .services import settings as settings_svc
 from .services.auth import resolve_user_from_access_token
 
 
 def get_db() -> Generator[Session]:
     db = SessionLocal()
+    # One request, one Session, one read of the settings table
+    # (services/settings.py::enable_request_cache). Workers never opt in.
+    settings_svc.enable_request_cache(db)
     try:
         yield db
     except Exception:

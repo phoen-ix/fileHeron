@@ -90,6 +90,38 @@ def test_error_log_ip_and_user_id_are_scrubbed(db, admin, victim):
     assert result["pii_purged"]["error_log_scrubbed"] == 1
 
 
+def test_audit_log_ip_is_scrubbed_on_the_subjects_own_rows(db, admin, victim):
+    """Every action the subject took is an audit row stamped with their client
+    IP - the same datum the download_log and error_log scrubs remove, and the
+    one place it was left behind (audit 2026-11-08). Rows where the subject is
+    only the TARGET carry the admin's address and are left alone."""
+    from app.models.audit_log import AuditLog
+
+    db.add(
+        AuditLog(
+            event_type="share_created", actor_user_id=victim.id, target_type="share",
+            target_id="s-1", ip="203.0.113.44", request_id="req-a",
+        )
+    )
+    db.add(
+        AuditLog(
+            event_type="user_disabled", actor_user_id=admin.id, target_type="user",
+            target_id=str(victim.id), ip="198.51.100.9",
+        )
+    )
+    db.commit()
+
+    result = erasure.erase_user(db, actor=admin, target=victim)
+    db.commit()
+
+    own = db.query(AuditLog).filter(AuditLog.actor_user_id == victim.id, AuditLog.target_id == "s-1").one()
+    assert own.ip is None, "the erased user's client IP survived on their own audit rows"
+    assert own.request_id == "req-a", "the correlation key is not personal data and stays"
+    admins = db.query(AuditLog).filter(AuditLog.actor_user_id == admin.id, AuditLog.event_type == "user_disabled").one()
+    assert admins.ip == "198.51.100.9", "the admin's address on a row ABOUT the subject is theirs, not the subject's"
+    assert result["pii_purged"]["audit_log_ip_scrubbed"] == 1
+
+
 def test_error_log_rows_are_kept_not_deleted(db, admin, victim):
     """Control: the row is scan-triage data. Scrub the person, keep the count."""
     db.add(
@@ -280,7 +312,7 @@ def test_pii_purged_accounts_for_every_new_purge(db, admin, victim):
     is indistinguishable from a purge that did not happen."""
     result = erasure.erase_user(db, actor=admin, target=victim)
     db.commit()
-    for key in ("error_log_scrubbed", "group_members", "inbound_attachments"):
+    for key in ("error_log_scrubbed", "audit_log_ip_scrubbed", "group_members", "inbound_attachments"):
         assert key in result["pii_purged"], f"{key} is not accounted for in the receipt"
 
 

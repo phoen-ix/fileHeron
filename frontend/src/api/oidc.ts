@@ -25,7 +25,6 @@ export interface PublicLegal {
 
 export interface PublicConfigResponse {
   app_name: string
-  default_locale: 'en' | 'de'
   /** One entry per enabled, usable OIDC provider. */
   providers: PublicProvider[]
   /** Admin-set login-page banner. Absent when disabled or text is empty. */

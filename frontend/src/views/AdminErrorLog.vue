@@ -1,11 +1,12 @@
 <script setup lang="ts">
-  import { computed, onMounted, ref, watch } from 'vue'
+  import { computed, onMounted, ref } from 'vue'
   import { useI18n } from 'vue-i18n'
 
   import { ADMIN_LOG_MAX_PAGE, exportErrorCsv, listErrorLog } from '@/api/admin'
   import Pager from '@/components/Pager.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+  import { usePaginatedList } from '@/composables/usePaginatedList'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
   import { useUiStore } from '@/stores/ui'
   import type { AdminErrorRow } from '@/types/api'
@@ -14,13 +15,9 @@
 
   const { t } = useI18n()
   const { formatDate } = useSiteDateFormat()
-  const { describe, describeBlob } = useApiError()
+  const { describeBlob } = useApiError()
   const ui = useUiStore()
 
-  const items = ref<AdminErrorRow[]>([])
-  const total = ref(0)
-  const page = ref(1)
-  const pageSize = ref(50)
   const code = ref('')
   const statusCode = ref('')
   const source = ref('')
@@ -28,8 +25,6 @@
   const fromTs = ref('')
   const toTs = ref('')
 
-  const loading = ref(true)
-  const errorMsg = ref<string | null>(null)
   const expanded = ref<number | null>(null)
 
   // Every value the backend can write to error_log.source. `csp` was added with
@@ -62,40 +57,17 @@
     return p
   })
 
-  // Out-of-order guard. Typing in the filter fires a request per keystroke
-  // (debounced, not serialised), and whichever response arrived LAST won - so a
-  // slow early request could overwrite the results of a newer, narrower one and
-  // leave the table showing rows that do not match what is in the search box
-  // (audit 2026-07-30, fe-correct-11). Same `seq` pattern usePaginatedList uses.
-  let loadSeq = 0
-
-  async function load() {
-    const mine = ++loadSeq
-    loading.value = true
-    errorMsg.value = null
-    try {
-      const { data } = await listErrorLog({
+  const { items, total, page, pageSize, loading, errorMsg, load, resetAndLoad } =
+    usePaginatedList<AdminErrorRow>(({ page, pageSize }) =>
+      listErrorLog({
         ...filterParams.value,
         status_code: statusCode.value ? Number(statusCode.value) : undefined,
-        page: page.value,
-        page_size: pageSize.value,
-      })
-      if (mine !== loadSeq) return
-      items.value = data.items
-      total.value = data.total
-    } catch (err) {
-      if (mine !== loadSeq) return
-      errorMsg.value = describe(err)
-    } finally {
-      if (mine === loadSeq) loading.value = false
-    }
-  }
+        page,
+        page_size: pageSize,
+      }).then((r) => r.data),
+    )
 
-  useDebouncedSearch(filterParams, () => {
-    page.value = 1
-    void load()
-  })
-  watch(page, load)
+  useDebouncedSearch(filterParams, resetAndLoad)
 
   function toggle(id: number) {
     expanded.value = expanded.value === id ? null : id

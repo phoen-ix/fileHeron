@@ -38,6 +38,15 @@ class WebAuthnRegisterBeginRequest(APIBaseModel):
     password: str = Field(..., min_length=1, max_length=255)
 
 
+class WebAuthnDeleteRequest(APIBaseModel):
+    """Re-auth for removing a passkey, for the mirror-image reason: with passkey
+    sign-in on, a passkey can be the account's ONLY second factor, so a borrowed
+    session must not be able to strip the factor that would have stopped it.
+    Same gate as adding one (audit 2026-11-08)."""
+
+    password: str = Field(..., min_length=1, max_length=255)
+
+
 class WebAuthnRegisterBeginResponse(APIBaseModel):
     options: dict[str, Any]
 

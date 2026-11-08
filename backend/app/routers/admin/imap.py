@@ -32,6 +32,7 @@ from ...schemas.imap_settings import (
     UpdateImapSettingsRequest,
     UpdateInboxStatusRequest,
 )
+from ...services import file as file_svc
 from ...services import file_encryption, imap_config, mail_test_gate
 from ...services import imap_poll as imap_poll_svc
 from ...services import settings as settings_svc
@@ -336,7 +337,6 @@ def delete_inbox_message(
     admin: User = Depends(get_current_admin),
 ) -> None:
     m = _get_message_or_404(db, msg_id)
-    backend = storage_svc.get_storage_backend()
     attachments = (
         db.query(InboundAttachment)
         .filter(InboundAttachment.message_id == m.id)
@@ -374,11 +374,12 @@ def delete_inbox_message(
     )
     db.delete(m)
     db.commit()
-    for key in to_purge:
-        try:
-            backend.delete(key)
-        except Exception:
-            logger.warning("inbox delete: could not unlink attachment blob %s", key)
+    # Through `purge_locators`, not a bare loop: the rows are gone, so no
+    # sweeper will ever walk these locators again, and a `logger.warning` is
+    # not a record (stdout rotates; it reaches neither error_log nor an
+    # alert). A blob that would not unlink leaves a `file_purge_failed` audit
+    # row, the same trace every other deferred purge leaves (audit 2026-11-08).
+    file_svc.purge_locators(db, to_purge, reason="inbound_message_deleted")
 
 
 @router.get("/inbox/{msg_id}/attachments/{att_id}/download")

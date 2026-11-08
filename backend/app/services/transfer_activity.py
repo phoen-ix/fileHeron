@@ -74,17 +74,30 @@ def mark_download_recent(file_id: str) -> None:
         logger.warning("transfer_activity: recent-mark failed (redis)")
 
 
+def recent_download_mark(file_id: str) -> bool | None:
+    """The serving mark as Redis has it, or None when Redis cannot be asked.
+
+    The three-valued form is for a caller that must NOT treat an outage as a
+    mark: the encryption backfill skips a file that was recently served, and
+    reading the fail-open `was_download_recent` there made a Redis outage look
+    like every file being in flight - the run encrypted nothing and reported
+    success (audit 2026-11-08)."""
+    try:
+        return get_redis().get(f"{_RECENT_KEY_PREFIX}{file_id}") is not None
+    except Exception:
+        logger.warning("transfer_activity: recent-check failed (redis)")
+        return None
+
+
 def was_download_recent(file_id: str) -> bool:
     """Whether this instance served bytes for `file_id` inside the window.
 
     Fails OPEN: with Redis unreachable we cannot tell a resume from a fabricated
     range, and refusing a genuine resume is the worse outcome - the same
-    fail-open posture the quota counter takes."""
-    try:
-        return get_redis().get(f"{_RECENT_KEY_PREFIX}{file_id}") is not None
-    except Exception:
-        logger.warning("transfer_activity: recent-check failed (redis); allowing")
-        return True
+    fail-open posture the quota counter takes. Serving only; a caller that
+    needs to know the difference reads `recent_download_mark`."""
+    mark = recent_download_mark(file_id)
+    return True if mark is None else mark
 
 
 def download_started(file_id: str | None = None) -> str | None:

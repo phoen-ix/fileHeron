@@ -65,8 +65,11 @@ DECLARED: dict[tuple[str, str], tuple[str, str] | None] = {
     ("auth", "change_password"): ("POST", "/account/change-password"),
     ("account", "change_email"): ("POST", "/account/email"),
     ("totp", "confirm_enable"): ("POST", "/account/2fa/enable"),
-    ("totp", "disable"): ("POST", "/account/2fa/disable"),
-    ("totp", "regenerate_recovery_codes"): ("POST", "/account/2fa/recovery-codes/regenerate"),
+    # /account/2fa/disable and /2fa/recovery-codes/regenerate are NOT here any
+    # more: since 2026-11-08 both go through the step-up gate, which answers
+    # 403 for a wrong password or code (services/step_up.py), so the SPA's
+    # interceptor never sees a 401 from them. If a 401 raise site comes back
+    # in `totp._step_up_with_second_factor`, this scan will demand an entry.
 }
 
 

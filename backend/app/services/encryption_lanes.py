@@ -459,9 +459,20 @@ def run_backfill(
                 if member in deferred:
                     counts["deferred_skipped"] += 1
                     continue
-                if kind == file_encryption.KIND_FILE and transfer_activity.was_download_recent(str(row_id)):
-                    counts["recently_served"] += 1
-                    continue
+                if kind == file_encryption.KIND_FILE:
+                    recent = transfer_activity.recent_download_mark(str(row_id))
+                    if recent is None:
+                        # Not "every file is in flight": with Redis down we
+                        # cannot tell which files a reader holds open, and
+                        # swapping one under a live download is the one thing
+                        # this check prevents. Stop, and say so - the fail-open
+                        # `was_download_recent` here made an outage look like
+                        # a quiet, successful run that encrypted nothing.
+                        stopped = "redis_unavailable"
+                        break
+                    if recent:
+                        counts["recently_served"] += 1
+                        continue
                 target = _target(db, kind, row_id)
                 if target is None:
                     continue
@@ -522,7 +533,7 @@ def run_backfill(
     # A run that tried and got nothing done is a failed run: the Scheduled
     # tasks page and the cron alert must see it, not a green "success".
     if (counts["failed"] and not counts["encrypted"] and not counts["superseded"]) or (
-        stopped == "insufficient_space" and not counts["encrypted"]
+        stopped in ("insufficient_space", "redis_unavailable") and not counts["encrypted"]
     ):
         result[CRON_FAILED_KEY] = True
     return result

@@ -309,30 +309,45 @@ async def aconsume_recovery_code(db: Session, *, user: User, code: str, request)
     return _claim_recovery_code(db, user=user, rc_id=rc_id, request=request) if rc_id else False
 
 
-def disable(db: Session, *, user: User, password: str, code_or_recovery: str, request) -> None:
-    """Disable 2FA. Requires password + (current TOTP code OR recovery code).
-    Deletes UserTOTP row + all recovery codes (cascade)."""
-    if not argon2_verify(user.password_hash, password):
-        raise AppError(401, "INVALID_CREDENTIALS", "Password incorrect.")
+def _step_up_with_second_factor(
+    db: Session, *, user: User, password: str, code_or_recovery: str, request, action: str
+) -> None:
+    """The gate `disable` and `regenerate_recovery_codes` share: the current
+    password, then a current TOTP code or an unused recovery code.
+
+    Both secrets go through `services/step_up`: one attempt of the per-user
+    window is spent per request, a wrong password or a wrong code writes a
+    `step_up_failed` row and answers 403, and the window is cleared only once
+    BOTH passed. Before 2026-11-08 the password was a bare `argon2_verify` and
+    the code was checked with no limit and no record: a session that knew the
+    password could brute-force the six-digit code (three valid codes per 30 s
+    window) until the second factor was gone, nothing logged the attempts, and
+    the failures answered 401 - the status the SPA's refresh interceptor reads
+    as "session expired" (see `step_up.refuse`).
+
+    A recovery code alone is enough when the SECRET cannot be decrypted -
+    which is the JWT_SECRET-rotated-without-re-encrypting case
+    `SecretUndecryptableError` exists to name. Before this, `verify_at_login`
+    raised 503 out of the `or`, so the user could sign in with a recovery code
+    but could not disable 2FA, could not mint new recovery codes, and no admin
+    endpoint could clear it: after the tenth code the account was permanently
+    unreachable through the API, and the 503's own message named an admin
+    remedy that does not exist (audit #2).
+    """
+    from . import step_up
+
+    step_up.verify_password_or_403(db, user, password, request=request, final=False)
     if user.totp is None or user.totp.enabled_at is None:
         raise AppError(409, "TOTP_NOT_ENABLED", "Two-factor auth is not enabled.")
-
-    # A recovery code alone is enough when the SECRET cannot be decrypted -
-    # which is the JWT_SECRET-rotated-without-re-encrypting case
-    # `SecretUndecryptableError` exists to name. Before this, `verify_at_login`
-    # raised 503 out of the `or`, so the user could sign in with a recovery code
-    # but could not disable 2FA, could not mint new recovery codes, and no admin
-    # endpoint could clear it: after the tenth code the account was permanently
-    # unreachable through the API, and the 503's own message named an admin
-    # remedy that does not exist (audit #2).
     try:
         totp_ok = verify_at_login(db, user=user, code=code_or_recovery)
     except AppError as e:
         if e.code != "TOTP_SECRET_UNAVAILABLE":
             raise
         logger.warning(
-            "totp: disabling 2FA for user_id=%s on a recovery code alone - the "
-            "stored secret cannot be decrypted",
+            "totp: %s for user_id=%s on a recovery code alone - the stored "
+            "secret cannot be decrypted",
+            action,
             user.id,
         )
         totp_ok = False
@@ -340,7 +355,28 @@ def disable(db: Session, *, user: User, password: str, code_or_recovery: str, re
         totp_ok
         or consume_recovery_code(db, user=user, code=code_or_recovery, request=request)
     ):
-        raise AppError(401, "INVALID_TOTP", "Provide a valid TOTP code or recovery code.")
+        step_up.refuse(
+            db,
+            user,
+            reason="bad_second_factor",
+            request=request,
+            code="INVALID_TOTP",
+            message="Provide a valid TOTP code or recovery code.",
+        )
+    step_up.clear_window(user)
+
+
+def disable(db: Session, *, user: User, password: str, code_or_recovery: str, request) -> None:
+    """Disable 2FA. Requires password + (current TOTP code OR recovery code).
+    Deletes UserTOTP row + all recovery codes (cascade)."""
+    _step_up_with_second_factor(
+        db,
+        user=user,
+        password=password,
+        code_or_recovery=code_or_recovery,
+        request=request,
+        action="disabling 2FA",
+    )
 
     db.delete(user.totp)
     for rc in list(user.recovery_codes):
@@ -361,23 +397,14 @@ def regenerate_recovery_codes(
 ) -> list[str]:
     """Replace all existing recovery codes. Returns 10 new plaintexts (once).
     Same auth gate as `disable`."""
-    if not argon2_verify(user.password_hash, password):
-        raise AppError(401, "INVALID_CREDENTIALS", "Password incorrect.")
-    if user.totp is None or user.totp.enabled_at is None:
-        raise AppError(409, "TOTP_NOT_ENABLED", "Two-factor auth is not enabled.")
-    # Same reasoning as `disable`: an undecryptable secret must not be able to
-    # lock a user out of minting fresh recovery codes (audit #2).
-    try:
-        totp_ok = verify_at_login(db, user=user, code=code_or_recovery)
-    except AppError as e:
-        if e.code != "TOTP_SECRET_UNAVAILABLE":
-            raise
-        totp_ok = False
-    if not (
-        totp_ok
-        or consume_recovery_code(db, user=user, code=code_or_recovery, request=request)
-    ):
-        raise AppError(401, "INVALID_TOTP", "Provide a valid TOTP code or recovery code.")
+    _step_up_with_second_factor(
+        db,
+        user=user,
+        password=password,
+        code_or_recovery=code_or_recovery,
+        request=request,
+        action="regenerating recovery codes",
+    )
 
     for rc in list(user.recovery_codes):
         db.delete(rc)

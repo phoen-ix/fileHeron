@@ -10,6 +10,7 @@
   import Pager from '@/components/Pager.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+  import { usePaginatedList } from '@/composables/usePaginatedList'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
   import { useUiStore } from '@/stores/ui'
   import type {
@@ -24,43 +25,21 @@
   const { formatDate, formatExpiry } = useSiteDateFormat()
   const ui = useUiStore()
 
-  const items = ref<AdminSecretRequestListItem[]>([])
-  const total = ref(0)
-  const page = ref(1)
-  const pageSize = 50
   const q = ref('')
   const stateFilter = ref<'' | SecretRequestState>('open')
-  const loading = ref(true)
-  const errorMsg = ref<string | null>(null)
 
-  async function load() {
-    loading.value = true
-    errorMsg.value = null
-    try {
-      const { data } = await listAllSecretRequests({
+  const { items, total, page, pageSize, loading, errorMsg, load, resetAndLoad } =
+    usePaginatedList<AdminSecretRequestListItem>(({ page, pageSize }) =>
+      listAllSecretRequests({
         state: stateFilter.value ? [stateFilter.value] : [],
         q: q.value || undefined,
-        page: page.value,
+        page,
         page_size: pageSize,
-      })
-      items.value = data.items
-      total.value = data.total ?? data.items.length
-    } catch (err) {
-      errorMsg.value = describe(err)
-    } finally {
-      loading.value = false
-    }
-  }
+      }).then((r) => r.data),
+    )
 
-  watch(stateFilter, () => {
-    page.value = 1
-    void load()
-  })
-  watch(page, () => void load())
-  useDebouncedSearch(q, () => {
-    page.value = 1
-    void load()
-  })
+  watch(stateFilter, resetAndLoad)
+  useDebouncedSearch(q, resetAndLoad)
 
   function audience(sum: SecretRecipientSummary | null | undefined): string {
     if (!sum) return '-'

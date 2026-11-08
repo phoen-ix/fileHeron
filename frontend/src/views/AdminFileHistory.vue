@@ -36,8 +36,8 @@
 
   const sort = useTableSort({ defaultBy: 'uploaded_at', defaultDir: 'desc' })
 
-  const { items, total, page, pageSize, loading, errorMsg, load } = usePaginatedList<AdminFileItem>(
-    ({ page, pageSize }) =>
+  const { items, total, page, pageSize, loading, errorMsg, load, resetAndLoad } =
+    usePaginatedList<AdminFileItem>(({ page, pageSize }) =>
       adminListFiles({
         q: q.value || undefined,
         state: stateFilter.value || undefined,
@@ -50,21 +50,19 @@
         page,
         page_size: pageSize,
       }).then((r) => r.data),
-  )
+    )
 
-  useDebouncedSearch(q, () => {
-    page.value = 1
-    void load()
-  })
-  watch([stateFilter, shareStateFilter, orphanedOnly, includeInactive], () => {
-    page.value = 1
-    void load()
-  })
+  useDebouncedSearch(q, resetAndLoad)
+  // A new filter or sort order starts from page 1 - page N of a different
+  // ordering is not "the same rows, re-sorted".
+  watch(
+    [stateFilter, shareStateFilter, orphanedOnly, includeInactive, sort.sortBy, sort.sortDir],
+    resetAndLoad,
+  )
 
   function clearUploaderFilter() {
     uploaderId.value = null
-    page.value = 1
-    void load()
+    resetAndLoad()
   }
 
   async function onReclaim(it: AdminFileItem) {
@@ -108,7 +106,6 @@
       deleting.value = null
     }
   }
-  watch([sort.sortBy, sort.sortDir, page], load)
 
   function pillForFileState(s: FileState): string | undefined {
     if (s === 'clean') return 'active'

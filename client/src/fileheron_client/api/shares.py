@@ -6,7 +6,7 @@ from typing import Optional
 
 from ..formatters import display_timezone
 from ..models import ShareListResponse, ShareResponse
-from .client import ApiClient
+from .client import ApiClient, SessionExpiredError
 
 
 def _expiry_to_utc_iso(dt: datetime) -> str:
@@ -193,6 +193,11 @@ def get_public_link(api: ApiClient, share_id: str) -> Optional[dict]:
         return api.request_or_raise(
             "GET", f"/api/shares/{share_id}/public-link",
         )
+    except SessionExpiredError:
+        # The one exception the UI layer is built to intercept (it signs the
+        # user out); swallowing it here turned an expired session into a share
+        # page that simply never showed its link (audit 2026-11-08).
+        raise
     except Exception:
         return None
 

@@ -243,8 +243,11 @@ test('passkeys: one is added behind the password and removed again', async ({ pa
   await expect(page.getByText('Passkey added.')).toBeVisible()
   await expect(panel.getByText('E2E key')).toBeVisible()
 
+  // Removing one is step-up gated too (2026-11-08): the password, not a
+  // confirm dialog, is what stands between a borrowed session and the factor.
   await panel.getByRole('button', { name: 'Remove' }).click()
-  await confirmDialog(page).click()
+  await page.getByTestId('step-up-password').fill(p.password)
+  await page.getByTestId('step-up-confirm').click()
   await expect(page.getByText('Passkey removed.')).toBeVisible()
   await expect(panel.getByText('No passkeys registered yet.')).toBeVisible()
 })

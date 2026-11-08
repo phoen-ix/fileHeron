@@ -221,3 +221,46 @@ async def test_the_stream_replays_then_closes(db, make_user, monkeypatch):
     frames = [f async for f in sse_svc.stream_for_user(u.id, last_event_id=n.id - 1)]
     assert any(str(n.id).encode() in f for f in frames), "the replay never arrived"
     assert frames[-1] == b": close\n\n"
+
+
+@pytest.mark.asyncio
+async def test_a_client_that_drops_during_the_replay_still_releases_redis(db, make_user, monkeypatch):
+    """The catch-up replay yields, so a consumer can close the generator in
+    the middle of it. It ran BEFORE the try/finally that unsubscribes and
+    closes the connection, so every disconnect during a replay leaked a pubsub
+    and a redis client for the life of the process (audit 2026-11-08)."""
+    u = make_user(email="drop@test.local")
+    first = _notif(db, u)
+    _notif(db, u)
+    db.commit()
+    released: list[str] = []
+
+    class _FakePubSub:
+        async def subscribe(self, _ch):
+            return None
+
+        async def get_message(self, **_kw):  # pragma: no cover - never reached
+            raise AssertionError("the live loop must not start")
+
+        async def unsubscribe(self, *_a):
+            released.append("unsubscribe")
+
+        async def aclose(self):
+            released.append("pubsub.aclose")
+
+    class _FakeRedis:
+        def pubsub(self):
+            return _FakePubSub()
+
+        async def aclose(self):
+            released.append("redis.aclose")
+
+    monkeypatch.setattr(sse_svc, "_redis", lambda: _FakeRedis())
+
+    gen = sse_svc.stream_for_user(u.id, last_event_id=first.id - 1)
+    frame = await gen.__anext__()
+    assert str(first.id).encode() in frame, "the first replayed frame"
+    await gen.aclose()  # the client went away with a replay frame still queued
+
+    assert released == ["unsubscribe", "pubsub.aclose", "redis.aclose"]
+

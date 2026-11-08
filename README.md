@@ -61,9 +61,8 @@ of `.env` for you. To do it by hand instead:
 
 ```bash
 cp .env.example .env
-# 1. REQUIRED - .env.example ships ENVIRONMENT=development. Without this the
-#    stack runs in dev mode: Secure cookies are not forced and /docs is public.
-sed -i 's/^ENVIRONMENT=.*/ENVIRONMENT=production/' .env
+# 1. .env.example ships ENVIRONMENT=production, and compose refuses a .env
+#    without the key - keep it; development is for a local stack only.
 # 2. REQUIRED - replace all four placeholders with real random values.
 #    The backend refuses to boot in production while any of them is still a
 #    placeholder, which is the intended behaviour, not a bug.
@@ -77,7 +76,7 @@ docker compose up -d       # binds everything to 127.0.0.1; add a Traefik route 
 **Development** (auto-reload + HMR + DB exposed on `127.0.0.1:3307`, override with `DB_EXTERNAL_PORT`):
 
 ```bash
-cp .env.example .env       # required - the base compose fail-fasts on the secrets
+cp .env.example .env       # required - the base compose fail-fasts on the secrets (dev.yml sets development itself)
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 

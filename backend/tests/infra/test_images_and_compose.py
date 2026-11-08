@@ -426,3 +426,28 @@ def test_no_override_file_widens_the_capability_policy():
         for key in ("cap_add", "cap_drop", "privileged"):
             assert key not in text, f"{name} sets {key}"
         assert not re.search(r"^\s+user:", text, re.M), f"{name} sets a user"
+
+
+def test_compose_has_no_development_fallback_for_the_environment():
+    """`ENVIRONMENT: ${ENVIRONMENT:-development}` on backend and worker meant a
+    .env without the key - an old hand-kept one, or a copy of the example with
+    the line dropped - ran a public instance in development mode: dev seeding,
+    /docs exposed, insecure cookies and token-bearing mail bodies in the
+    container log. Only `install.sh` flipped it, and only on a fresh .env.
+    Compose must refuse instead (`:?`), the same way it refuses a missing
+    `FH_TAG`, and the example must ship production (audit 2026-11-08)."""
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    lines = [ln for ln in compose.splitlines() if ln.strip().startswith("ENVIRONMENT:")]
+    assert len(lines) == 2, lines  # backend + worker
+    for ln in lines:
+        assert "${ENVIRONMENT:?" in ln, f"ENVIRONMENT has a fallback again: {ln.strip()}"
+        assert "development" not in ln.split("?")[0], ln
+    env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
+    m = re.search(r"^ENVIRONMENT=(.*)$", env_example, re.M)
+    assert m is not None and m.group(1).strip() == "production", (
+        f".env.example ships ENVIRONMENT={m.group(1) if m else None!r}; it must be production"
+    )
+    # The local stacks say development themselves, so they still come up.
+    for override in ("docker-compose.dev.yml", "docker-compose.e2e.yml"):
+        text = (ROOT / override).read_text(encoding="utf-8")
+        assert text.count("ENVIRONMENT: development") == 2, override

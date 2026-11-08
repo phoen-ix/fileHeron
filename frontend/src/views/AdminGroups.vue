@@ -7,6 +7,7 @@
   import { createGroup, listGroups } from '@/api/groups'
   import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
   import { useApiError } from '@/composables/useApiError'
+  import { usePaginatedList } from '@/composables/usePaginatedList'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
   import { useUiStore } from '@/stores/ui'
   import type { GroupResponse } from '@/types/api'
@@ -17,10 +18,6 @@
   const { formatDateOnly: formatDate } = useSiteDateFormat()
   const { describe } = useApiError()
 
-  const items = ref<GroupResponse[]>([])
-  const loading = ref(true)
-  const errorMsg = ref<string | null>(null)
-
   const showForm = ref(false)
   const newName = ref('')
   const newDescription = ref('')
@@ -28,28 +25,10 @@
   const creating = ref(false)
   const formError = ref<string | null>(null)
 
-  // Out-of-order guard. Typing in the filter fires a request per keystroke
-  // (debounced, not serialised), and whichever response arrived LAST won - so a
-  // slow early request could overwrite the results of a newer, narrower one and
-  // leave the table showing rows that do not match what is in the search box
-  // (audit 2026-07-30, fe-correct-11). Same `seq` pattern usePaginatedList uses.
-  let loadSeq = 0
-
-  async function load() {
-    const mine = ++loadSeq
-    loading.value = true
-    errorMsg.value = null
-    try {
-      const { data } = await listGroups()
-      if (mine !== loadSeq) return
-      items.value = data.items
-    } catch (err) {
-      if (mine !== loadSeq) return
-      errorMsg.value = describe(err)
-    } finally {
-      if (mine === loadSeq) loading.value = false
-    }
-  }
+  // Unpaginated, but the shared skeleton still owns loading/error state.
+  const { items, loading, errorMsg, load } = usePaginatedList<GroupResponse>(() =>
+    listGroups().then((r) => ({ items: r.data.items })),
+  )
 
   async function onCreate() {
     formError.value = null

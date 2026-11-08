@@ -63,6 +63,7 @@ jobs:
       JWT_SECRET: e2e-jwt-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       TUS_HOOK_SECRET: e2e-tus-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       FH_TAG: latest
+      ENVIRONMENT: development
       E2E_IMAGE_TAG: fileheron_e2e
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

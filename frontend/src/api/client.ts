@@ -445,9 +445,10 @@ api.interceptors.response.use(
       // POST only: DELETE /account/email (cancel a pending change) takes no
       // secret and 401s only for an expired session, which must be replayed.
       (original.method?.toUpperCase() === 'POST' && url.includes('/account/email')) ||
-      url.includes('/account/2fa/enable') ||
-      url.includes('/account/2fa/disable') ||
-      url.includes('/account/2fa/recovery-codes/regenerate')
+      // 2fa/disable and 2fa/recovery-codes/regenerate are not listed: since
+      // 2026-11-08 they answer 403 (the step-up gate) for a wrong password or
+      // code, so their only 401 is an expired session, which must be replayed.
+      url.includes('/account/2fa/enable')
 
     if (status === 401 && !original._retry && !isAuthCall) {
       original._retry = true

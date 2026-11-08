@@ -316,14 +316,18 @@ async def stream_for_user(user_id: int, last_event_id: int | None = None) -> Asy
     await pubsub.subscribe(_channel(user_id))
 
     seen_max = last_event_id or 0
-    if last_event_id is not None:
-        for frame, fid in _catchup_frames(user_id, last_event_id):
-            seen_max = max(seen_max, fid)
-            yield frame
-
     deadline = asyncio.get_running_loop().time() + CONNECTION_TTL_SEC
 
+    # Everything after the subscribe is inside the try: the catch-up replay
+    # yields, and a client that drops during it closes the generator right
+    # there - which used to skip the finally below and leak the pubsub and
+    # the connection for the life of the process (audit 2026-11-08).
     try:
+        if last_event_id is not None:
+            for frame, fid in _catchup_frames(user_id, last_event_id):
+                seen_max = max(seen_max, fid)
+                yield frame
+
         while True:
             now = asyncio.get_running_loop().time()
             if now >= deadline:

@@ -18,8 +18,6 @@ if TYPE_CHECKING:
     from .user import User
 
 
-
-
 class GroupMember(Base):
     __tablename__ = "group_members"
 

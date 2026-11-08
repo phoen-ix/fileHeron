@@ -2,8 +2,6 @@
   import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
   import { useI18n } from 'vue-i18n'
 
-  import { useEscapeToClose } from '@/composables/useEscapeToClose'
-
   import {
     applyRollback,
     applyUpdate,
@@ -25,6 +23,7 @@
   import AutoUpdateSection from '@/components/admin/AutoUpdateSection.vue'
   import TunableFields from '@/components/admin/TunableFields.vue'
   import UpdatesSection from '@/components/admin/UpdatesSection.vue'
+  import ModalShell from '@/components/ModalShell.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useSSE } from '@/composables/useSSE'
   import { useUiStore } from '@/stores/ui'
@@ -285,15 +284,6 @@
       await loadTransferActivity()
     }
   }
-
-  // Escape must be bound on the document: the `@keydown.escape` on the backdrop
-  // cannot fire, because the backdrop is not focusable and so is never on the
-  // propagation path (audit 2026-07-30). closeConfirm already refuses while a
-  // submit is in flight.
-  useEscapeToClose(
-    computed(() => confirming.value !== null),
-    () => closeConfirm(),
-  )
 
   function closeConfirm() {
     if (submitting.value) return
@@ -693,113 +683,103 @@
       </section>
 
       <!-- update / rollback confirm modal -->
-      <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -- modal backdrop: click-outside is a convenience, Escape is the keyboard path; revisited with the modal focus work -->
-      <div
-        v-if="confirming"
-        class="fh-modal-backdrop"
-        role="dialog"
-        aria-modal="true"
-        @click.self="closeConfirm"
-        @keydown.escape="closeConfirm"
-      >
-        <div class="fh-modal fh-modal--small">
-          <h2 class="modal-h2">
-            {{
-              confirming === 'update'
-                ? t('admin_system.update.confirm.title_update', { v: status.version.latest })
-                : confirming === 'force'
-                  ? t('admin_system.update.postpone.force_title', { v: pendingUpdate?.target_tag })
-                  : t('admin_system.update.confirm.title_rollback', {
-                      v: updaterStatus?.rollback_target,
-                    })
-            }}
-          </h2>
-          <p class="modal-body">
-            {{
-              confirming === 'rollback'
-                ? t('admin_system.update.confirm.body_rollback')
-                : t('admin_system.update.confirm.body')
-            }}
-          </p>
-          <div
-            v-if="confirming === 'rollback' && updaterStatus?.rollback_alembic_head_known === false"
-            class="fh-notice"
-            data-tone="warning"
-          >
-            {{ t('admin_system.update.rollback_head_unknown_confirm') }}
-          </div>
-          <div
-            v-if="confirming === 'update' && activeTransfers > 0"
-            class="fh-notice"
-            data-tone="warning"
-          >
-            {{
-              t('admin_system.update.postpone.active_notice', {
-                up: transferActivity?.active_uploads ?? 0,
-                down: transferActivity?.active_downloads ?? 0,
-              })
-            }}
-          </div>
-          <form @submit.prevent="submitConfirm(false)">
-            <label v-if="confirming !== 'rollback'" class="checkbox backup-check">
-              <input v-model="backupBeforeUpdate" type="checkbox" data-testid="update-backup" />
-              <span>
-                <span class="cb-label">{{ t('admin_system.update.backup.label') }}</span>
-                <span class="cb-help">{{ t('admin_system.update.backup.help') }}</span>
-                <span
-                  v-if="!backupBeforeUpdate && updaterStatus?.backup_on_db_change !== false"
-                  class="cb-help"
-                  data-testid="update-backup-forced"
-                >
-                  {{ t('admin_system.update.backup.forced_note') }}
-                </span>
-              </span>
-            </label>
-            <label class="fh-field">
-              <span class="fh-field-label">{{ t('common.current_password') }}</span>
-              <input
-                v-model="passwordInput"
-                type="password"
-                class="fh-field-input"
-                autocomplete="current-password"
-                required
-                autofocus
-              />
-            </label>
-            <div v-if="confirmError" class="fh-notice" data-tone="error" role="alert">
-              {{ confirmError }}
-            </div>
-            <div class="form-actions">
-              <button type="submit" class="btn-primary" :disabled="submitting || !passwordInput">
-                {{
-                  submitting
-                    ? t('common.loading')
-                    : confirming === 'update' && activeTransfers > 0
-                      ? t('admin_system.update.postpone.update_now_anyway')
-                      : t('admin_system.update.confirm.action')
-                }}
-              </button>
-              <button
-                v-if="confirming === 'update' && activeTransfers > 0"
-                type="button"
-                class="btn-secondary"
-                :disabled="submitting || !passwordInput"
-                @click="submitConfirm(true)"
-              >
-                {{ t('admin_system.update.postpone.postpone_btn') }}
-              </button>
-              <button
-                type="button"
-                class="btn-secondary"
-                :disabled="submitting"
-                @click="closeConfirm"
-              >
-                {{ t('common.cancel') }}
-              </button>
-            </div>
-          </form>
+      <ModalShell v-if="confirming" :open="true" @close="closeConfirm">
+        <h2 class="modal-h2">
+          {{
+            confirming === 'update'
+              ? t('admin_system.update.confirm.title_update', { v: status.version.latest })
+              : confirming === 'force'
+                ? t('admin_system.update.postpone.force_title', { v: pendingUpdate?.target_tag })
+                : t('admin_system.update.confirm.title_rollback', {
+                    v: updaterStatus?.rollback_target,
+                  })
+          }}
+        </h2>
+        <p class="modal-body">
+          {{
+            confirming === 'rollback'
+              ? t('admin_system.update.confirm.body_rollback')
+              : t('admin_system.update.confirm.body')
+          }}
+        </p>
+        <div
+          v-if="confirming === 'rollback' && updaterStatus?.rollback_alembic_head_known === false"
+          class="fh-notice"
+          data-tone="warning"
+        >
+          {{ t('admin_system.update.rollback_head_unknown_confirm') }}
         </div>
-      </div>
+        <div
+          v-if="confirming === 'update' && activeTransfers > 0"
+          class="fh-notice"
+          data-tone="warning"
+        >
+          {{
+            t('admin_system.update.postpone.active_notice', {
+              up: transferActivity?.active_uploads ?? 0,
+              down: transferActivity?.active_downloads ?? 0,
+            })
+          }}
+        </div>
+        <form @submit.prevent="submitConfirm(false)">
+          <label v-if="confirming !== 'rollback'" class="checkbox backup-check">
+            <input v-model="backupBeforeUpdate" type="checkbox" data-testid="update-backup" />
+            <span>
+              <span class="cb-label">{{ t('admin_system.update.backup.label') }}</span>
+              <span class="cb-help">{{ t('admin_system.update.backup.help') }}</span>
+              <span
+                v-if="!backupBeforeUpdate && updaterStatus?.backup_on_db_change !== false"
+                class="cb-help"
+                data-testid="update-backup-forced"
+              >
+                {{ t('admin_system.update.backup.forced_note') }}
+              </span>
+            </span>
+          </label>
+          <label class="fh-field">
+            <span class="fh-field-label">{{ t('common.current_password') }}</span>
+            <input
+              v-model="passwordInput"
+              type="password"
+              class="fh-field-input"
+              autocomplete="current-password"
+              required
+              autofocus
+            />
+          </label>
+          <div v-if="confirmError" class="fh-notice" data-tone="error" role="alert">
+            {{ confirmError }}
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary" :disabled="submitting || !passwordInput">
+              {{
+                submitting
+                  ? t('common.loading')
+                  : confirming === 'update' && activeTransfers > 0
+                    ? t('admin_system.update.postpone.update_now_anyway')
+                    : t('admin_system.update.confirm.action')
+              }}
+            </button>
+            <button
+              v-if="confirming === 'update' && activeTransfers > 0"
+              type="button"
+              class="btn-secondary"
+              :disabled="submitting || !passwordInput"
+              @click="submitConfirm(true)"
+            >
+              {{ t('admin_system.update.postpone.postpone_btn') }}
+            </button>
+            <button
+              type="button"
+              class="btn-secondary"
+              :disabled="submitting"
+              @click="closeConfirm"
+            >
+              {{ t('common.cancel') }}
+            </button>
+          </div>
+        </form>
+      </ModalShell>
 
       <!-- recent failures -->
       <section v-if="status.recent_failures.length > 0" class="card">
@@ -1082,26 +1062,6 @@
   .btn-primary:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-  }
-  .fh-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(26, 29, 36, 0.4);
-    display: grid;
-    place-items: center;
-    z-index: 100;
-  }
-  .fh-modal {
-    background: var(--fh-paper);
-    border: 1px solid var(--fh-hairline-strong);
-    box-shadow: 0 8px 40px rgba(26, 29, 36, 0.15);
-    padding: var(--fh-space-5);
-    width: min(480px, 92vw);
-    max-height: 92vh;
-    overflow-y: auto;
-  }
-  .fh-modal--small {
-    width: min(420px, 92vw);
   }
   .modal-h2 {
     font-family: var(--fh-font-display);

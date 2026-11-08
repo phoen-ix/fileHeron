@@ -1,7 +1,7 @@
 """Regression: audit CSV export neutralises formula injection (finding L3)."""
 from __future__ import annotations
 
-from app.routers.admin.audit import _csv_safe
+from app.utils.csv_export import csv_safe as _csv_safe
 
 
 def test_csv_safe_neutralises_formula_prefixes():

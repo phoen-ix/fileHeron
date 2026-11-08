@@ -23,6 +23,7 @@ from ....schemas.share_approval_settings import (
     ShareApprovalSettingsResponse,
     UpdateShareApprovalSettingsRequest,
 )
+from ....services import policy_gate
 from ....services import settings as settings_svc
 from ....services import share_approval as share_approval_svc
 from ....services.audit import record_audit_event
@@ -71,36 +72,9 @@ def update_share_approval_settings(
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ) -> ShareApprovalSettingsResponse:
-    if payload.approver_user_ids:
-        found = {
-            row[0]
-            for row in db.query(User.id)
-            .filter(User.id.in_(payload.approver_user_ids))
-            .all()
-        }
-        missing = [i for i in payload.approver_user_ids if i not in found]
-        if missing:
-            raise AppError(
-                400,
-                "USER_NOT_FOUND",
-                "One or more selected users do not exist.",
-                details={"missing_user_ids": missing},
-            )
-    if payload.approver_group_ids:
-        found = {
-            row[0]
-            for row in db.query(Group.id)
-            .filter(Group.id.in_(payload.approver_group_ids))
-            .all()
-        }
-        missing = [i for i in payload.approver_group_ids if i not in found]
-        if missing:
-            raise AppError(
-                400,
-                "GROUP_NOT_FOUND",
-                "One or more selected groups do not exist.",
-                details={"missing_group_ids": missing},
-            )
+    policy_gate.assert_ids_exist(
+        db, user_ids=payload.approver_user_ids or [], group_ids=payload.approver_group_ids or []
+    )
 
     # Refuse a combination that can never queue anything. "Every employee may
     # approve" plus "an approver's own shares are exempt" cancel each other out:

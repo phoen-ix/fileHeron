@@ -59,7 +59,6 @@ class SmtpConfig:
         return formataddr((self.from_name, self.from_email))
 
 
-
 def _header_safe(value: str) -> str:
     """Strip control characters from a value destined for a mail header."""
     collapsed = "".join(" " if (ch < " " or ch == "\x7f") else ch for ch in value)

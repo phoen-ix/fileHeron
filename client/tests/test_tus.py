@@ -128,3 +128,35 @@ def test_tus_create_failure_raises(tmp_path):
             file_path=f,
         )
     assert ei.value.status_code == 403
+
+
+@respx.mock
+def test_a_gateway_error_on_patch_is_retried_not_fatal(tmp_path, monkeypatch):
+    """nginx answers 502/503/504 while tusd is being recreated by an update.
+    That aborted the whole upload; it is transient and retried now
+    (audit 2026-11-08)."""
+    from fileheron_client import tus as tus_mod
+
+    monkeypatch.setattr(tus_mod.time, "sleep", lambda _s: None)
+    f = tmp_path / "big.bin"
+    f.write_bytes(b"X" * 5000)
+    respx.post(TUS_URL).mock(return_value=httpx.Response(201, headers={"Location": "/uploads/new-id"}))
+    answers = iter([502, 503])
+
+    def _on_patch(request: httpx.Request) -> httpx.Response:
+        code = next(answers, 204)
+        if code != 204:
+            return httpx.Response(code, text="bad gateway")
+        offset = int(request.headers["Upload-Offset"])
+        return httpx.Response(204, headers={"Upload-Offset": str(offset + len(request.content))})
+
+    respx.patch(NEW_UPLOAD_URL).mock(side_effect=_on_patch)
+
+    final_url = upload_tus(
+        server_url=SERVER,
+        tus_endpoint="/uploads/",
+        upload_metadata_header="fh_payload Y,fh_sig Z",
+        file_path=f,
+    )
+
+    assert final_url == NEW_UPLOAD_URL

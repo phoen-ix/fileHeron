@@ -23,8 +23,6 @@ from ..utils.timeutil import utc_now
 logger = logging.getLogger("fileheron.workers.cleanup_read_notifications")
 
 
-
-
 @track_cron("cleanup_read_notifications")
 async def cleanup_read_notifications(_ctx) -> dict:
     """Age-out old in-app notifications by creation time.

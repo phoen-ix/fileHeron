@@ -81,8 +81,6 @@ def mark_failed(result: dict[str, Any], error: str) -> dict[str, Any]:
     return result
 
 
-
-
 def _truncate(result: Any) -> Any:
     """JSON-friendly truncation so result_summary doesn't bloat the table
     if a cron returns a large dict/list."""

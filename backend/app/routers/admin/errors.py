@@ -7,9 +7,6 @@ mutated from here; retention is handled by the prune_history cron.
 """
 from __future__ import annotations
 
-import csv
-import io
-from collections.abc import Iterator
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
@@ -22,15 +19,9 @@ from ...models.error_log import ErrorLog
 from ...models.user import User
 from ...schemas.admin import AdminErrorListResponse, AdminErrorRow
 from ...services import error_log as error_log_svc
+from ...utils.csv_export import BATCH_SIZE, csv_response, csv_safe
 
 router = APIRouter()
-
-
-def _csv_safe(value) -> str:
-    s = "" if value is None else str(value)
-    if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
-        return "'" + s
-    return s
 
 
 def _row(r: ErrorLog) -> AdminErrorRow:
@@ -116,64 +107,46 @@ def export_errors_csv(
         from_ts=from_ts, to_ts=to_ts,
     ).order_by(ErrorLog.created_at.desc(), ErrorLog.id.desc())
 
-    def _rows() -> Iterator[bytes]:
-        buf = io.StringIO()
-        writer = csv.writer(buf)
-        writer.writerow(
-            [
-                "id",
-                "created_at",
-                "source",
-                "status_code",
-                "code",
-                "exception_type",
-                "method",
-                "path",
-                "job_name",
-                "ip",
-                "request_id",
-                "user_id",
-                "auth_via",
-                "signature",
-                "alerted",
-                "message",
-            ]
-        )
-        yield buf.getvalue().encode("utf-8")
-        buf.seek(0)
-        buf.truncate()
+    def _to_row(r) -> list:
+        return [
+            r.id,
+            r.created_at.isoformat() if r.created_at else "",
+            csv_safe(r.source),
+            r.status_code,
+            csv_safe(r.code),
+            csv_safe(r.exception_type or ""),
+            csv_safe(r.method or ""),
+            csv_safe(r.path or ""),
+            csv_safe(r.job_name or ""),
+            csv_safe(r.ip or ""),
+            csv_safe(r.request_id or ""),
+            r.user_id if r.user_id is not None else "",
+            csv_safe(r.auth_via or ""),
+            csv_safe(r.signature),
+            "1" if r.alerted else "0",
+            csv_safe(r.message or ""),
+        ]
 
-        for r in query.yield_per(500):
-            writer.writerow(
-                [
-                    r.id,
-                    r.created_at.isoformat() if r.created_at else "",
-                    _csv_safe(r.source),
-                    r.status_code,
-                    _csv_safe(r.code),
-                    _csv_safe(r.exception_type or ""),
-                    _csv_safe(r.method or ""),
-                    _csv_safe(r.path or ""),
-                    _csv_safe(r.job_name or ""),
-                    _csv_safe(r.ip or ""),
-                    _csv_safe(r.request_id or ""),
-                    r.user_id if r.user_id is not None else "",
-                    _csv_safe(r.auth_via or ""),
-                    _csv_safe(r.signature),
-                    "1" if r.alerted else "0",
-                    _csv_safe(r.message or ""),
-                ]
-            )
-            data = buf.getvalue()
-            if len(data) > 8192:
-                yield data.encode("utf-8")
-                buf.seek(0)
-                buf.truncate()
-        tail = buf.getvalue()
-        if tail:
-            yield tail.encode("utf-8")
-
-    headers = {
-        "Content-Disposition": 'attachment; filename="fileheron-error-log.csv"',
-    }
-    return StreamingResponse(_rows(), media_type="text/csv", headers=headers)
+    return csv_response(
+        "fileheron-error-log.csv",
+        [
+            "id",
+            "created_at",
+            "source",
+            "status_code",
+            "code",
+            "exception_type",
+            "method",
+            "path",
+            "job_name",
+            "ip",
+            "request_id",
+            "user_id",
+            "auth_via",
+            "signature",
+            "alerted",
+            "message",
+        ],
+        query.yield_per(BATCH_SIZE),
+        _to_row,
+    )

@@ -61,8 +61,6 @@ stream_router = APIRouter()
 _KNOWN_CRONS = list(cron_schedule.REGISTRY)
 
 
-
-
 def _live_checks() -> dict:
     """Mirror /api/health's probes - DB, Redis, AV. Probes run fresh on every
     call; `checked_at` records when, so the UI can show 'checked <time>'."""

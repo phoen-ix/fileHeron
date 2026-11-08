@@ -361,7 +361,6 @@ def _content_disposition(disposition: str, filename: str) -> str:
     return f"{disposition}; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"
 
 
-
 # RFC 9110 token characters. A media type outside this shape has no business
 # reaching a response header.
 _MEDIA_TYPE_RE = re.compile(r"^[!#$%&\'*+\-.^_`|~0-9A-Za-z]+/[!#$%&\'*+\-.^_`|~0-9A-Za-z]+$")

@@ -20,7 +20,7 @@
         <span class="kv-label">{{ t('public_link.url_label') }}</span>
         <pre class="url fh-mono">{{ active.url }}</pre>
         <button type="button" class="fh-btn-text" @click="copyActiveUrl">
-          {{ copiedTimer ? t('public_link.url_copied') : t('public_link.url_copy') }}
+          {{ copied ? t('public_link.url_copied') : t('public_link.url_copy') }}
         </button>
       </div>
       <p v-else class="fh-field-help token-note">
@@ -127,6 +127,7 @@
   import { createPublicLink, getPublicLink, revokePublicLink } from '@/api/publicLinks'
   import { useApiError } from '@/composables/useApiError'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
+  import { useCopyToClipboard } from '@/composables/useCopyToClipboard'
   import { useUiStore } from '@/stores/ui'
   import type { PublicLinkResponse } from '@/types/api'
 
@@ -145,7 +146,7 @@
   const newPassword = ref('')
   const newLimit = ref<number | null>(null)
   const newNotify = ref(false)
-  const copiedTimer = ref<number | null>(null)
+  const { copy, copied } = useCopyToClipboard()
 
   async function load() {
     loading.value = true
@@ -211,15 +212,7 @@
   }
 
   async function copyToClipboard(text: string) {
-    try {
-      await navigator.clipboard.writeText(text)
-      if (copiedTimer.value) clearTimeout(copiedTimer.value)
-      copiedTimer.value = window.setTimeout(() => {
-        copiedTimer.value = null
-      }, 1600)
-    } catch {
-      /* clipboard blocked */
-    }
+    await copy(text)
   }
 
   async function copyActiveUrl() {

@@ -38,7 +38,6 @@ WORKSPACE = Path(os.environ.get("EXECUTOR_WORKSPACE", "/workspace"))
 COMPOSE_FILE = WORKSPACE / "docker-compose.yml"
 ENV_FILE = WORKSPACE / ".env"
 ROLLBACK_FILE = STATE_FILE.parent / "rollback_target.json"
-COMPOSE_PROJECT = os.environ.get("COMPOSE_PROJECT_NAME", "fileheron")
 GHCR_OWNER = os.environ.get("GHCR_OWNER", "phoen-ix")
 BACKEND_HEALTH_URL = os.environ.get(
     "EXECUTOR_BACKEND_HEALTH_URL", "http://backend:8000/api/health"
@@ -258,14 +257,10 @@ def run_capture(cmd: list[str], env: dict[str, str] | None = None) -> int:
 
 
 def read_current_tag() -> str:
-    """Returns the FH_TAG from .env (or 'latest' if unset)."""
-    if not ENV_FILE.exists():
-        return "latest"
-    for raw in ENV_FILE.read_text().splitlines():
-        line = raw.strip()
-        if line.startswith("FH_TAG="):
-            return line.split("=", 1)[1].strip()
-    return "latest"
+    """Returns the FH_TAG from .env (or 'latest' if unset). The same reader as
+    every other .env key (`_env_file_value`), which also drops quotes the way
+    compose does - this was a second copy that kept them (audit 2026-11-08)."""
+    return _env_file_value("FH_TAG") or "latest"
 
 
 def write_current_tag(new_tag: str) -> None:
@@ -447,16 +442,26 @@ def resolve_running_version() -> str | None:
     code (audit #2). Resolve the floating tag to the concrete version first.
     """
     try:
-        result = subprocess.run(
-            ["curl", "-fsS", "--max-time", "5", BACKEND_HEALTH_URL],
-            capture_output=True, text=True, timeout=10,
-        )
-        if result.returncode == 0 and result.stdout:
-            running = json.loads(result.stdout).get("running_version")
-            if running and running not in ("latest", "unknown", ""):
-                return str(running)
+        health = _probe_backend_health()
+        running = health.get("running_version") if health else None
+        if running and running not in ("latest", "unknown", ""):
+            return str(running)
     except Exception as e:
         log_line(f"WARN could not resolve running version: {type(e).__name__}: {e}")
+    return None
+
+
+def _probe_backend_health() -> dict | None:
+    """One GET of the backend's /api/health; the parsed body, or None when it
+    did not answer 2xx with a body. Raises on a malformed body or a curl that
+    cannot run - both callers log that their own way. The two probes carried
+    this request twice (audit 2026-11-08)."""
+    result = subprocess.run(
+        ["curl", "-fsS", "--max-time", "5", BACKEND_HEALTH_URL],
+        capture_output=True, text=True, timeout=10,
+    )
+    if result.returncode == 0 and result.stdout:
+        return json.loads(result.stdout)
     return None
 
 
@@ -470,14 +475,8 @@ def wait_for_backend_health(expected_tag: str | None, *, not_tag: str | None = N
     deadline = time.time() + HEALTH_TIMEOUT_SEC
     while time.time() < deadline:
         try:
-            result = subprocess.run(
-                ["curl", "-fsS", "--max-time", "5", BACKEND_HEALTH_URL],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if result.returncode == 0 and result.stdout:
-                parsed = json.loads(result.stdout)
+            parsed = _probe_backend_health()
+            if parsed is not None:
                 running = parsed.get("running_version")
                 if running == expected_tag or (
                     expected_tag is None and running and running != not_tag

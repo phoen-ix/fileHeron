@@ -100,7 +100,7 @@
       <pre class="plaintext-token fh-mono">{{ plaintext.plaintext_token }}</pre>
       <div class="plaintext-actions">
         <button type="button" class="fh-btn-text" @click="copyPlaintext">
-          {{ copiedTimer ? t('api_tokens.copied') : t('api_tokens.copy') }}
+          {{ copied ? t('api_tokens.copied') : t('api_tokens.copy') }}
         </button>
         <button type="button" class="fh-btn-text" @click="dismissPlaintext">
           {{ t('api_tokens.acknowledged') }}
@@ -164,6 +164,7 @@
   import StepUpDialog from '@/components/StepUpDialog.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
+  import { useCopyToClipboard } from '@/composables/useCopyToClipboard'
   import { useUiStore } from '@/stores/ui'
   import type { ApiTokenListItem, CreateApiTokenResponse } from '@/types/api'
   import { defaultTokenExpiryLocal, parseServerDate, siteLocalIsoToUtcIso } from '@/utils/datetime'
@@ -201,7 +202,7 @@
   }
   const errorMsg = ref<string | null>(null)
   const revoking = ref<number | null>(null)
-  const copiedTimer = ref<number | null>(null)
+  const { copy, copied } = useCopyToClipboard()
 
   // A failed load used to leave the list empty and render "No API tokens yet" -
   // telling someone with live tokens they have none, which is the one thing a
@@ -294,17 +295,9 @@
     }
   }
 
-  async function copyPlaintext() {
-    if (!plaintext.value) return
-    try {
-      await navigator.clipboard.writeText(plaintext.value.plaintext_token)
-      if (copiedTimer.value) clearTimeout(copiedTimer.value)
-      copiedTimer.value = window.setTimeout(() => {
-        copiedTimer.value = null
-      }, 1600)
-    } catch {
-      /* clipboard blocked - user can still select-and-copy */
-    }
+  function copyPlaintext() {
+    // A blocked clipboard leaves the token on screen to select.
+    if (plaintext.value) void copy(plaintext.value.plaintext_token)
   }
 
   function dismissPlaintext() {

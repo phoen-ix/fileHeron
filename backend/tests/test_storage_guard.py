@@ -48,7 +48,7 @@ def test_is_storage_critical_low_unknown_fails_open(db, monkeypatch):
 
 
 def test_refuse_if_storage_critical_gate(db):
-    from app.routers.uploads import _refuse_if_storage_critical
+    from app.services.storage_guard import refuse_if_critical_low as _refuse_if_storage_critical
 
     # Flag unset → no raise.
     _refuse_if_storage_critical(db)

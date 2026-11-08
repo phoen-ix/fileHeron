@@ -27,8 +27,6 @@ if TYPE_CHECKING:
     from .user import User
 
 
-
-
 class ApiToken(Base):
     __tablename__ = "api_tokens"
 

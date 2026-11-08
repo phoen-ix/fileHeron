@@ -18,6 +18,7 @@
   import SecretAnswerForm from '@/components/SecretAnswerForm.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
+  import { useCopyToClipboard } from '@/composables/useCopyToClipboard'
   import { useUiStore } from '@/stores/ui'
   import type { SecretRequestLinkItem, SecretRequestResponse } from '@/types/api'
   import { secretRequestPill, secretRequestStateKey } from '@/utils/statePill'
@@ -34,7 +35,7 @@
   const cancelling = ref(false)
   const answered = ref(false)
   const links = ref<SecretRequestLinkItem[] | null>(null)
-  const copiedId = ref<number | null>(null)
+  const { copy: copyText, copiedKey: copiedId } = useCopyToClipboard()
 
   const id = computed(() => String(route.params.id))
   const isRequester = computed(() => req.value?.viewer_role === 'requester')
@@ -119,15 +120,9 @@
     }
   }
 
-  async function copy(item: SecretRequestLinkItem) {
-    if (!item.url) return
-    try {
-      await navigator.clipboard.writeText(item.url)
-      copiedId.value = item.target_id
-      window.setTimeout(() => (copiedId.value = null), 1600)
-    } catch {
-      /* clipboard blocked - the link is on screen to select */
-    }
+  function copy(item: SecretRequestLinkItem) {
+    // A blocked clipboard leaves the link on screen to select.
+    if (item.url) void copyText(item.url, item.target_id)
   }
 
   function targetText(tg: NonNullable<SecretRequestResponse['targets']>[number]): string {

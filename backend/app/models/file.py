@@ -65,8 +65,6 @@ class FileApprovalState(str, enum.Enum):
     pending_review = "pending_review"
 
 
-
-
 def _new_uuid() -> str:
     return str(uuid.uuid4())
 

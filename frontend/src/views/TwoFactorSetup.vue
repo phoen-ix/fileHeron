@@ -6,6 +6,7 @@
   import * as twoFaApi from '@/api/twoFactor'
   import { useApiError } from '@/composables/useApiError'
   import { effectiveLandingPath } from '@/composables/useEffectiveLanding'
+  import { useCopyToClipboard } from '@/composables/useCopyToClipboard'
   import { useAuthStore } from '@/stores/auth'
   import { useUiStore } from '@/stores/ui'
   import type { TotpStatusResponse } from '@/types/api'
@@ -96,9 +97,12 @@
     }
   }
 
+  // No `try` here before: a blocked clipboard was an unhandled rejection. The
+  // codes are on screen to write down either way.
+  const { copy } = useCopyToClipboard()
   async function copyCodes() {
-    await navigator.clipboard.writeText(codes.value.join('\n'))
-    ui.pushToast(t('twofa.recovery_codes_copied'), 'success')
+    if (await copy(codes.value.join('\n')))
+      ui.pushToast(t('twofa.recovery_codes_copied'), 'success')
   }
 
   async function finishCodes() {

@@ -256,11 +256,15 @@ class AddFilesDialog:
                 self._api, self._share_id, notify=notify, file_ids=file_ids,
             )
 
-        def _finish(notified_ok: bool):
+        def _finish(registered_ok: bool):
             # Files are uploaded + attached regardless; reload the detail view.
             self._on_added()
             if self._flash is not None:
-                if notified_ok:
+                # "Recipients could not be notified" only when they were meant
+                # to be: with Notify unticked a failed registration notified
+                # nobody by design, and the files are in the share either way
+                # (audit 2026-11-08).
+                if registered_ok or not notify:
                     self._flash(t("add_files.toast_added", n=len(file_ids)), kind="success")
                 else:
                     self._flash(t("add_files.notify_failed"), kind="error")

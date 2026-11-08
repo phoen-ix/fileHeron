@@ -76,8 +76,6 @@ UNLOCK_TTL_SEC = 24 * 60 * 60  # 24h
 COOKIE_PATH_PREFIX = "/api/public"
 
 
-
-
 _b64url = signed_token.b64url
 _b64url_decode = signed_token.b64url_decode
 

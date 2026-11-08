@@ -28,8 +28,6 @@ from ..utils.timeutil import utc_now
 logger = logging.getLogger("fileheron.workers.share_expiring")
 
 
-
-
 @track_cron("share_expiring_24h_warning")
 async def share_expiring_24h_warning(_ctx) -> dict:
     """Find active shares expiring in (now+24h, now+25h) without a prior

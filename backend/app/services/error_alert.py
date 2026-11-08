@@ -40,7 +40,7 @@ from sqlalchemy.orm import Session
 
 from ..middleware.errors import AppError
 from ..models.notification import NotificationCategory
-from ..models.user import User, UserRole
+from ..models.user import User
 from ..models.user_notification_preference import NotificationChannel
 from ..redis_client import get_redis, sync
 from ..utils.crypto import sha256_hex
@@ -242,30 +242,14 @@ def _build_payload(event: dict[str, Any], decision: _CooldownDecision) -> dict[s
 
 
 def _send_to_admins(db: Session, payload: dict[str, Any]) -> int:
-    from . import notification as notif_svc
+    from . import admin_alerts
 
-    admins = (
-        db.query(User)
-        .filter(User.role == UserRole.admin, User.is_disabled.is_(False))
-        .all()
+    fanout = admin_alerts.notify_admins(
+        db, payload=payload, link_url="/admin/system", category=NotificationCategory.server_error
     )
-    sent = 0
-    for admin in admins:
-        try:
-            notif_svc.dispatch(
-                db,
-                user=admin,
-                category=NotificationCategory.server_error,
-                payload=payload,
-                link_url="/admin/system",
-                email_to=admin.email,
-            )
-            sent += 1
-        except Exception:
-            logger.exception("error_alert: dispatch to admin=%d failed", admin.id)
     # Commit so the dispatcher's after-commit hooks (email enqueue + bell SSE) fire.
     db.commit()
-    return sent
+    return fanout.sent
 
 
 def _send_to_custom(db: Session, payload: dict[str, Any], addrs: list[str]) -> int:
@@ -286,7 +270,11 @@ def _send_to_custom(db: Session, payload: dict[str, Any], addrs: list[str]) -> i
         app_name=site_svc.get_app_name(db),
         db=db,
     )
-    sent = 0
+    # Every mail-log row first, ONE commit (the worker must find its row),
+    # then one batch enqueue: it committed and opened a Redis pool per address
+    # (audit 2026-11-08). `enqueue_many`, like `enqueue`, logs a failure and
+    # never raises, so the count is the addresses queued.
+    jobs: list[tuple[str, tuple, dict]] = []
     for addr in addrs:
         eid = mail_log.record_queued(
             db,
@@ -298,20 +286,14 @@ def _send_to_custom(db: Session, payload: dict[str, Any], addrs: list[str]) -> i
             text_body=text,
             html_body=html,
         )
-        db.commit()
-        try:
-            job_queue.enqueue(
-                "send_email_job",
-                to=addr,
-                subject=subject,
-                text_body=text,
-                html_body=html,
-                email_log_id=eid,
-            )
-            sent += 1
-        except Exception:
-            logger.exception("error_alert: send_email enqueue failed for %s", addr)
-    return sent
+        jobs.append((
+            "send_email_job",
+            (),
+            {"to": addr, "subject": subject, "text_body": text, "html_body": html, "email_log_id": eid},
+        ))
+    db.commit()
+    job_queue.enqueue_many(jobs)
+    return len(jobs)
 
 
 def send_to_configured_recipients(db: Session, payload: dict[str, Any]) -> int:

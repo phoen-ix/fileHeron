@@ -68,3 +68,27 @@ def test_no_progress_callback_when_none():
     for cb, args in items:
         cb(*args)
     assert out == [42]
+
+
+def test_init_async_is_idempotent_per_root(monkeypatch):
+    """Each call scheduled another poll loop, so a second call doubled the
+    polling for the life of the app (audit 2026-11-08)."""
+    from fileheron_client.ui import _async
+
+    monkeypatch.setattr(_async, "_polling_root", None)
+
+    class _Root:
+        def __init__(self):
+            self.scheduled = 0
+
+        def after(self, _ms, _fn):
+            self.scheduled += 1
+
+    root = _Root()
+    _async.init_async(root)
+    _async.init_async(root)
+    assert root.scheduled == 1
+
+    other = _Root()
+    _async.init_async(other)
+    assert other.scheduled == 1, "a NEW root still gets its loop"

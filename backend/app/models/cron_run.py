@@ -34,8 +34,6 @@ class CronRunStatus(str, enum.Enum):
 _BigIntPK = BigInteger().with_variant(Integer(), "sqlite")
 
 
-
-
 class CronRun(Base):
     __tablename__ = "cron_runs"
 

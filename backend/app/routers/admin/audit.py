@@ -1,11 +1,7 @@
 """/api/admin/audit-log - list + streaming CSV export."""
 from __future__ import annotations
 
-import base64
-import csv
-import io
 import json
-from collections.abc import Iterator
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
@@ -14,40 +10,13 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from ...dependencies import get_current_admin, get_db
-from ...middleware.errors import AppError
 from ...models.audit_log import AuditEventType, AuditLog
 from ...models.user import User
 from ...schemas.admin import AdminAuditResponse, AdminAuditRow, AdminSettingsChangesResponse
+from ...utils.csv_export import BATCH_SIZE, csv_response, csv_safe, decode_cursor, encode_cursor
 from ...utils.timeutil import to_naive_utc
 
 router = APIRouter()
-
-
-def _csv_safe(value) -> str:
-    """Neutralise CSV formula injection (finding L3). Spreadsheet apps
-    execute a cell whose text starts with = + - @ (or a leading control
-    char). User-influenced fields land in the export (e.g. a failed-email
-    `target_id`, display names in `extra`), so prefix a single quote to
-    defuse the formula while keeping the value readable."""
-    s = "" if value is None else str(value)
-    if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
-        return "'" + s
-    return s
-
-
-def _encode_cursor(created_at: datetime, row_id: int) -> str:
-    raw = f"{created_at.isoformat()}|{row_id}".encode()
-    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
-
-
-def _decode_cursor(s: str) -> tuple[datetime, int]:
-    try:
-        padded = s + "=" * (-len(s) % 4)
-        raw = base64.urlsafe_b64decode(padded.encode()).decode()
-        ts_str, id_str = raw.split("|", 1)
-        return datetime.fromisoformat(ts_str), int(id_str)
-    except Exception as e:
-        raise AppError(400, "INVALID_CURSOR", "Cursor is not valid.") from e
 
 
 def _audit_query(
@@ -189,7 +158,7 @@ def list_audit(
     )
 
     if cursor is not None:
-        ts, last_id = _decode_cursor(cursor)
+        ts, last_id = decode_cursor(cursor)
         q = q.filter(
             or_(
                 AuditLog.created_at < ts,
@@ -216,7 +185,7 @@ def list_audit(
     next_cursor: str | None = None
     if len(rows) == page_size and rows:
         last = rows[-1]
-        next_cursor = _encode_cursor(last.created_at, last.id)
+        next_cursor = encode_cursor(last.created_at, last.id)
 
     return AdminAuditResponse(
         items=items,
@@ -250,51 +219,32 @@ def export_audit_csv(
         to_ts=to_ts,
     ).order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
 
-    def _rows() -> Iterator[bytes]:
-        buf = io.StringIO()
-        writer = csv.writer(buf)
-        writer.writerow(
-            [
-                "id",
-                "created_at",
-                "event_type",
-                "actor_user_id",
-                "target_type",
-                "target_id",
-                "ip",
-                "request_id",
-                "extra",
-            ]
-        )
-        yield buf.getvalue().encode("utf-8")
-        buf.seek(0)
-        buf.truncate()
+    def _to_row(r) -> list:
+        return [
+            r.id,
+            r.created_at.isoformat() if r.created_at else "",
+            csv_safe(r.event_type),
+            r.actor_user_id if r.actor_user_id is not None else "",
+            csv_safe(r.target_type or ""),
+            csv_safe(r.target_id or ""),
+            csv_safe(r.ip or ""),
+            csv_safe(r.request_id or ""),
+            "" if r.extra is None else csv_safe(json.dumps(r.extra)),
+        ]
 
-        batch_size = 500
-        for r in q.yield_per(batch_size):
-            writer.writerow(
-                [
-                    r.id,
-                    r.created_at.isoformat() if r.created_at else "",
-                    _csv_safe(r.event_type),
-                    r.actor_user_id if r.actor_user_id is not None else "",
-                    _csv_safe(r.target_type or ""),
-                    _csv_safe(r.target_id or ""),
-                    _csv_safe(r.ip or ""),
-                    _csv_safe(r.request_id or ""),
-                    "" if r.extra is None else _csv_safe(json.dumps(r.extra)),
-                ]
-            )
-            data = buf.getvalue()
-            if len(data) > 8192:
-                yield data.encode("utf-8")
-                buf.seek(0)
-                buf.truncate()
-        tail = buf.getvalue()
-        if tail:
-            yield tail.encode("utf-8")
-
-    headers = {
-        "Content-Disposition": 'attachment; filename="fileheron-audit-log.csv"',
-    }
-    return StreamingResponse(_rows(), media_type="text/csv", headers=headers)
+    return csv_response(
+        "fileheron-audit-log.csv",
+        [
+            "id",
+            "created_at",
+            "event_type",
+            "actor_user_id",
+            "target_type",
+            "target_id",
+            "ip",
+            "request_id",
+            "extra",
+        ],
+        q.yield_per(BATCH_SIZE),
+        _to_row,
+    )

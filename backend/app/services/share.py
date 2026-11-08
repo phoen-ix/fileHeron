@@ -58,8 +58,6 @@ _SUBJECT_MAX = declared_width(Share.__table__.c.subject)
 _REJECTION_REASON_MAX = 1000
 
 
-
-
 def _user_group_ids(db: Session, user_id: int) -> list[int]:
     rows = (
         db.query(GroupMember.group_id)

@@ -43,8 +43,6 @@ _BATCH_SIZE = 10_000
 _INTER_BATCH_SLEEP_SEC = 5.0
 
 
-
-
 async def _prune_table(
     table_name: str, days: int, age_column, model, *, keep=None
 ) -> int:

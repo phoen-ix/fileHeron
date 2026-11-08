@@ -14,6 +14,7 @@
   } from '@/api/admin'
   import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
   import { useApiError } from '@/composables/useApiError'
+  import { useCopyToClipboard } from '@/composables/useCopyToClipboard'
   import { useUiStore } from '@/stores/ui'
   import type { WebhookDeliveryItem, WebhookItem } from '@/types/api'
 
@@ -147,8 +148,11 @@
     }
   }
 
+  // It gave no feedback at all, and a blocked clipboard was an unhandled
+  // rejection (audit 2026-11-08).
+  const { copy, copied: secretCopied } = useCopyToClipboard()
   function copySecret() {
-    if (justCreatedSecret.value) void navigator.clipboard?.writeText(justCreatedSecret.value)
+    if (justCreatedSecret.value) void copy(justCreatedSecret.value)
   }
 
   const pillTone: Record<string, 'active' | 'warn' | 'danger'> = {
@@ -182,7 +186,7 @@
       <pre class="secret fh-mono">{{ justCreatedSecret }}</pre>
       <div class="actions">
         <button type="button" class="fh-btn-text" @click="copySecret">
-          {{ t('admin_webhooks.copy') }}
+          {{ secretCopied ? t('api_tokens.copied') : t('admin_webhooks.copy') }}
         </button>
         <button type="button" class="fh-btn-text" @click="justCreatedSecret = null">
           {{ t('admin_webhooks.acknowledged') }}

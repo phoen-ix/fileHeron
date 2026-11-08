@@ -59,8 +59,6 @@ _SCAN_GIVEN_UP_AFTER_H = 6
 _RESCAN_BATCH = 500
 
 
-
-
 def _unlink_partial_bytes(file: File) -> list[str]:
     """Best-effort removal of any remnants of an abandoned upload. Returns what
     could NOT be removed, one line each, so the run can report it: the row is

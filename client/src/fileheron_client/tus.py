@@ -177,6 +177,20 @@ def _send_chunk_with_retry(
         if resp.status_code == 204:
             return int(resp.headers.get("Upload-Offset", expected_offset + len(chunk)))
 
+        if resp.status_code in (502, 503, 504):
+            # nginx answering while tusd is unreachable - an in-app update
+            # recreates it. Transient, like a transport error: back off and
+            # PATCH again. If tusd kept part of this chunk, that PATCH answers
+            # 409 and the resync below picks up from the server's offset. It
+            # used to abort the whole upload (audit 2026-11-08).
+            logger.warning(
+                "tus PATCH got HTTP %d (attempt %d/%d); retrying",
+                resp.status_code, attempt + 1, MAX_RETRIES,
+            )
+            if attempt + 1 < MAX_RETRIES:
+                time.sleep(BACKOFF_SECONDS[min(attempt, len(BACKOFF_SECONDS) - 1)])
+            continue
+
         if resp.status_code in (409, 410, 423, 460):
             # Offset mismatch / locked - re-sync via HEAD and retry from
             # the server's reported position.

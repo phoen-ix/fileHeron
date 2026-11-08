@@ -53,7 +53,6 @@ class FileIntegrityError(FileCryptoError):
     size: tampered with, truncated, extended, or the wrong key."""
 
 
-
 class EncryptionCancelledError(FileCryptoError):
     """The caller asked the encryption to stop (worker shutdown). Not a fault
     of the file: the lanes leave it to the next run instead of giving up."""

@@ -114,8 +114,6 @@ ADMIN_ONLY_CATEGORIES = frozenset(
 )
 
 
-
-
 class Notification(Base):
     __tablename__ = "notifications"
     __table_args__ = (

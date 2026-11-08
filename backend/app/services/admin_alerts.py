@@ -3,6 +3,9 @@
 Six places each queried the enabled admins, looped, dispatched and swallowed a
 per-admin failure in their own way - the ops alerts the crons raise, the
 update-triggered notice (twice: router and worker), the inbound-mail notice.
+Four more were found on 2026-11-08 (the server-error alert, the scan-guard
+block notice, release-available, the quarantine notice); an AST test now fails
+any loop over admins that dispatches outside this module.
 Only some of them counted what failed, and none reported it: a cron whose
 alert could not be delivered still returned a success.
 
@@ -50,23 +53,27 @@ def notify_admins(
     db: Session,
     *,
     payload: dict[str, Any],
-    link_url: str = "/admin/system",
+    link_url: str | None = "/admin/system",
     category: NotificationCategory = NotificationCategory.ops_alert,
     email_for: Callable[[User], str | None] | None = None,
+    exclude_user_id: int | None = None,
 ) -> FanOut:
     """Dispatch one notification to every enabled admin. Caller commits.
 
     An `ops_alert` payload gets an `at` stamp when it has none - the mail
     renders it as the time, and without it an alert carried no time at all.
     `email_for(admin)` picks the address per admin (None = bell only); the
-    default is the admin's own. A dispatch that raises is logged and counted,
-    never propagated."""
+    default is the admin's own. `exclude_user_id` skips one admin (the
+    quarantine notice must not reach an uploader twice). A dispatch that raises
+    is logged and counted, never propagated."""
     if category == NotificationCategory.ops_alert and not payload.get("at"):
         payload = {**payload, "at": utc_now().isoformat()}
     pick_email = email_for or (lambda admin: admin.email)
     sent = failed = 0
     first_error: str | None = None
     for admin in enabled_admins(db):
+        if admin.id == exclude_user_id:
+            continue
         try:
             notif_svc.dispatch(
                 db,

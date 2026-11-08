@@ -35,8 +35,6 @@ if TYPE_CHECKING:
     from .user import User
 
 
-
-
 class Group(Base):
     __tablename__ = "groups"
 

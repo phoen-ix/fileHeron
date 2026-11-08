@@ -45,8 +45,6 @@ _CRON_FAILURE_LOOKBACK = timedelta(hours=3)
 _CRON_FAILURE_THRESHOLD = 3
 
 
-
-
 def _dedup_seen(reason: str) -> bool:
     """True if we've already dispatched this reason in the dedup window. With
     Redis down the in-process record answers, so `redis_unhealthy` itself goes

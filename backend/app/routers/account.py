@@ -483,22 +483,9 @@ async def create_invite(
     # Validate all initial_group_ids exist before creating the invite.
     initial_group_ids = list(payload.initial_group_ids or [])
     if initial_group_ids:
-        from ..models.group import Group
+        from ..services import policy_gate
 
-        found = (
-            db.query(Group.id)
-            .filter(Group.id.in_(initial_group_ids))
-            .all()
-        )
-        found_ids = {row[0] for row in found}
-        missing = [gid for gid in initial_group_ids if gid not in found_ids]
-        if missing:
-            raise AppError(
-                400,
-                "GROUP_NOT_FOUND",
-                "One or more selected groups do not exist.",
-                details={"missing_group_ids": missing},
-            )
+        policy_gate.assert_ids_exist(db, user_ids=[], group_ids=initial_group_ids)
 
         # Existence is not authority. Group membership is resolved LIVE by
         # services/share.py::is_authorized_to_download, so seeding an account

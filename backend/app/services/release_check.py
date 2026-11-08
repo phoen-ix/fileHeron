@@ -53,13 +53,11 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal
 from ..middleware.errors import AppError
 from ..models.notification import NotificationCategory
-from ..models.user import User, UserRole
 from ..utils.http_fetch import ResponseTooLargeError, fetch_json_capped, mib
 from ..utils.net import assert_public_http_url
 from ..utils.timeutil import utc_now
 from . import settings as settings_svc
 from .cron_tracker import CRON_FAILED_KEY, track_cron
-from .notification import dispatch
 
 logger = logging.getLogger("fileheron.release_check")
 
@@ -159,8 +157,6 @@ class CacheKeys:
     # Dedup: the last version we already notified admins about. If the
     # next poll's `tag_name` matches this, suppress the fan-out.
     NOTIFIED_VERSION = "release.notified_version"
-
-
 
 
 def _utcnow_iso() -> str:
@@ -372,30 +368,16 @@ def _maybe_notify_admins(db: Session, new_version: str, release_url: str | None)
     if already == new_version:
         return 0
 
-    admins = (
-        db.query(User)
-        .filter(User.role == UserRole.admin, User.is_disabled.is_(False))
-        .all()
-    )
+    from . import admin_alerts
+
     payload = {
         "version": new_version,
         "release_url": release_url or "",
         "running_version": RUNNING_VERSION,
     }
-    sent = 0
-    for a in admins:
-        try:
-            dispatch(
-                db,
-                user=a,
-                category=NotificationCategory.release_available,
-                payload=payload,
-                link_url="/admin/system",
-                email_to=a.email,
-            )
-            sent += 1
-        except Exception:
-            logger.exception("release_available dispatch to admin=%d failed", a.id)
+    sent = admin_alerts.notify_admins(
+        db, payload=payload, link_url="/admin/system", category=NotificationCategory.release_available
+    ).sent
     settings_svc.set_value(
         db, key=CacheKeys.NOTIFIED_VERSION, value=new_version, actor=None
     )

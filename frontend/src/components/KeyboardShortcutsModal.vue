@@ -1,13 +1,10 @@
 <script setup lang="ts">
-  import { toRef } from 'vue'
   import { useI18n } from 'vue-i18n'
 
-  import { useEscapeToClose } from '@/composables/useEscapeToClose'
+  import ModalShell from '@/components/ModalShell.vue'
 
-  const props = defineProps<{ open: boolean }>()
+  defineProps<{ open: boolean }>()
   const emit = defineEmits<{ (e: 'close'): void }>()
-
-  useEscapeToClose(toRef(props, 'open'), () => emit('close'))
 
   const { t } = useI18n()
 
@@ -27,53 +24,32 @@
 </script>
 
 <template>
-  <!-- eslint-disable-next-line vuejs-accessibility/click-events-have-key-events vuejs-accessibility/no-static-element-interactions -- modal backdrop: click-outside is a convenience, Escape is the keyboard path; revisited with the modal focus work -->
-  <div
-    v-if="open"
-    class="fh-modal-backdrop"
-    role="dialog"
-    aria-modal="true"
-    :aria-label="t('shortcuts.title')"
-    @click.self="emit('close')"
+  <ModalShell
+    :open="open"
+    :label="t('shortcuts.title')"
+    :width="460"
+    :layer="200"
+    @close="emit('close')"
   >
-    <div class="fh-modal fh-modal--small">
-      <h2 class="modal-h2">{{ t('shortcuts.title') }}</h2>
-      <p class="hint">{{ t('shortcuts.hint') }}</p>
-      <dl class="shortcut-list">
-        <template v-for="row in rows" :key="row.keys.join('+')">
-          <dt class="keys">
-            <kbd v-for="(k, idx) in row.keys" :key="idx" class="fh-kbd">{{ k }}</kbd>
-          </dt>
-          <dd class="label">{{ t(row.labelKey) }}</dd>
-        </template>
-      </dl>
-      <div class="actions">
-        <button type="button" class="fh-btn" @click="emit('close')">
-          {{ t('common.close') }}
-        </button>
-      </div>
+    <h2 class="modal-h2">{{ t('shortcuts.title') }}</h2>
+    <p class="hint">{{ t('shortcuts.hint') }}</p>
+    <dl class="shortcut-list">
+      <template v-for="row in rows" :key="row.keys.join('+')">
+        <dt class="keys">
+          <kbd v-for="(k, idx) in row.keys" :key="idx" class="fh-kbd">{{ k }}</kbd>
+        </dt>
+        <dd class="label">{{ t(row.labelKey) }}</dd>
+      </template>
+    </dl>
+    <div class="actions">
+      <button type="button" class="fh-btn" @click="emit('close')">
+        {{ t('common.close') }}
+      </button>
     </div>
-  </div>
+  </ModalShell>
 </template>
 
 <style scoped>
-  .fh-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(26, 29, 36, 0.4);
-    display: grid;
-    place-items: center;
-    z-index: 200;
-  }
-
-  .fh-modal {
-    background: var(--fh-paper);
-    border: 1px solid var(--fh-hairline-strong);
-    box-shadow: 0 8px 40px rgba(26, 29, 36, 0.15);
-    padding: var(--fh-space-5);
-    width: min(460px, 92vw);
-  }
-
   .modal-h2 {
     font-family: var(--fh-font-display);
     font-size: 1.25rem;

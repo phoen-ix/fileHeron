@@ -39,6 +39,8 @@ _log = logging.getLogger("fileheron_client.ui._async")
 # reason instead of spinning forever. A handler that returns None is treated as
 # having handled it (the pre-2026-09 contract).
 _session_expired_handler: Optional[Callable[[], Optional[bool]]] = None
+# The root whose poll loop is running, so init_async can be idempotent.
+_polling_root: Any = None
 
 
 def set_session_expired_handler(fn: Optional[Callable[[], Optional[bool]]]) -> None:
@@ -77,8 +79,14 @@ _POLL_INTERVAL_MS = 50
 
 
 def init_async(root) -> None:
-    """Wire the main-thread polling loop. Idempotent - calling more
-    than once just re-schedules the next tick."""
+    """Wire the main-thread polling loop. Idempotent per root: a second call
+    for the same root does nothing. (The docstring said so before it was
+    true - each call started another poll loop, audit 2026-11-08.)"""
+    global _polling_root
+    if _polling_root is root:
+        return
+    _polling_root = root
+
     def _poll() -> None:
         try:
             while True:

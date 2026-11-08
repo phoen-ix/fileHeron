@@ -60,8 +60,6 @@ logger = logging.getLogger("fileheron.totp")
 _TOTP_VALID_WINDOW = 2
 
 
-
-
 def _build_otpauth_uri(secret_b32: str, account_label: str) -> str:
     issuer = settings.APP_NAME
     return pyotp.totp.TOTP(secret_b32).provisioning_uri(
@@ -136,6 +134,20 @@ def _decrypt_or_503(totp: UserTOTP) -> str:
         ) from None
 
 
+def _replace_recovery_codes(db: Session, user: User) -> list[str]:
+    """Drop the user's recovery codes and mint ten new ones; returns the
+    plaintexts (shown once). Enabling and regenerating each spelled this out
+    (audit 2026-11-08)."""
+    for rc in list(user.recovery_codes):
+        db.delete(rc)
+    db.flush()
+    plaintexts = generate_recovery_codes(10)
+    for plain in plaintexts:
+        db.add(UserRecoveryCode(user_id=user.id, code_hash=argon2_hash(plain)))
+    db.flush()
+    return plaintexts
+
+
 def confirm_enable(db: Session, *, user: User, code: str, request) -> list[str]:
     """User submits the first valid code. Marks 2FA active and returns the
     one-time list of plaintext recovery codes (caller MUST display these once
@@ -156,14 +168,7 @@ def confirm_enable(db: Session, *, user: User, code: str, request) -> list[str]:
     # window. Anti-replay only kicks in once a code is accepted by login.
 
     # Replace any existing recovery codes (defensive - should be none).
-    for rc in list(user.recovery_codes):
-        db.delete(rc)
-    db.flush()
-
-    plaintexts = generate_recovery_codes(10)
-    for plain in plaintexts:
-        db.add(UserRecoveryCode(user_id=user.id, code_hash=argon2_hash(plain)))
-    db.flush()
+    plaintexts = _replace_recovery_codes(db, user)
 
     record_audit_event(
         db,
@@ -406,13 +411,5 @@ def regenerate_recovery_codes(
         action="regenerating recovery codes",
     )
 
-    for rc in list(user.recovery_codes):
-        db.delete(rc)
-    db.flush()
-    plaintexts = generate_recovery_codes(10)
-    for plain in plaintexts:
-        db.add(UserRecoveryCode(user_id=user.id, code_hash=argon2_hash(plain)))
-    db.flush()
-    return plaintexts
-
+    return _replace_recovery_codes(db, user)
 

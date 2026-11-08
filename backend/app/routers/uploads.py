@@ -20,6 +20,7 @@ from ..schemas.upload import DirectUploadResponse, UploadInitRequest, UploadInit
 from ..services import file as file_svc
 from ..services import quota as quota_svc
 from ..services import share as share_svc
+from ..services import storage_guard
 from ..services import tus_signing as ts_svc
 from ..services.storage_backend import get_storage_backend
 from ..services.tus_signing import UploadEnvelope
@@ -27,17 +28,6 @@ from ..utils.timeutil import utc_now
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 logger = logging.getLogger("fileheron.uploads")
-
-
-def _refuse_if_storage_critical(db: Session) -> None:
-    """Thin alias for services/storage_guard.refuse_if_critical_low.
-
-    The rule moved to a service so the tusd pre-create hook can apply it too -
-    it could not while it lived here, which meant every upload above 100 MB
-    bypassed the disk-full guard entirely."""
-    from ..services.storage_guard import refuse_if_critical_low
-
-    refuse_if_critical_low(db)
 
 
 @router.post("/init", response_model=UploadInitResponse)
@@ -57,7 +47,7 @@ def init_upload(
 
     from ..services import maintenance as maintenance_svc
     maintenance_svc.refuse_if_maintenance(db, kind="upload")
-    _refuse_if_storage_critical(db)
+    storage_guard.refuse_if_critical_low(db)
 
     # Pre-flight quota check (best-effort; pre-create hook re-checks).
     quota_limit = user.quota_bytes if user.quota_bytes is not None else 0
@@ -132,7 +122,7 @@ async def direct_upload(
 
     from ..services import maintenance as maintenance_svc
     maintenance_svc.refuse_if_maintenance(db, kind="upload")
-    _refuse_if_storage_critical(db)
+    storage_guard.refuse_if_critical_low(db)
 
     # Pre-flight, as /init does. The real reservation has to wait for the read
     # (the size is only known then), but a user already AT their quota used to

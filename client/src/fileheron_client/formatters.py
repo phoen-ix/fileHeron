@@ -1,7 +1,7 @@
 """Pure-Python formatters for share / file / time values.
 
-Kept out of ``ui/`` so tests can import these without pulling PySide6
-into the test process (see ``tests/conftest.py``)."""
+Kept out of ``ui/`` so tests can import these without tkinter, which the
+Linux CI leg does not have."""
 from __future__ import annotations
 
 import time
@@ -88,18 +88,20 @@ def timezone_label() -> str:
 
 
 def to_local(value: datetime) -> datetime:
-    """Coerce a timestamp to the user's LOCAL timezone for display.
+    """Coerce a timestamp to the display timezone: the SITE timezone once the
+    server has said which (`set_display_timezone`, at sign-in), else the
+    machine's local one.
 
     The backend stores + serialises timestamps as naive UTC (finding C5).
     Rendering them verbatim showed a non-UTC user a wall-clock time offset
     from their own, with no tz label. Treat a naive value as UTC, then
-    convert to local; an already-aware value is just converted."""
+    convert; an already-aware value is just converted."""
     aware = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
     return aware.astimezone(_display_tz) if _display_tz else aware.astimezone()
 
 
 def format_datetime(value: datetime) -> str:
-    """Render a non-nullable timestamp (e.g. created_at) in local time."""
+    """Render a non-nullable timestamp (e.g. created_at) in the display timezone."""
     return to_local(value).strftime("%Y-%m-%d %H:%M")
 
 
@@ -120,16 +122,23 @@ def format_expiry(value: Optional[datetime]) -> str:
 # --- Download rate / ETA (per-file progress readout) ------------------------
 
 
-def format_rate(bytes_per_sec: float) -> str:
-    """Human-readable transfer rate, e.g. ``"12.3 MB/s"``. Own size logic so
-    this module stays free of the ui/widgets (tkinter) dependency."""
-    n = max(0.0, float(bytes_per_sec))
+def format_size(n_bytes: float) -> str:
+    """Human-readable size, e.g. ``"12.3 MB"``: whole bytes, one decimal
+    above. The one byte ladder - `ui/widgets.human_size` and `format_rate` each
+    had their own, the way the SPA had two before it folded them
+    (audit 2026-11-08). Lives here so it stays free of tkinter."""
+    n = max(0.0, float(n_bytes))
     units = ("B", "KB", "MB", "GB", "TB")
     i = 0
     while n >= 1024 and i < len(units) - 1:
         n /= 1024
         i += 1
-    return f"{n:.0f} {units[i]}/s" if i == 0 else f"{n:.1f} {units[i]}/s"
+    return f"{n:.0f} {units[i]}" if i == 0 else f"{n:.1f} {units[i]}"
+
+
+def format_rate(bytes_per_sec: float) -> str:
+    """Human-readable transfer rate, e.g. ``"12.3 MB/s"``."""
+    return f"{format_size(bytes_per_sec)}/s"
 
 
 def format_eta(seconds: Optional[float]) -> str:

@@ -25,8 +25,6 @@ if TYPE_CHECKING:
     from .user import User  # noqa: F401  (only for type hints)
 
 
-
-
 class AppSetting(Base):
     __tablename__ = "app_settings"
 

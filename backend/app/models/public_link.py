@@ -40,8 +40,6 @@ if TYPE_CHECKING:
     from .user import User
 
 
-
-
 def _new_uuid() -> str:
     return str(uuid.uuid4())
 

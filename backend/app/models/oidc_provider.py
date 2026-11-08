@@ -42,8 +42,6 @@ class OIDCPreset(str, enum.Enum):
     custom = "custom"
 
 
-
-
 def _new_uuid() -> str:
     return str(uuid.uuid4())
 

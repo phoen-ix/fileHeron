@@ -254,6 +254,26 @@ def reset_email_template(
     return _item(db, slug, locale)
 
 
+def _render_draft(
+    db: Session, slug: str, locale: str, subject_raw: str | None, body_html: str
+) -> tuple[str, str, str]:
+    """Validate an unsaved edit and render it with sample data - what Preview
+    shows and what Test-send mails. The two routes carried this block twice
+    (audit 2026-11-08)."""
+    _assert_slug(slug)
+    _assert_locale(locale)
+    subject = (subject_raw or "").strip() or None
+    _validate_content(slug, subject, body_html)
+    app_url = site_svc.get_site_url(db)
+    ov = SimpleNamespace(subject=subject, body_html=body_html)
+    return email_svc.render_override(
+        ov, slug, locale, ep.sample_ctx(slug, app_url=app_url),
+        app_url=app_url,
+        app_name=site_svc.get_app_name(db),
+        site_timezone=site_svc.get_site_timezone(db),
+    )
+
+
 @router.post(
     "/settings/email-templates/{slug}/{locale}/preview",
     response_model=PreviewEmailTemplateResponse,
@@ -264,18 +284,7 @@ def preview_email_template(
     db: Session = Depends(get_db),
     _admin: User = Depends(get_current_admin),
 ) -> PreviewEmailTemplateResponse:
-    _assert_slug(slug)
-    _assert_locale(locale)
-    subject = (payload.subject or "").strip() or None
-    _validate_content(slug, subject, payload.body_html)
-    app_url = site_svc.get_site_url(db)
-    ov = SimpleNamespace(subject=subject, body_html=payload.body_html)
-    rendered_subject, text, html = email_svc.render_override(
-        ov, slug, locale, ep.sample_ctx(slug, app_url=app_url),
-        app_url=app_url,
-        app_name=site_svc.get_app_name(db),
-        site_timezone=site_svc.get_site_timezone(db),
-    )
+    rendered_subject, text, html = _render_draft(db, slug, locale, payload.subject, payload.body_html)
     return PreviewEmailTemplateResponse(subject=rendered_subject, text=text, html=html)
 
 
@@ -292,18 +301,7 @@ async def test_send_email_template(
     """Render the (possibly unsaved) edits with sample data and send to the
     requesting admin's own address. Recipient is server-resolved - never client
     supplied - so this can't be used to mail arbitrary people."""
-    _assert_slug(slug)
-    _assert_locale(locale)
-    subject = (payload.subject or "").strip() or None
-    _validate_content(slug, subject, payload.body_html)
-    app_url = site_svc.get_site_url(db)
-    ov = SimpleNamespace(subject=subject, body_html=payload.body_html)
-    rendered_subject, text, html = email_svc.render_override(
-        ov, slug, locale, ep.sample_ctx(slug, app_url=app_url),
-        app_url=app_url,
-        app_name=site_svc.get_app_name(db),
-        site_timezone=site_svc.get_site_timezone(db),
-    )
+    rendered_subject, text, html = _render_draft(db, slug, locale, payload.subject, payload.body_html)
     cfg = email_svc.resolve_smtp_config(db)
     if not cfg.is_configured:
         return TestSendEmailTemplateResponse(

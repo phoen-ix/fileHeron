@@ -387,8 +387,6 @@ class Keys:
 _ENCRYPTED_KEYS: set[str] = {Keys.SMTP_PASSWORD, Keys.IMAP_PASSWORD}
 
 
-
-
 # --- the request-scoped read cache -------------------------------------------
 #
 # A request reads settings one key at a time through dozens of independent
@@ -525,8 +523,6 @@ def audit_settings_change(
         metadata={"keys": sorted(set(changed_keys))},
         request=request,
     )
-
-
 
 
 def get_many(db: Session, *, prefix: str) -> dict[str, str]:

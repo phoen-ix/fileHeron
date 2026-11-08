@@ -31,8 +31,6 @@ class ConnectionSource(str, enum.Enum):
     shared_group = "shared_group"
 
 
-
-
 class ClientEmployeeConnection(Base):
     __tablename__ = "client_employee_connections"
 

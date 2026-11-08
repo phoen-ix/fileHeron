@@ -17,6 +17,7 @@
   import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
   import { usePaginatedList } from '@/composables/usePaginatedList'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
+  import { useCopyToClipboard } from '@/composables/useCopyToClipboard'
   import { useUiStore } from '@/stores/ui'
   import { defaultTokenExpiryLocal, siteLocalIsoToUtcIso } from '@/utils/datetime'
   import { TOKEN_SCOPE_GROUPS, scopeLabelKey } from '@/utils/tokenScopes'
@@ -118,7 +119,7 @@
     return t(scopeLabelKey(scope))
   }
   const plaintextResult = ref<CreateApiTokenResponse | null>(null)
-  const copied = ref(false)
+  const { copy, copied } = useCopyToClipboard()
   let userSearchTimer: ReturnType<typeof setTimeout> | null = null
 
   watch(userQuery, () => {
@@ -209,15 +210,9 @@
     }
   }
 
-  async function copyPlaintext() {
-    if (!plaintextResult.value) return
-    try {
-      await navigator.clipboard.writeText(plaintextResult.value.plaintext_token)
-      copied.value = true
-      setTimeout(() => (copied.value = false), 1600)
-    } catch {
-      /* clipboard blocked */
-    }
+  function copyPlaintext() {
+    // A blocked clipboard leaves the token on screen to select.
+    if (plaintextResult.value) void copy(plaintextResult.value.plaintext_token)
   }
 
   function dismissPlaintext() {

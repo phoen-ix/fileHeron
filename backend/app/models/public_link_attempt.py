@@ -36,8 +36,6 @@ class PublicLinkAttemptOutcome(str, enum.Enum):
     locked = "locked"
 
 
-
-
 class PublicLinkAttempt(Base):
     __tablename__ = "public_link_password_attempts"
 

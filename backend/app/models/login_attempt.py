@@ -37,8 +37,6 @@ class LoginOutcome(str, enum.Enum):
     bad_passkey = "bad_passkey"
 
 
-
-
 class LoginAttempt(Base):
     __tablename__ = "login_attempts"
     __table_args__ = (

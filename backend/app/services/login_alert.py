@@ -27,8 +27,6 @@ from . import notification as notif_svc
 logger = logging.getLogger("fileheron.login_alert")
 
 
-
-
 def fire_new_device_alert(
     db: Session,
     *,

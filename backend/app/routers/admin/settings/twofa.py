@@ -20,6 +20,7 @@ from ....schemas.twofa_policy import (
     TwofaPolicyResponse,
     UpdateTwofaPolicyRequest,
 )
+from ....services import policy_gate
 from ....services import settings as settings_svc
 from ....services import twofa_policy as twofa_policy_svc
 from ....services import webauthn as webauthn_svc
@@ -80,23 +81,7 @@ def update_twofa_policy(
             details={"invalid_roles": bad_roles},
         )
 
-    if payload.required_group_ids:
-        found_group_ids = {
-            row[0]
-            for row in db.query(Group.id)
-            .filter(Group.id.in_(payload.required_group_ids))
-            .all()
-        }
-        missing = [
-            gid for gid in payload.required_group_ids if gid not in found_group_ids
-        ]
-        if missing:
-            raise AppError(
-                400,
-                "GROUP_NOT_FOUND",
-                "One or more selected groups do not exist.",
-                details={"missing_group_ids": missing},
-            )
+    policy_gate.assert_ids_exist(db, user_ids=[], group_ids=payload.required_group_ids or [])
 
     twofa_policy_svc.write_policy(
         db,

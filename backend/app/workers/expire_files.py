@@ -37,8 +37,6 @@ from ..utils.timeutil import utc_now
 logger = logging.getLogger("fileheron.workers.expire_files")
 
 
-
-
 @track_cron("expire_files")
 async def expire_files(_ctx) -> dict:
     """Walk shares.expires_at < now, transition state + hard-delete files.

@@ -28,8 +28,6 @@ class DownloadVia(str, enum.Enum):
     public = "public"        # /d/{token} - Phase 5
 
 
-
-
 class DownloadLog(Base):
     __tablename__ = "download_log"
 

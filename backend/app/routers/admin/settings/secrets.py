@@ -13,7 +13,6 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from ....dependencies import get_current_admin, get_db
-from ....middleware.errors import AppError
 from ....models.audit_log import AuditEventType
 from ....models.group import Group
 from ....models.user import User
@@ -25,6 +24,7 @@ from ....schemas.secret import (
     UpdateSecretPolicyRequest,
     UpdateSecretPolicySide,
 )
+from ....services import policy_gate
 from ....services import secret as secret_svc
 from ....services import settings as settings_svc
 from ....services.audit import record_audit_event
@@ -62,33 +62,6 @@ def get_secret_policy(
     )
 
 
-def _check_ids(db: Session, side: UpdateSecretPolicySide) -> None:
-    if side.allowed_user_ids:
-        found = {
-            uid for (uid,) in db.query(User.id).filter(User.id.in_(side.allowed_user_ids))
-        }
-        missing = [uid for uid in side.allowed_user_ids if uid not in found]
-        if missing:
-            raise AppError(
-                400,
-                "USER_NOT_FOUND",
-                "One or more selected users do not exist.",
-                details={"missing_user_ids": missing},
-            )
-    if side.allowed_group_ids:
-        found = {
-            gid for (gid,) in db.query(Group.id).filter(Group.id.in_(side.allowed_group_ids))
-        }
-        missing = [gid for gid in side.allowed_group_ids if gid not in found]
-        if missing:
-            raise AppError(
-                400,
-                "GROUP_NOT_FOUND",
-                "One or more selected groups do not exist.",
-                details={"missing_group_ids": missing},
-            )
-
-
 def _write_side(
     db: Session,
     side: UpdateSecretPolicySide,
@@ -118,7 +91,9 @@ def update_secret_policy(
 ) -> SecretPolicyResponse:
     for side in (payload.send, payload.external):
         if side is not None:
-            _check_ids(db, side)
+            policy_gate.assert_ids_exist(
+                db, user_ids=side.allowed_user_ids, group_ids=side.allowed_group_ids
+            )
     written: list[str] = []
     metadata: dict[str, object] = {}
     if payload.enabled is not None:

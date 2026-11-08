@@ -15,8 +15,6 @@ from ..utils.timeutil import utc_now
 _BigIntPK = BigInteger().with_variant(Integer(), "sqlite")
 
 
-
-
 class KnownDevice(Base):
     __tablename__ = "known_devices"
 

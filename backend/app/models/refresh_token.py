@@ -29,8 +29,6 @@ if TYPE_CHECKING:
     from .user import User
 
 
-
-
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
     __table_args__ = (

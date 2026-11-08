@@ -225,10 +225,10 @@ def _build(model, data: dict, *, overrides: dict | None = None, skip: frozenset[
     # started speaking ORM names still loads.
     aliases = {c.name: c.key for c in _columns(model) if c.name != c.key}
     kwargs: dict[str, Any] = {}
-    for k, v in data.items():
-        if k in skip:
+    for raw_key, v in data.items():
+        if raw_key in skip:
             continue
-        k = aliases.get(k, k)
+        k = aliases.get(raw_key, raw_key)
         col = cols.get(k)
         if col is None:
             continue
@@ -849,8 +849,8 @@ def _restore_log(
     }
     db.query(model).delete(synchronize_session=False)
     db.flush()
-    for d in rows:
-        d = dict(d)
+    for row in rows:
+        d = dict(row)
         if user_fk and user_fk in d:
             resolved = _resolve_log_user(
                 d.get(user_fk), user_id_map, has_users, existing_ids=existing_ids
@@ -914,8 +914,8 @@ def _reinsert_preserved_audit(db, rows: list[dict]) -> None:
             AuditLog.event_type, AuditLog.target_id, AuditLog.created_at
         ).all()
     }
-    for d in rows:
-        d = dict(d)
+    for row in rows:
+        d = dict(row)
         if d.get("actor_user_id") is not None and d["actor_user_id"] not in existing:
             d["actor_user_id"] = None
         created = d.get("created_at")
@@ -1305,8 +1305,8 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
         ow = p["oidc_webhooks"]
         db.query(OIDCProvider).delete(synchronize_session=False)
         db.flush()
-        for d in ow.get("oidc_providers", []):
-            d = dict(d)
+        for row in ow.get("oidc_providers", []):
+            d = dict(row)
             secret = _ingest_secret_str(d.pop("client_secret_encrypted", None))
             # The id is deliberately NOT skipped, unlike `Webhook` below.
             # `users.oidc_provider_id` carries the BACKUP's provider id and is
@@ -1326,8 +1326,8 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
         db.flush()
         db.query(Webhook).delete(synchronize_session=False)
         db.flush()
-        for d in ow.get("webhooks", []):
-            d = dict(d)
+        for row in ow.get("webhooks", []):
+            d = dict(row)
             secret = _ingest_secret_str(d.pop("secret_encrypted", None))
             db.add(_build(Webhook, d, overrides={
                 "secret_encrypted": secret or "", "created_by_id": actor.id,

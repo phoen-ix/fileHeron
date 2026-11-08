@@ -2,11 +2,11 @@
   import { computed, onMounted, ref } from 'vue'
   import { useI18n } from 'vue-i18n'
 
-  import { useEscapeToClose } from '@/composables/useEscapeToClose'
   import { useRoute, useRouter } from 'vue-router'
 
   import { bulkExpireShares } from '@/api/shares'
   import Pager from '@/components/Pager.vue'
+  import ModalShell from '@/components/ModalShell.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useShareListState } from '@/composables/useShareListState'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
@@ -70,12 +70,6 @@
   function closeBulkConfirm() {
     if (!bulkInProgress.value) bulkConfirmOpen.value = false
   }
-
-  // See useEscapeToClose: the backdrop's own @keydown.escape never fires.
-  useEscapeToClose(
-    computed(() => bulkConfirmOpen.value),
-    closeBulkConfirm,
-  )
 
   async function confirmBulkExpire() {
     const ids = Array.from(items.value.filter((i) => isSelected(i.id)).map((i) => i.id))
@@ -379,42 +373,35 @@
       </div>
     </Transition>
 
-    <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -- modal backdrop: click-outside is a convenience, Escape is the keyboard path; revisited with the modal focus work -->
-    <div
+    <ModalShell
       v-if="bulkConfirmOpen"
-      class="fh-modal-backdrop"
-      @click.self="closeBulkConfirm"
-      @keydown.escape="closeBulkConfirm"
+      :open="true"
+      :label="t('share_list.bulk.confirm.title')"
+      @close="closeBulkConfirm"
     >
-      <div
-        class="fh-modal fh-modal--small"
-        role="dialog"
-        :aria-label="t('share_list.bulk.confirm.title')"
-      >
-        <h2 class="modal-h2">{{ t('share_list.bulk.confirm.title') }}</h2>
-        <p class="modal-body">
-          {{ t('share_list.bulk.confirm.body', { n: selectedCount }, selectedCount) }}
-        </p>
-        <div class="form-actions">
-          <button
-            type="button"
-            class="fh-btn fh-btn--danger"
-            :disabled="bulkInProgress"
-            @click="confirmBulkExpire"
-          >
-            {{ bulkInProgress ? t('common.loading') : t('share_list.bulk.confirm.action') }}
-          </button>
-          <button
-            type="button"
-            class="fh-btn-text"
-            :disabled="bulkInProgress"
-            @click="closeBulkConfirm"
-          >
-            {{ t('common.cancel') }}
-          </button>
-        </div>
+      <h2 class="modal-h2">{{ t('share_list.bulk.confirm.title') }}</h2>
+      <p class="modal-body">
+        {{ t('share_list.bulk.confirm.body', { n: selectedCount }, selectedCount) }}
+      </p>
+      <div class="form-actions">
+        <button
+          type="button"
+          class="fh-btn fh-btn--danger"
+          :disabled="bulkInProgress"
+          @click="confirmBulkExpire"
+        >
+          {{ bulkInProgress ? t('common.loading') : t('share_list.bulk.confirm.action') }}
+        </button>
+        <button
+          type="button"
+          class="fh-btn-text"
+          :disabled="bulkInProgress"
+          @click="closeBulkConfirm"
+        >
+          {{ t('common.cancel') }}
+        </button>
       </div>
-    </div>
+    </ModalShell>
   </div>
 </template>
 
@@ -680,29 +667,6 @@
   .bulk-bar-leave-to {
     opacity: 0;
     transform: translate(-50%, 12px);
-  }
-
-  .fh-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(26, 29, 36, 0.4);
-    display: grid;
-    place-items: center;
-    z-index: 100;
-  }
-
-  .fh-modal {
-    background: var(--fh-paper);
-    border: 1px solid var(--fh-hairline-strong);
-    box-shadow: 0 8px 40px rgba(26, 29, 36, 0.15);
-    padding: var(--fh-space-5);
-    width: min(560px, 92vw);
-    max-height: 92vh;
-    overflow-y: auto;
-  }
-
-  .fh-modal--small {
-    width: min(420px, 92vw);
   }
 
   .modal-h2 {

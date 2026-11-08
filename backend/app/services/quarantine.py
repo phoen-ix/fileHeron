@@ -147,7 +147,7 @@ def quarantine_file(
     # never fail the quarantine because of a notification path.
     try:
         from ..models.notification import NotificationCategory
-        from ..models.user import User, UserRole
+        from ..models.user import User
         from . import notification as notif_svc
         from . import settings as settings_svc
 
@@ -173,23 +173,21 @@ def quarantine_file(
         if settings_svc.get_bool(
             db, settings_svc.Keys.QUARANTINE_NOTIFY_ADMINS, default=False
         ):
-            uploader_id = uploader.id if uploader is not None else None
-            admins = (
-                db.query(User)
-                .filter(User.role == UserRole.admin, User.is_disabled == False)  # noqa: E712
-                .all()
-            )
-            for admin in admins:
+            from . import admin_alerts
+
+            fanout = admin_alerts.notify_admins(
+                db,
+                payload=payload,
+                link_url=None,
+                category=NotificationCategory.file_quarantined,
                 # Don't double-notify if the uploader IS an admin.
-                if admin.id == uploader_id:
-                    continue
-                notif_svc.dispatch(
-                    db,
-                    user=admin,
-                    category=NotificationCategory.file_quarantined,
-                    payload=payload,
-                    email_to=admin.email,
-                )
+                exclude_user_id=uploader.id if uploader is not None else None,
+            )
+            if fanout.failed:
+                # The loop used to raise into the except below on the first
+                # failed admin; the helper counts instead, so re-raise to
+                # keep the dispatch-failed record ops_check reads.
+                raise RuntimeError(fanout.first_error or "admin dispatch failed")
     except Exception as e:
         logger.exception(
             "could not enqueue file_quarantined notification for file=%s", file.id

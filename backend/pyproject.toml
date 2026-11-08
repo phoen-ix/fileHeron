@@ -123,6 +123,9 @@ select = [
     # A `noqa` for a rule that no longer fires (or was never enabled) is a
     # comment pretending to be a suppression; 17 had accumulated.
     "RUF100",
+    # A loop variable rebound inside the loop hid six copies of one CSV parse
+    # (now utils/text.split_list); the rest were renamed (2026-11-08).
+    "PLW2901",
 ]
 ignore = [
     "S101",   # assert used (tests + defensive invariants)

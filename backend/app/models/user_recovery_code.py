@@ -16,8 +16,6 @@ if TYPE_CHECKING:
     from .user import User
 
 
-
-
 class UserRecoveryCode(Base):
     __tablename__ = "user_recovery_codes"
 

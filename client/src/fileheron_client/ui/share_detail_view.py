@@ -883,6 +883,10 @@ class ShareDetailView(ctk.CTkFrame):
         self._toast(t("share_detail.discarded"), kind="info")
 
     def _spawn_download(self, file_id: str, dest: Path, *, resume: bool = False) -> None:
+        # Read per download on purpose: it is what makes a connection count
+        # changed in Settings apply to the next download without plumbing the
+        # value through every open view. One small local file, not a network
+        # call.
         from ..config import load_config
         conns = load_config().download_connections
 

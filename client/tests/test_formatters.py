@@ -237,3 +237,14 @@ def test_an_unknown_code_falls_back_to_the_servers_text():
         assert err.localized() == "Teapot."
     finally:
         set_locale("en")
+
+
+def test_format_size_is_the_one_ladder():
+    """widgets.human_size and format_rate each had their own (audit 2026-11-08)."""
+    from fileheron_client.formatters import format_size
+
+    assert format_size(512) == "512 B"
+    assert format_size(1536) == "1.5 KB"
+    assert format_size(3 * 1024**3) == "3.0 GB"
+    assert format_size(5 * 1024**4) == "5.0 TB"
+    assert format_rate(1536) == format_size(1536) + "/s"

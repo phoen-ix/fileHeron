@@ -46,8 +46,6 @@ _TERMINAL = [ShareState.revoked, ShareState.deleted, ShareState.rejected]
 _RECLAIMABLE = [FileState.clean, FileState.ready_unscanned]
 
 
-
-
 def _notify_admins(db, *, count: int, bytes_freed: int, days: int) -> admin_alerts.FanOut:
     mb = bytes_freed / 1_000_000
     payload = {

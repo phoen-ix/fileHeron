@@ -6,10 +6,6 @@ the model, so the list + CSV never load them - only the detail endpoint.
 """
 from __future__ import annotations
 
-import base64
-import csv
-import io
-from collections.abc import Iterator
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -30,6 +26,7 @@ from ...schemas.admin import (
 )
 from ...services import job_queue
 from ...services.audit import record_audit_event
+from ...utils.csv_export import BATCH_SIZE, csv_response, csv_safe, decode_cursor, encode_cursor
 from ...utils.like import LIKE_ESCAPE, contains
 from ...utils.timeutil import to_naive_utc
 
@@ -42,28 +39,6 @@ _NO_RESEND_VIA = {EmailVia.test, EmailVia.dev_fallback}
 
 def _can_resend(row: EmailLog) -> bool:
     return not row.masked and row.via not in _NO_RESEND_VIA
-
-
-def _csv_safe(value) -> str:
-    s = "" if value is None else str(value)
-    if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
-        return "'" + s
-    return s
-
-
-def _encode_cursor(created_at: datetime, row_id: int) -> str:
-    raw = f"{created_at.isoformat()}|{row_id}".encode()
-    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
-
-
-def _decode_cursor(s: str) -> tuple[datetime, int]:
-    try:
-        padded = s + "=" * (-len(s) % 4)
-        raw = base64.urlsafe_b64decode(padded.encode()).decode()
-        ts_str, id_str = raw.split("|", 1)
-        return datetime.fromisoformat(ts_str), int(id_str)
-    except Exception as e:
-        raise AppError(400, "INVALID_CURSOR", "Cursor is not valid.") from e
 
 
 def _mail_query(
@@ -154,7 +129,7 @@ def list_mail(
     )
 
     if cursor is not None:
-        ts, last_id = _decode_cursor(cursor)
+        ts, last_id = decode_cursor(cursor)
         query = query.filter(
             or_(
                 EmailLog.created_at < ts,
@@ -191,7 +166,7 @@ def list_mail(
     next_cursor: str | None = None
     if len(rows) == page_size and rows:
         last = rows[-1]
-        next_cursor = _encode_cursor(last.created_at, last.id)
+        next_cursor = encode_cursor(last.created_at, last.id)
 
     return AdminMailListResponse(
         items=items,
@@ -329,58 +304,40 @@ def export_mail_csv(
         to_ts=to_ts,
     ).order_by(EmailLog.created_at.desc(), EmailLog.id.desc())
 
-    def _rows() -> Iterator[bytes]:
-        buf = io.StringIO()
-        writer = csv.writer(buf)
-        writer.writerow(
-            [
-                "id",
-                "created_at",
-                "recipient_email",
-                "recipient_user_id",
-                "category",
-                "template_slug",
-                "via",
-                "status",
-                "subject",
-                "masked",
-                "attempts",
-                "smtp_code",
-                "error_class",
-            ]
-        )
-        yield buf.getvalue().encode("utf-8")
-        buf.seek(0)
-        buf.truncate()
+    def _to_row(r) -> list:
+        return [
+            r.id,
+            r.created_at.isoformat() if r.created_at else "",
+            csv_safe(r.recipient_email),
+            r.recipient_user_id if r.recipient_user_id is not None else "",
+            csv_safe(r.category or ""),
+            csv_safe(r.template_slug or ""),
+            r.via.value,
+            r.status.value,
+            csv_safe(r.subject),
+            "1" if r.masked else "0",
+            r.attempts,
+            r.smtp_code if r.smtp_code is not None else "",
+            csv_safe(r.error_class or ""),
+        ]
 
-        for r in query.yield_per(500):
-            writer.writerow(
-                [
-                    r.id,
-                    r.created_at.isoformat() if r.created_at else "",
-                    _csv_safe(r.recipient_email),
-                    r.recipient_user_id if r.recipient_user_id is not None else "",
-                    _csv_safe(r.category or ""),
-                    _csv_safe(r.template_slug or ""),
-                    r.via.value,
-                    r.status.value,
-                    _csv_safe(r.subject),
-                    "1" if r.masked else "0",
-                    r.attempts,
-                    r.smtp_code if r.smtp_code is not None else "",
-                    _csv_safe(r.error_class or ""),
-                ]
-            )
-            data = buf.getvalue()
-            if len(data) > 8192:
-                yield data.encode("utf-8")
-                buf.seek(0)
-                buf.truncate()
-        tail = buf.getvalue()
-        if tail:
-            yield tail.encode("utf-8")
-
-    headers = {
-        "Content-Disposition": 'attachment; filename="fileheron-mail-log.csv"',
-    }
-    return StreamingResponse(_rows(), media_type="text/csv", headers=headers)
+    return csv_response(
+        "fileheron-mail-log.csv",
+        [
+            "id",
+            "created_at",
+            "recipient_email",
+            "recipient_user_id",
+            "category",
+            "template_slug",
+            "via",
+            "status",
+            "subject",
+            "masked",
+            "attempts",
+            "smtp_code",
+            "error_class",
+        ],
+        query.yield_per(BATCH_SIZE),
+        _to_row,
+    )

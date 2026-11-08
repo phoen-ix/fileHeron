@@ -25,6 +25,7 @@ import socket
 from urllib.parse import urlparse
 
 from ..middleware.errors import AppError
+from .text import split_list
 
 
 def assert_safe_host(host: str, port: int, *, allow_private: bool = True) -> None:
@@ -119,10 +120,7 @@ def ip_in_allowlist(ip: str | None, raw: str | None) -> bool:
         addr = ipaddress.ip_address(ip)
     except ValueError:
         return False
-    for part in (raw or "").split(","):
-        part = part.strip()
-        if not part:
-            continue
+    for part in split_list(raw):
         try:
             if "/" in part:
                 if addr in ipaddress.ip_network(part, strict=False):

@@ -6,6 +6,7 @@ from typing import Callable, Optional
 
 import customtkinter as ctk
 
+from ..formatters import format_size
 from ..i18n import t
 
 _log = logging.getLogger("fileheron_client.ui.widgets")
@@ -192,15 +193,8 @@ class Toast(ctk.CTkLabel):
 
 
 def human_size(n: int) -> str:
-    if n < 1024:
-        return f"{n} B"
-    k = n / 1024
-    if k < 1024:
-        return f"{k:.1f} KB"
-    m = k / 1024
-    if m < 1024:
-        return f"{m:.1f} MB"
-    return f"{m / 1024:.2f} GB"
+    """Kept as the name the views import; the ladder is formatters.format_size."""
+    return format_size(n)
 
 
 def modal_dialog(parent, title: str, width: int, height: int) -> tuple[ctk.CTkToplevel, ctk.CTkFrame]:

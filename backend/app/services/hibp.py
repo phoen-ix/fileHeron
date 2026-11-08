@@ -131,8 +131,8 @@ async def is_password_breached(password: str, db=None) -> bool:
     # Body is `<35-char-suffix>:<count>\n` lines. Padded responses include
     # zero-count entries; we still detect the real one because the suffix
     # match is exact.
-    for line in body.splitlines():
-        line = line.strip()
+    for raw_line in body.splitlines():
+        line = raw_line.strip()
         if not line:
             continue
         try:

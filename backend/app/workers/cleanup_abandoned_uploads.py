@@ -29,8 +29,6 @@ from ..utils.timeutil import utc_now
 logger = logging.getLogger("fileheron.workers.cleanup_abandoned_uploads")
 
 
-
-
 @track_cron("cleanup_abandoned_uploads")
 async def cleanup_abandoned_uploads(_ctx) -> dict:
     upload_dir = Path(settings.TUS_UPLOAD_DIR)

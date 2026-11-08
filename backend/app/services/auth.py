@@ -412,7 +412,6 @@ async def _maybe_send_lockout_email(
     )
 
 
-
 async def _after_second_factor_failure(
     db: Session,
     *,

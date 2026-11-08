@@ -53,8 +53,6 @@ class ShareState(str, enum.Enum):
     rejected = "rejected"
 
 
-
-
 def _new_uuid() -> str:
     return str(uuid.uuid4())
 

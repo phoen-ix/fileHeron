@@ -63,8 +63,6 @@ _ATTEMPT_IP_MAX = declared_width(PublicLinkAttempt.__table__.c.ip)
 logger = logging.getLogger("fileheron.public_link")
 
 
-
-
 def public_url(db: Session, token: str) -> str:
     """The recipient-facing URL for a plaintext link token. The ONE builder:
     the create routes, the owner's metadata view and the mail to a recipient
@@ -485,6 +483,41 @@ def record_consumption(
     )
 
 
+def _notify_owner(
+    db: Session,
+    link: PublicLink,
+    *,
+    filename: str,
+    size_bytes: int,
+    downloads_remaining: int | None,
+) -> None:
+    """The one `public_link_downloaded` dispatch both notify paths send; they
+    differ only in what the payload names (audit 2026-11-08)."""
+    if not link.notify_on_download:
+        return
+    owner = db.query(User).filter(User.id == link.created_by_id).one_or_none()
+    if owner is None or owner.is_disabled:
+        return
+    share = db.query(Share).filter(Share.id == link.share_id).one()
+    share_url = f"{site_svc.get_site_url(db)}/share/{share.id}"
+    notif_svc.dispatch(
+        db,
+        user=owner,
+        category=NotificationCategory.public_link_downloaded,
+        payload={
+            "owner_name": owner.display_name,
+            "subject": share.subject,
+            "filename": filename,
+            "size_bytes": size_bytes,
+            "at": utc_now(),
+            "downloads_remaining": downloads_remaining,
+            "share_url": share_url,
+        },
+        link_url=share_url,
+        email_to=owner.email,
+    )
+
+
 def notify_owner_on_download(
     db: Session,
     *,
@@ -500,28 +533,11 @@ def notify_owner_on_download(
     pre-decrement value off by one (the in-memory ``link`` is refreshed
     by ``decrement_counter`` on success, but routes that pass NULL-limit
     links never see a refresh - explicit param keeps both paths honest)."""
-    if not link.notify_on_download:
-        return
-    owner = db.query(User).filter(User.id == link.created_by_id).one_or_none()
-    if owner is None or owner.is_disabled:
-        return
-    share = db.query(Share).filter(Share.id == link.share_id).one()
-    share_url = f"{site_svc.get_site_url(db)}/share/{share.id}"
-    notif_svc.dispatch(
-        db,
-        user=owner,
-        category=NotificationCategory.public_link_downloaded,
-        payload={
-            "owner_name": owner.display_name,
-            "subject": share.subject,
-            "filename": file.original_filename,
-            "size_bytes": file.size_bytes,
-            "at": utc_now(),
-            "downloads_remaining": downloads_remaining,
-            "share_url": share_url,
-        },
-        link_url=share_url,
-        email_to=owner.email,
+    _notify_owner(
+        db, link,
+        filename=file.original_filename,
+        size_bytes=file.size_bytes,
+        downloads_remaining=downloads_remaining,
     )
 
 
@@ -536,28 +552,11 @@ def notify_owner_on_archive_download(
     """Bulk-ZIP variant of `notify_owner_on_download`. A ZIP names no single
     file, so the payload reports a synthetic '<n> files (ZIP)' label + the
     combined size instead of one filename - never leak the file list."""
-    if not link.notify_on_download:
-        return
-    owner = db.query(User).filter(User.id == link.created_by_id).one_or_none()
-    if owner is None or owner.is_disabled:
-        return
-    share = db.query(Share).filter(Share.id == link.share_id).one()
-    share_url = f"{site_svc.get_site_url(db)}/share/{share.id}"
-    notif_svc.dispatch(
-        db,
-        user=owner,
-        category=NotificationCategory.public_link_downloaded,
-        payload={
-            "owner_name": owner.display_name,
-            "subject": share.subject,
-            "filename": f"{file_count} files (ZIP)",
-            "size_bytes": total_bytes,
-            "at": utc_now(),
-            "downloads_remaining": downloads_remaining,
-            "share_url": share_url,
-        },
-        link_url=share_url,
-        email_to=owner.email,
+    _notify_owner(
+        db, link,
+        filename=f"{file_count} files (ZIP)",
+        size_bytes=total_bytes,
+        downloads_remaining=downloads_remaining,
     )
 
 

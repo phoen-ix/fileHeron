@@ -18,6 +18,7 @@
   import SecretReveal from '@/components/SecretReveal.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
+  import { useCopyToClipboard } from '@/composables/useCopyToClipboard'
   import { useAuthStore } from '@/stores/auth'
   import { useUiStore } from '@/stores/ui'
   import type {
@@ -41,7 +42,7 @@
   const burning = ref(false)
   const links = ref<SecretLinkItem[] | null>(null)
   const linkBusy = ref(false)
-  const copiedId = ref<number | null>(null)
+  const { copy: copyText, copiedKey: copiedId } = useCopyToClipboard()
 
   const id = computed(() => String(route.params.id))
   const isSender = computed(() => secret.value?.viewer_role === 'sender')
@@ -168,15 +169,9 @@
     }
   }
 
-  async function copy(item: SecretLinkItem) {
-    if (!item.url) return
-    try {
-      await navigator.clipboard.writeText(item.url)
-      copiedId.value = item.recipient_id
-      window.setTimeout(() => (copiedId.value = null), 1600)
-    } catch {
-      /* clipboard blocked - the link is on screen to select */
-    }
+  function copy(item: SecretLinkItem) {
+    // A blocked clipboard leaves the link on screen to select.
+    if (item.url) void copyText(item.url, item.recipient_id)
   }
 
   function recipientName(r: SecretRecipientStatus): string {

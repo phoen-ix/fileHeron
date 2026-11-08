@@ -148,37 +148,42 @@ async def publish_many(events: list[tuple[int, dict]]) -> None:
         await r.aclose()
 
 
-def publish_many_sync(events: list[tuple[int, dict]]) -> None:
-    """The sync publisher for a batch: one event loop and one connection when called
-    from the threadpool, one tracked task when a loop is already running.
-    Failures are logged, never raised - the in-app rows are the record."""
-    if not events:
-        return
+def _run_or_schedule(make_coro, what: str) -> None:
+    """Run a publish coroutine to completion when there is no event loop (a
+    threadpool route, the worker's sync code), or schedule it as a tracked task
+    when there is one. Failures are logged on BOTH paths, never raised - the
+    in-app rows are the record. The admin publisher was a copy of this without
+    the done-callback, so a failed publish from a running loop vanished
+    (audit 2026-11-08)."""
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         loop = None
     if loop is None:
         try:
-            asyncio.run(publish_many(events))
+            asyncio.run(make_coro())
         except Exception:
-            logger.warning("SSE batch publish failed (%d events)", len(events), exc_info=True)
+            logger.warning("%s", what, exc_info=True)
         return
     try:
-        task = loop.create_task(publish_many(events))
+        task = loop.create_task(make_coro())
         _track_publish_task(task)
 
         def _on_done(t: asyncio.Task) -> None:
             if not t.cancelled() and t.exception() is not None:
-                logger.warning(
-                    "SSE batch publish failed (%d events): %s", len(events), t.exception()
-                )
+                logger.warning("%s: %s", what, t.exception())
 
         task.add_done_callback(_on_done)
     except Exception:
-        logger.warning(
-            "SSE batch publish (loop variant) failed (%d events)", len(events), exc_info=True
-        )
+        logger.warning("%s (loop variant)", what, exc_info=True)
+
+
+def publish_many_sync(events: list[tuple[int, dict]]) -> None:
+    """The sync publisher for a batch: one event loop and one connection when called
+    from the threadpool, one tracked task when a loop is already running."""
+    if not events:
+        return
+    _run_or_schedule(lambda: publish_many(events), f"SSE batch publish failed ({len(events)} events)")
 
 
 async def publish_admin(event: dict) -> None:
@@ -192,23 +197,8 @@ async def publish_admin(event: dict) -> None:
 
 
 def publish_admin_sync(event: dict) -> None:
-    """Sync wrapper for the admin channel - mirrors `publish_many_sync`'s
-    loop-aware behavior so callers in worker / sync contexts can both
-    invoke it without ceremony."""
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-    if loop is None:
-        try:
-            asyncio.run(publish_admin(event))
-        except Exception:
-            logger.warning("admin SSE publish failed", exc_info=True)
-        return
-    try:
-        _track_publish_task(loop.create_task(publish_admin(event)))
-    except Exception:
-        logger.warning("admin SSE publish failed (loop variant)", exc_info=True)
+    """Sync wrapper for the admin channel, the same shape as `publish_many_sync`."""
+    _run_or_schedule(lambda: publish_admin(event), "admin SSE publish failed")
 
 
 async def stream_admin_events() -> AsyncIterator[bytes]:

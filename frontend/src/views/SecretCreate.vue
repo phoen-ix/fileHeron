@@ -15,6 +15,7 @@
   import PasswordGenerator from '@/components/PasswordGenerator.vue'
   import RecipientPicker from '@/components/RecipientPicker.vue'
   import { useApiError } from '@/composables/useApiError'
+  import { useCopyToClipboard } from '@/composables/useCopyToClipboard'
   import { useAuthStore } from '@/stores/auth'
   import { useUiStore } from '@/stores/ui'
   import type { SecretRecipientsRequest, SecretResponse, SecretViewScope } from '@/types/api'
@@ -66,7 +67,7 @@
   const submitting = ref(false)
   const errorMsg = ref<string | null>(null)
   const created = ref<SecretResponse | null>(null)
-  const copied = ref(false)
+  const { copy, copied } = useCopyToClipboard()
 
   /** Expiry presets the admin's ceiling allows, plus "no expiry". */
   const presets = computed(() => {
@@ -182,15 +183,9 @@
     }
   }
 
-  async function copyLink() {
-    if (!created.value?.link_url) return
-    try {
-      await navigator.clipboard.writeText(created.value.link_url)
-      copied.value = true
-      window.setTimeout(() => (copied.value = false), 1600)
-    } catch {
-      /* clipboard blocked - the link is on screen to select */
-    }
+  function copyLink() {
+    // A blocked clipboard leaves the link on screen to select.
+    if (created.value?.link_url) void copy(created.value.link_url)
   }
 </script>
 

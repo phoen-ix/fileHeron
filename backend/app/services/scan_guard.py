@@ -60,6 +60,7 @@ from ..models.ip_block import IpBlock
 from ..utils.client_ip import is_blockable, normalize_ip
 from ..utils.columns import declared_width
 from ..utils.like import LIKE_ESCAPE, contains
+from ..utils.text import split_list
 from ..utils.timeutil import utc_now, utc_now_aware
 from . import settings as settings_svc
 from . import settings_registry
@@ -262,10 +263,7 @@ def parse_networks(raw: str | None) -> tuple:
     rather than raising: this parses admin free-text on the request path, and a
     typo must not take the site down."""
     out = []
-    for part in (raw or "").replace("\n", ",").split(","):
-        part = part.strip()
-        if not part:
-            continue
+    for part in split_list(raw):
         try:
             out.append(ipaddress.ip_network(part, strict=False))
         except ValueError:
@@ -1079,16 +1077,7 @@ def _maybe_notify_block(db: Session, row, snap: dict) -> None:
     if snap.get("notify_mode") != "every_block":
         return
     try:
-        from ..models.notification import NotificationCategory
-        from ..models.user import User, UserRole
-        from . import rate_limit
-        from .notification import dispatch
-
-        admins = (
-            db.query(User)
-            .filter(User.role == UserRole.admin, User.is_disabled.is_(False))
-            .all()
-        )
+        from . import admin_alerts, rate_limit
         # `detail` and `at` are the generic slots ops_alert.txt.j2 already
         # renders; without them the mail would name the subject and drop why it
         # was blocked and until when. The structured keys stay for the in-app row.
@@ -1115,15 +1104,12 @@ def _maybe_notify_block(db: Session, row, snap: dict) -> None:
             logger.warning(
                 "scan_guard: block-email ceiling reached; in-app only for %s", row.subject
             )
-        for admin in admins:
-            dispatch(
-                db,
-                user=admin,
-                category=NotificationCategory.ops_alert,
-                payload=payload,
-                link_url="/admin/settings/scan-guard",
-                email_to=admin.email if email_ok else None,
-            )
+        admin_alerts.notify_admins(
+            db,
+            payload=payload,
+            link_url="/admin/settings/scan-guard",
+            email_for=lambda admin: admin.email if email_ok else None,
+        )
     except Exception:
         logger.warning("scan_guard: block notification failed", exc_info=True)
 
@@ -1315,15 +1301,6 @@ def release_all(db: Session, *, actor_id: int | None, request=None) -> int:
 _ALLOWLIST_MAX_CHARS = 4000
 
 
-def _split_allowlist(raw: str | None) -> list[str]:
-    out = []
-    for part in (raw or "").replace("\n", ",").split(","):
-        part = part.strip()
-        if part:
-            out.append(part)
-    return out
-
-
 def _normalize_entry(entry: str) -> str:
     """Canonical CIDR text, or raise ALLOWLIST_INVALID."""
     from ..middleware.errors import AppError
@@ -1358,7 +1335,7 @@ def allowlist_entries(db: Session) -> dict:
     raw = settings_svc.get(db, K.SCAN_GUARD_ALLOWLIST)
     valid: list[str] = []
     invalid: list[str] = []
-    for part in _split_allowlist(raw):
+    for part in split_list(raw):
         try:
             canonical = str(ipaddress.ip_network(part, strict=False))
         except ValueError:
@@ -1457,7 +1434,7 @@ def allowlist_remove(db: Session, *, entry: str, actor, request=None) -> dict:
     from ..middleware.errors import AppError
 
     _lock_allowlist_row(db)
-    raw_entries = _split_allowlist(settings_svc.get(db, K.SCAN_GUARD_ALLOWLIST))
+    raw_entries = split_list(settings_svc.get(db, K.SCAN_GUARD_ALLOWLIST))
     wanted = entry.strip()
     canonical: str | None = None
     try:
@@ -1714,13 +1691,7 @@ def list_blocks(
 def _split_prefixes(raw: str | None) -> tuple:
     """CSV/newline free-text -> tuple of path prefixes. Entries are normalised to
     start with `/` so an admin typing `wp-admin` gets what they meant."""
-    out = []
-    for part in (raw or "").replace("\n", ",").split(","):
-        part = part.strip()
-        if not part:
-            continue
-        out.append(part if part.startswith("/") else "/" + part)
-    return tuple(out)
+    return tuple(p if p.startswith("/") else "/" + p for p in split_list(raw))
 
 
 def update_settings(

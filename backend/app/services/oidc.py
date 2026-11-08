@@ -672,4 +672,3 @@ def unlink(db: Session, *, user: User, request=None) -> None:
         request=request,
     )
 
-

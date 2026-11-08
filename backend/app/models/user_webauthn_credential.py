@@ -34,8 +34,6 @@ if TYPE_CHECKING:
     from .user import User
 
 
-
-
 class UserWebAuthnCredential(Base):
     __tablename__ = "user_webauthn_credentials"
 

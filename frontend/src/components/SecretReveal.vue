@@ -97,6 +97,7 @@
 
   import { asEnvelope } from '@/api/client'
   import { useApiError } from '@/composables/useApiError'
+  import { useCopyToClipboard } from '@/composables/useCopyToClipboard'
   import type { RevealSecretResponse } from '@/types/api'
 
   const props = defineProps<{
@@ -126,8 +127,7 @@
   const error = ref<string | null>(null)
   const result = ref<RevealSecretResponse | null>(null)
   const shown = ref(true)
-  const copied = ref(false)
-  let copiedTimer: number | null = null
+  const { copy: copyText, copied } = useCopyToClipboard()
 
   // Codes after which there is nothing more to try on this page.
   const TERMINAL = new Set([
@@ -164,20 +164,12 @@
     }
   }
 
-  async function copy() {
-    if (!result.value) return
-    try {
-      await navigator.clipboard.writeText(result.value.content)
-      copied.value = true
-      if (copiedTimer) window.clearTimeout(copiedTimer)
-      copiedTimer = window.setTimeout(() => (copied.value = false), 1600)
-    } catch {
-      /* clipboard blocked - the text is on screen to select */
-    }
+  function copy() {
+    // A blocked clipboard leaves the text on screen to select.
+    if (result.value) void copyText(result.value.content)
   }
 
   onBeforeUnmount(() => {
-    if (copiedTimer) window.clearTimeout(copiedTimer)
     result.value = null
   })
 </script>

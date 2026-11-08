@@ -36,8 +36,6 @@ IdP-asserted email must still match the target user's before a bind is written.
 """
 from __future__ import annotations
 
-import hashlib
-import hmac as hmac_mod
 import logging
 
 from fastapi import APIRouter, Cookie, Depends, Query, Request, Response
@@ -57,6 +55,7 @@ from ..schemas.oidc_connect import (
 )
 from ..services import oidc as oidc_svc
 from ..services import oidc_admin as oidc_admin_svc
+from ..utils import signed_token
 from ..utils.crypto import constant_time_equals
 
 logger = logging.getLogger("fileheron.routers.oidc_connect")
@@ -72,14 +71,19 @@ _CONNECT_COOKIE = "fh_oidc_connect_state"
 _COOKIE_PATH = "/api/account/oidc"
 
 
+# Domain separation for utils/signed_token: this payload can never verify as
+# any other signed token's, and theirs never as this one.
+_CONNECT_DOMAIN = b"oidc-connect\x00"
+
+
 def _pack(state: str, provider_id: str, user_id: int, nonce: str) -> str:
     # The callback trusts cookie_user_id to authenticate the actor (no Bearer), so
-    # the packed value MUST be tamper-proof - HMAC it under JWT_SECRET.
+    # the packed value MUST be tamper-proof - signed under JWT_SECRET through
+    # the one signer every compact token uses (it carried its own HMAC copy,
+    # twice, until 2026-11-08; a cookie minted by the old format before an
+    # update fails closed and the user retries the connect).
     payload = f"{state}::{provider_id}::{user_id}::{nonce}"
-    sig = hmac_mod.new(
-        settings.JWT_SECRET.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
-    ).hexdigest()
-    return f"{payload}.{sig}"
+    return f"{payload}.{signed_token.sign(payload.encode('utf-8'), domain=_CONNECT_DOMAIN)}"
 
 
 def _unpack(
@@ -88,9 +92,7 @@ def _unpack(
     if not packed or "." not in packed:
         return None, None, None, None
     payload, _, sig = packed.rpartition(".")
-    expected = hmac_mod.new(
-        settings.JWT_SECRET.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
-    ).hexdigest()
+    expected = signed_token.sign(payload.encode("utf-8"), domain=_CONNECT_DOMAIN)
     if not constant_time_equals(expected, sig):
         return None, None, None, None
     parts = payload.split("::")

@@ -30,8 +30,6 @@ from ..utils.timeutil import utc_now
 logger = logging.getLogger("fileheron.workers.purge_old_quarantine")
 
 
-
-
 @track_cron("purge_old_quarantine")
 async def purge_old_quarantine(_ctx) -> dict:
     purged = 0

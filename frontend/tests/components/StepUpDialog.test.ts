@@ -62,7 +62,7 @@ describe('StepUpDialog', () => {
   it('cancels on Escape, the backdrop and the Cancel button', async () => {
     const w = mountIt()
     pressEscape()
-    await w.find('[data-testid="step-up-dialog"]').trigger('click')
+    await w.find('.fh-modal-backdrop').trigger('click') // a click outside the box
     await w.find('button[type="button"]').trigger('click')
     expect(w.emitted('cancel')).toHaveLength(3)
   })
@@ -71,7 +71,7 @@ describe('StepUpDialog', () => {
     const w = mountIt({ busy: true })
     await w.find('[data-testid="step-up-password"]').setValue('s3cret')
     pressEscape()
-    await w.find('[data-testid="step-up-dialog"]').trigger('click')
+    await w.find('.fh-modal-backdrop').trigger('click') // a click outside the box
     await w.find('form').trigger('submit')
     expect(w.emitted('cancel')).toBeUndefined()
     expect(w.emitted('confirm')).toBeUndefined()

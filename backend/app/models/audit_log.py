@@ -223,8 +223,6 @@ class AuditEventType(str, enum.Enum):
     secret_request_link_shown = "secret_request_link_shown"  # the requester copied a link again
 
 
-
-
 # In SQLite, BigInteger PRIMARY KEY does NOT autoincrement - only INTEGER PK
 # does (via ROWID alias). Use a type variant so prod gets BIGINT and tests
 # (SQLite) get INTEGER which DOES autoincrement.

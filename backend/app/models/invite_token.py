@@ -18,8 +18,6 @@ if TYPE_CHECKING:
     from .user import User
 
 
-
-
 class InviteToken(Base):
     __tablename__ = "invite_tokens"
 

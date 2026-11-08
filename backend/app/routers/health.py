@@ -20,12 +20,12 @@ from ..dependencies import get_db
 from ..schemas.settings import PublicConfigResponse
 from ..services import oidc_admin as oidc_admin_svc
 from ..utils.client_ip import get_client_ip
+from ..utils.text import split_list
 from ..version import GIT_SHA, VERSION
 
 logger = logging.getLogger("fileheron.health")
 
 router = APIRouter(tags=["health"])
-
 
 
 # Cache window for the non-authoritative dependency probes. Short enough that a
@@ -113,10 +113,7 @@ def _trusted_networks() -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, 
     raw = os.environ.get("HEALTH_DETAIL_TRUSTED_CIDRS", "").strip()
     if raw:
         out = []
-        for item in raw.split(","):
-            item = item.strip()
-            if not item:
-                continue
+        for item in split_list(raw):
             try:
                 out.append(ipaddress.ip_network(item, strict=False))
             except ValueError:

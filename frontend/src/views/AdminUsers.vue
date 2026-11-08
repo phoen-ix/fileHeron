@@ -1,9 +1,7 @@
 <script setup lang="ts">
-  import { computed, onMounted, ref, watch } from 'vue'
+  import { onMounted, ref, watch } from 'vue'
   import { useI18n } from 'vue-i18n'
   import { useRouter } from 'vue-router'
-
-  import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
   import {
     activateInvite,
@@ -16,11 +14,13 @@
   import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
   import Pager from '@/components/Pager.vue'
   import PasswordStrength from '@/components/PasswordStrength.vue'
+  import ModalShell from '@/components/ModalShell.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
   import { usePaginatedList } from '@/composables/usePaginatedList'
   import { useInviteForm } from '@/composables/useInviteForm'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
+  import { useCopyToClipboard } from '@/composables/useCopyToClipboard'
   import { useUiStore } from '@/stores/ui'
   import { formatBytes } from '@/utils/bytes'
   import type { AdminInviteItem, AdminUserItem, UserRole } from '@/types/api'
@@ -137,14 +137,12 @@
     }
   }
 
+  const { copy } = useCopyToClipboard()
   async function copyFreshInviteLink() {
-    if (!freshInviteLink.value) return
-    try {
-      await navigator.clipboard.writeText(freshInviteLink.value.url)
+    // A blocked clipboard: the link is on screen and the notice says to copy
+    // it by hand.
+    if (freshInviteLink.value && (await copy(freshInviteLink.value.url)))
       ui.pushToast(t('admin_users.invites.toast.link_copied'), 'success')
-    } catch {
-      // The link is on screen; the notice says to copy it by hand.
-    }
   }
 
   async function onResend(inv: AdminInviteItem) {
@@ -192,22 +190,6 @@
       revokeInProgress.value = false
     }
   }
-
-  // Escape on each of the three invite modals. The `@keydown.escape` each
-  // backdrop carries cannot fire: the backdrop is not focusable, so it is never
-  // on the propagation path from whatever inside has focus (audit 2026-07-30).
-  useEscapeToClose(
-    computed(() => detailsInvite.value !== null),
-    closeDetails,
-  )
-  useEscapeToClose(
-    computed(() => revokeInviteRow.value !== null),
-    closeRevoke,
-  )
-  useEscapeToClose(
-    computed(() => activateInviteRow.value !== null),
-    closeActivate,
-  )
 
   function openActivate(inv: AdminInviteItem) {
     activateInviteRow.value = inv
@@ -545,146 +527,129 @@
     </template>
 
     <!-- Details modal -->
-    <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -- modal backdrop: click-outside is a convenience, Escape is the keyboard path; revisited with the modal focus work -->
-    <div
+    <ModalShell
       v-if="detailsInvite"
-      class="fh-modal-backdrop"
-      @click.self="closeDetails"
-      @keydown.escape="closeDetails"
+      :open="true"
+      :label="t('admin_users.invites.details.title')"
+      :width="560"
+      @close="closeDetails"
     >
-      <div class="fh-modal" role="dialog" :aria-label="t('admin_users.invites.details.title')">
-        <h2 class="modal-h2">{{ t('admin_users.invites.details.title') }}</h2>
-        <dl class="details-list">
-          <dt>{{ t('admin_users.invites.details.email') }}</dt>
-          <dd class="fh-mono">{{ detailsInvite.email }}</dd>
-          <dt>{{ t('admin_users.invites.details.target_role') }}</dt>
-          <dd class="fh-mono">{{ detailsInvite.target_role }}</dd>
-          <dt>{{ t('admin_users.invites.details.state') }}</dt>
-          <dd>
-            <span
-              class="fh-pill"
-              :data-state="detailsInvite.state === 'pending' ? 'warn' : 'danger'"
-            >
-              {{ t(`admin_users.invites.state.${detailsInvite.state}`) }}
-            </span>
-          </dd>
-          <dt>{{ t('admin_users.invites.details.invited_by') }}</dt>
-          <dd>
-            <span v-if="detailsInvite.invited_by_display_name">
-              {{ detailsInvite.invited_by_display_name }}
-              <span class="subtle fh-mono">(id={{ detailsInvite.invited_by_id }})</span>
-            </span>
-            <span v-else class="subtle fh-mono">{{
-              t('admin_users.invites.invited_by_unknown')
-            }}</span>
-          </dd>
-          <dt>{{ t('admin_users.invites.details.created_at') }}</dt>
-          <dd class="fh-mono">{{ formatDate(detailsInvite.created_at) }}</dd>
-          <dt>{{ t('admin_users.invites.details.expires_at') }}</dt>
-          <dd class="fh-mono">{{ formatDate(detailsInvite.expires_at) }}</dd>
-          <dt v-if="detailsInvite.initial_group_ids && detailsInvite.initial_group_ids.length">
-            {{ t('admin_users.invites.details.initial_groups') }}
-          </dt>
-          <dd
-            v-if="detailsInvite.initial_group_ids && detailsInvite.initial_group_ids.length"
-            class="fh-mono"
-          >
-            {{ detailsInvite.initial_group_ids.join(', ') }}
-          </dd>
-        </dl>
-        <div class="form-actions">
-          <button type="button" class="fh-btn" @click="closeDetails">
-            {{ t('common.close') }}
-          </button>
-        </div>
+      <h2 class="modal-h2">{{ t('admin_users.invites.details.title') }}</h2>
+      <dl class="details-list">
+        <dt>{{ t('admin_users.invites.details.email') }}</dt>
+        <dd class="fh-mono">{{ detailsInvite.email }}</dd>
+        <dt>{{ t('admin_users.invites.details.target_role') }}</dt>
+        <dd class="fh-mono">{{ detailsInvite.target_role }}</dd>
+        <dt>{{ t('admin_users.invites.details.state') }}</dt>
+        <dd>
+          <span class="fh-pill" :data-state="detailsInvite.state === 'pending' ? 'warn' : 'danger'">
+            {{ t(`admin_users.invites.state.${detailsInvite.state}`) }}
+          </span>
+        </dd>
+        <dt>{{ t('admin_users.invites.details.invited_by') }}</dt>
+        <dd>
+          <span v-if="detailsInvite.invited_by_display_name">
+            {{ detailsInvite.invited_by_display_name }}
+            <span class="subtle fh-mono">(id={{ detailsInvite.invited_by_id }})</span>
+          </span>
+          <span v-else class="subtle fh-mono">{{
+            t('admin_users.invites.invited_by_unknown')
+          }}</span>
+        </dd>
+        <dt>{{ t('admin_users.invites.details.created_at') }}</dt>
+        <dd class="fh-mono">{{ formatDate(detailsInvite.created_at) }}</dd>
+        <dt>{{ t('admin_users.invites.details.expires_at') }}</dt>
+        <dd class="fh-mono">{{ formatDate(detailsInvite.expires_at) }}</dd>
+        <dt v-if="detailsInvite.initial_group_ids && detailsInvite.initial_group_ids.length">
+          {{ t('admin_users.invites.details.initial_groups') }}
+        </dt>
+        <dd
+          v-if="detailsInvite.initial_group_ids && detailsInvite.initial_group_ids.length"
+          class="fh-mono"
+        >
+          {{ detailsInvite.initial_group_ids.join(', ') }}
+        </dd>
+      </dl>
+      <div class="form-actions">
+        <button type="button" class="fh-btn" @click="closeDetails">
+          {{ t('common.close') }}
+        </button>
       </div>
-    </div>
+    </ModalShell>
 
     <!-- Activate modal -->
-    <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -- modal backdrop: click-outside is a convenience, Escape is the keyboard path; revisited with the modal focus work -->
-    <div
+    <ModalShell
       v-if="activateInviteRow"
-      class="fh-modal-backdrop"
-      @click.self="closeActivate"
-      @keydown.escape="closeActivate"
+      :open="true"
+      :label="t('admin_users.invites.activate.title')"
+      :width="560"
+      @close="closeActivate"
     >
-      <div class="fh-modal" role="dialog" :aria-label="t('admin_users.invites.activate.title')">
-        <h2 class="modal-h2">{{ t('admin_users.invites.activate.title') }}</h2>
-        <p class="modal-body">
-          {{
-            t('admin_users.invites.activate.body', {
-              email: activateInviteRow.email,
-              role: activateInviteRow.target_role,
-            })
-          }}
-        </p>
-        <label class="fh-field">
-          <span class="fh-field-label">{{
-            t('admin_users.invites.activate.display_name_label')
-          }}</span>
-          <input
-            v-model.trim="activateDisplayName"
-            class="fh-field-input"
-            type="text"
-            maxlength="120"
-          />
-          <span class="fh-field-help">{{
-            t('admin_users.invites.activate.display_name_help')
-          }}</span>
-        </label>
-        <div v-if="activateError" class="fh-notice" role="alert" data-tone="error">
-          {{ activateError }}
-        </div>
-        <div class="form-actions">
-          <button
-            type="button"
-            class="fh-btn"
-            :disabled="activateInProgress"
-            @click="onConfirmActivate"
-          >
-            {{
-              activateInProgress ? t('common.loading') : t('admin_users.invites.activate.confirm')
-            }}
-          </button>
-          <button type="button" class="fh-btn-text" @click="closeActivate">
-            {{ t('common.cancel') }}
-          </button>
-        </div>
+      <h2 class="modal-h2">{{ t('admin_users.invites.activate.title') }}</h2>
+      <p class="modal-body">
+        {{
+          t('admin_users.invites.activate.body', {
+            email: activateInviteRow.email,
+            role: activateInviteRow.target_role,
+          })
+        }}
+      </p>
+      <label class="fh-field">
+        <span class="fh-field-label">{{
+          t('admin_users.invites.activate.display_name_label')
+        }}</span>
+        <input
+          v-model.trim="activateDisplayName"
+          class="fh-field-input"
+          type="text"
+          maxlength="120"
+        />
+        <span class="fh-field-help">{{ t('admin_users.invites.activate.display_name_help') }}</span>
+      </label>
+      <div v-if="activateError" class="fh-notice" role="alert" data-tone="error">
+        {{ activateError }}
       </div>
-    </div>
+      <div class="form-actions">
+        <button
+          type="button"
+          class="fh-btn"
+          :disabled="activateInProgress"
+          @click="onConfirmActivate"
+        >
+          {{ activateInProgress ? t('common.loading') : t('admin_users.invites.activate.confirm') }}
+        </button>
+        <button type="button" class="fh-btn-text" @click="closeActivate">
+          {{ t('common.cancel') }}
+        </button>
+      </div>
+    </ModalShell>
 
     <!-- Revoke confirmation -->
-    <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -- modal backdrop: click-outside is a convenience, Escape is the keyboard path; revisited with the modal focus work -->
-    <div
+    <ModalShell
       v-if="revokeInviteRow"
-      class="fh-modal-backdrop"
-      @click.self="closeRevoke"
-      @keydown.escape="closeRevoke"
+      :open="true"
+      :label="t('admin_users.invites.delete.title')"
+      :width="560"
+      @close="closeRevoke"
     >
-      <div
-        class="fh-modal fh-modal--small"
-        role="dialog"
-        :aria-label="t('admin_users.invites.delete.title')"
-      >
-        <h2 class="modal-h2">{{ t('admin_users.invites.delete.title') }}</h2>
-        <p class="modal-body">
-          {{ t('admin_users.invites.delete.body', { email: revokeInviteRow.email }) }}
-        </p>
-        <div class="form-actions">
-          <button
-            type="button"
-            class="fh-btn fh-btn--danger"
-            :disabled="revokeInProgress"
-            @click="onConfirmRevoke"
-          >
-            {{ revokeInProgress ? t('common.loading') : t('admin_users.invites.delete.confirm') }}
-          </button>
-          <button type="button" class="fh-btn-text" @click="closeRevoke">
-            {{ t('common.cancel') }}
-          </button>
-        </div>
+      <h2 class="modal-h2">{{ t('admin_users.invites.delete.title') }}</h2>
+      <p class="modal-body">
+        {{ t('admin_users.invites.delete.body', { email: revokeInviteRow.email }) }}
+      </p>
+      <div class="form-actions">
+        <button
+          type="button"
+          class="fh-btn fh-btn--danger"
+          :disabled="revokeInProgress"
+          @click="onConfirmRevoke"
+        >
+          {{ revokeInProgress ? t('common.loading') : t('admin_users.invites.delete.confirm') }}
+        </button>
+        <button type="button" class="fh-btn-text" @click="closeRevoke">
+          {{ t('common.cancel') }}
+        </button>
       </div>
-    </div>
+    </ModalShell>
   </div>
 </template>
 
@@ -890,29 +855,6 @@
   }
 
   /* --- Modals --- */
-
-  .fh-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(26, 29, 36, 0.4);
-    display: grid;
-    place-items: center;
-    z-index: 100;
-  }
-
-  .fh-modal {
-    background: var(--fh-paper);
-    border: 1px solid var(--fh-hairline-strong);
-    box-shadow: 0 8px 40px rgba(26, 29, 36, 0.15);
-    padding: var(--fh-space-5);
-    width: min(560px, 92vw);
-    max-height: 92vh;
-    overflow-y: auto;
-  }
-
-  .fh-modal--small {
-    width: min(420px, 92vw);
-  }
 
   .modal-h2 {
     font-family: var(--fh-font-display);

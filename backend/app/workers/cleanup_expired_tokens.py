@@ -32,8 +32,6 @@ from ..utils.timeutil import utc_now
 logger = logging.getLogger("fileheron.workers.cleanup_expired_tokens")
 
 
-
-
 @track_cron("cleanup_expired_tokens")
 async def cleanup_expired_tokens(_ctx) -> dict:
     """Walk refresh_tokens; soft-revoke past-TTL rows + hard-delete

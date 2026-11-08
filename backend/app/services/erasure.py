@@ -69,8 +69,6 @@ def is_erased(user: User) -> bool:
 logger = logging.getLogger("fileheron.erasure")
 
 
-
-
 def _unlink_tus_partial(tus_upload_id: str) -> None:
     """Remove a tusd working file and its .info sidecar.
 

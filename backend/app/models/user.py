@@ -37,7 +37,6 @@ if TYPE_CHECKING:
     from .user_totp import UserTOTP
 
 
-
 # An EXACT comparison on MariaDB. The database default, utf8mb4_unicode_ci, is
 # case- AND accent-insensitive, so `WHERE email = 'kevin@exämple.com'` found
 # `kevin@example.com` - and forgot-password then mailed that account's reset link
@@ -64,8 +63,6 @@ class AdminNavCollapseMode(str, enum.Enum):
     expanded = "expanded"
     accordion = "accordion"
     manual = "manual"
-
-
 
 
 class User(Base):

@@ -37,8 +37,6 @@ from ..utils.timeutil import utc_now
 logger = logging.getLogger("fileheron.workers.cleanup_pending_invites")
 
 
-
-
 @track_cron("cleanup_pending_invites")
 async def cleanup_pending_invites(_ctx) -> dict:
     """Hard-delete pending/expired invites older than the retention

@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal
 from ..models.error_log import ErrorLog
 from ..utils.columns import declared_width
+from ..utils.text import split_list
 from ..utils.timeutil import to_naive_utc, utc_now
 from . import settings as settings_svc
 from . import settings_registry
@@ -54,10 +55,7 @@ K = settings_svc.Keys
 def parse_4xx_codes(raw: str | None) -> set[int]:
     """Parse a CSV of HTTP status codes; keep only valid 4xx values."""
     out: set[int] = set()
-    for part in (raw or "").split(","):
-        part = part.strip()
-        if not part:
-            continue
+    for part in split_list(raw):
         try:
             n = int(part)
         except ValueError:

@@ -6,11 +6,12 @@
    * everything in via props. Action buttons appear only once nothing is in
    * flight (gated on isActive, NOT allDone, because the 800ms 'finalizing'
    * timer keeps isActive true until the last file truly settles). */
-  import { computed, ref } from 'vue'
+  import { computed } from 'vue'
   import { useI18n } from 'vue-i18n'
 
   import UploadFileRow from '@/components/UploadFileRow.vue'
   import type { LogEntry, UploadItem } from '@/composables/useUpload'
+  import { useCopyToClipboard } from '@/composables/useCopyToClipboard'
   import type { InlinePublicLinkResult } from '@/types/api'
 
   const props = defineProps<{
@@ -37,16 +38,9 @@
     return t('share_create.progress.done_title')
   })
 
-  const plCopied = ref(false)
-  async function copyPublicLink() {
-    if (!props.publicLink) return
-    try {
-      await navigator.clipboard.writeText(props.publicLink.url)
-      plCopied.value = true
-      setTimeout(() => (plCopied.value = false), 1600)
-    } catch {
-      /* clipboard blocked */
-    }
+  const { copy, copied: plCopied } = useCopyToClipboard()
+  function copyPublicLink() {
+    if (props.publicLink) void copy(props.publicLink.url)
   }
 
   function formatLogTime(ts: number): string {

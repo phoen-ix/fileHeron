@@ -1,4 +1,4 @@
-# fileHeron updater-shim - perpetual, ~50 lines of bash.
+# fileHeron updater-shim - a perpetual bash poller (shim.sh) that verifies and starts the executor.
 #
 # Polls /state/current_job.json every 5s. When status == "pending",
 # pulls the matching `fileheron-updater-executor:<target_tag>` image

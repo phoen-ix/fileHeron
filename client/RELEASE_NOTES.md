@@ -1,3 +1,24 @@
+# Desktop client 1.6.3
+
+**Bug fixes.**
+
+Requires server **v2.6.1 or newer** (unchanged).
+
+---
+
+- **Download** and **Save all** are offered only for files that have finished
+  their antivirus scan. Files still being scanned were offered too, and every
+  such download failed ("scan in progress").
+- An upload no longer fails outright when the server briefly answers "bad
+  gateway" while it updates; the upload retries and continues.
+- A session that expired while a share page loaded its public link now signs
+  you out cleanly instead of showing the page without the link.
+- After adding files to a share with **Notify recipients** unticked, the app no
+  longer claims that recipients could not be notified.
+- Upload no longer sends your sign-in token to the upload server, which never
+  used it.
+- Released beside server v2.30.0.
+
 # Desktop client 1.6.2
 
 **Housekeeping, no behaviour change.**

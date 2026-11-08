@@ -172,7 +172,7 @@ cleanup() {
     [ -n "$WORKSPACE" ] && rm -rf "$WORKSPACE" 2>/dev/null || true
     # data dirs may be written root-owned by the containers; force-remove.
     [ -n "$WORKSPACE" ] && [ -d "$WORKSPACE" ] && \
-        docker run --rm -v "$(dirname "$WORKSPACE")":/w alpine rm -rf "/w/$(basename "$WORKSPACE")" >/dev/null 2>&1 || true
+        docker run --rm -v "$(dirname "$WORKSPACE")":/w alpine:3.24.4 rm -rf "/w/$(basename "$WORKSPACE")" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -188,12 +188,12 @@ mkdir -p "$WORKSPACE/data/db" "$WORKSPACE/data/redis" "$WORKSPACE/data/files" \
 # "the drill has been broken for months" finding as last time (audit #2).
 cp "$ROOT/docker/mariadb/init.sh" "$WORKSPACE/docker/mariadb/init.sh"
 # The UID-1000 containers must own the bind-mount dirs (see the data-dir gotcha).
-docker run --rm -v "$WORKSPACE/data":/d alpine chown -R 1000:1000 /d >/dev/null
+docker run --rm -v "$WORKSPACE/data":/d alpine:3.24.4 chown -R 1000:1000 /d >/dev/null
 
 log "extracting file archives ..."
 tar -C "$WORKSPACE/data" -xzf "$BACKUP/files.tar.gz"
 tar -C "$WORKSPACE/data" -xzf "$BACKUP/quarantine.tar.gz"
-docker run --rm -v "$WORKSPACE/data":/d alpine chown -R 1000:1000 /d/files /d/quarantine >/dev/null
+docker run --rm -v "$WORKSPACE/data":/d alpine:3.24.4 chown -R 1000:1000 /d/files /d/quarantine >/dev/null
 
 # --- bring up db + redis, restore into them ---------------------------------
 log "starting throwaway db + redis ..."
@@ -240,10 +240,10 @@ log "restoring redis snapshot ..."
 REDIS_CID="$(dc ps -q redis)"
 REDIS_LOADER="${PROJECT}-redis-restore"
 dc stop redis >/dev/null
-docker run --rm -v "$WORKSPACE/data/redis":/d alpine \
+docker run --rm -v "$WORKSPACE/data/redis":/d alpine:3.24.4 \
     sh -c 'rm -rf /d/appendonlydir /d/dump.rdb' >/dev/null
 docker cp "$BACKUP/redis.rdb" "$REDIS_CID:/data/dump.rdb"
-docker run --rm -v "$WORKSPACE/data/redis":/d alpine chown 999:999 /d/dump.rdb >/dev/null
+docker run --rm -v "$WORKSPACE/data/redis":/d alpine:3.24.4 chown 999:999 /d/dump.rdb >/dev/null
 
 docker rm -f "$REDIS_LOADER" >/dev/null 2>&1 || true
 docker run -d --rm --name "$REDIS_LOADER" \

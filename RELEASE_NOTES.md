@@ -1,3 +1,84 @@
+# file:Heron v2.30.0
+
+**Turning off two-factor sign-in now takes your password through the same
+guarded check as other sensitive actions.** Disabling two-factor sign-in and
+creating new recovery codes ask for your password and a current code, as
+before. Wrong attempts now count against a per-account limit (both the password
+and the code), each failure is recorded in the audit log, and a wrong entry
+shows as "password incorrect" or "code incorrect" in the form instead of
+looking like an expired session. Before, someone holding a signed-in session
+who knew the password could keep guessing the six-digit code without limit.
+
+**Removing a passkey asks for your password**, the same way adding one does.
+While passkey sign-in is switched on, a passkey can be an account's only second
+factor, so a borrowed session must not be able to remove it.
+
+**Right-to-erasure also clears the person's IP address from the audit log**
+for the actions they took. The audit entries stay; the address goes, as it
+already did from the download and error logs.
+
+**Fixes.**
+
+- An approver previewing a file in a pending share leaves one audit entry per
+  preview, not one per chunk the PDF or video viewer requests.
+- The encryption backfill stops and reports a failed run while Redis is
+  unreachable, instead of encrypting nothing and reporting success.
+- Deleting an inbox message, and the nightly history prune, now record any
+  attachment file that could not be removed (as every other deletion does).
+- A file that still has no antivirus verdict six hours after upload makes the
+  stale-uploads task report a failed run, so a scanner that keeps failing on a
+  file is no longer silent.
+- **Fetch now** on the inbox says how many messages were refused because the
+  sender is not a known user, and how many wait for the next run. The IMAP
+  **Test** button tries the "accept any certificate" setting as shown on
+  screen, not the saved one.
+- A webhook switched off while a delivery was waiting for its retry closes that
+  delivery as failed instead of leaving it pending for ever.
+- The updates URL is checked against the same address rules when it is saved
+  as when it is used.
+- Backup **Preview** rejects a damaged backup file with the same message as
+  **Import**, instead of a server error.
+- An expired or already-ended share can no longer be revoked a second time
+  (which changed how it showed as ending). Discarding a rejected share works as
+  before.
+- Setting both a download limit and "no limit" in one change is refused rather
+  than silently dropping the limit.
+- The first admin created by the setup wizard gets the language the wizard was
+  shown in.
+- Change-password and change-email no longer share one attempt limit.
+- The analytics page's "today" and the storage snapshot follow the site
+  timezone, not UTC, around midnight.
+- Searching the admin console for "preview" or "notify recipients" opens the
+  Transfers page, where those settings now live.
+- The System page's failed-task count matches the Overview and the Scheduled
+  tasks page.
+- List pages no longer load twice when a filter changes on a later page, and a
+  slow earlier search can no longer overwrite a newer one's results.
+- Copy buttons that hit a blocked clipboard no longer raise an error in the
+  browser; the webhook secret's Copy button now confirms the copy.
+- The browser tab shows the instance's own name, not always "file:Heron".
+- Faster pages: the account and settings endpoints read their settings in one
+  query, the secret lists no longer query per row, and the scheduler's
+  once-a-minute check needs two queries instead of about seventy.
+
+**Under the hood**, from a second full audit: more duplicated code folded into
+one place (admin notifications, CSV exports, modal dialogs, copy buttons, the
+list pages, the settings sections, the mail and IMAP test confirmation),
+unused code removed, stricter lint rules, and tests that pin each change.
+
+## On this update
+
+- A minor release: automatic updates set to **patches only** do not install
+  it; install it from **Admin → System** or wait for an automatic update that
+  allows minor versions. No migration; no default change.
+- **`.env` must set `ENVIRONMENT`.** `docker-compose.yml` no longer falls back
+  to `development` when it is missing, because that ran a public instance in
+  development mode. `docker compose` refuses to start and says so. `install.sh`
+  and `.env.example` set `ENVIRONMENT=production`; a hand-kept `.env` without
+  the line needs `ENVIRONMENT=production` added once.
+- Forks: `GHCR_OWNER` can now be set in `.env` for the updater shim.
+- The desktop client 1.6.3 ships beside it; 1.6.2 keeps working.
+
 # file:Heron v2.29.4
 
 **Scheduled tasks no longer hide a failed run.** Eleven background tasks caught

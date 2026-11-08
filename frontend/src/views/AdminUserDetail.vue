@@ -101,9 +101,8 @@
       editRole.value = data.role
       editQuota.value = data.quota_bytes
       editDisabled.value = data.is_disabled
-      await loadSessions()
-      await loadFiles()
-      await loadEmails()
+      // Independent lists: in parallel, not three round trips in a row.
+      await Promise.all([loadSessions(), loadFiles(), loadEmails()])
     } catch (err) {
       // Without this the page painted the admin sidebar and an entirely empty
       // content area - no message, no not-found state, nothing to suggest a
@@ -164,8 +163,7 @@
     try {
       await adminDeleteFile(f.file_id)
       ui.pushToast(t('admin_file_history.deleted_toast', { name: f.filename }), 'success')
-      await loadFiles()
-      await load() // refresh the Storage figure
+      await load() // refreshes the Storage figure, and the file list with it
     } catch (err) {
       ui.pushToast(describe(err), 'error')
     } finally {

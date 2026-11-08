@@ -80,6 +80,10 @@
       try {
         const { data } = await searchUsers(userQuery.value)
         userResults.value = data.items
+      } catch {
+        // It escaped as an unhandled rejection from inside the timer
+        // (audit 2026-11-08); an empty list is the honest result.
+        userResults.value = []
       } finally {
         userSearching.value = false
       }

@@ -59,3 +59,9 @@ export const TOKEN_SCOPE_GROUPS: {
 export function scopeLabelKey(scope: string): string {
   return `api_tokens.scopes.${scope.replace(/:/g, '_')}`
 }
+
+/** Token-appropriate expiry presets. The forms open on
+ *  `defaultTokenExpiryLocal()` (90 days); "never" is offered but has to be
+ *  picked. One copy for the account and the admin token forms, which each had
+ *  their own (audit 2026-11-08). */
+export const TOKEN_EXPIRY_PRESETS = ['7d', '30d', '90d', '1y', 'never'] as const

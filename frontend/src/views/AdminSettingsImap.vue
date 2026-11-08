@@ -3,10 +3,10 @@
   import { useI18n } from 'vue-i18n'
 
   import { fetchInboxNow, getImapSettings, testImap, updateImapSettings } from '@/api/admin'
-  import { asEnvelope } from '@/api/client'
   import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
   import StepUpDialog from '@/components/StepUpDialog.vue'
   import { useApiError } from '@/composables/useApiError'
+  import { useTestStepUp } from '@/composables/useTestStepUp'
   import { useUiStore } from '@/stores/ui'
   import type { ImapSettingsResponse, ImapTestResponse } from '@/types/api'
 
@@ -20,13 +20,16 @@
   const fetching = ref(false)
   const errorMsg = ref<string | null>(null)
   const testResult = ref<ImapTestResponse | null>(null)
-  // Revealed only when the backend asks for it: testing a server other than
-  // the saved one while relying on the stored mail password.
-  // The step-up password, asked in a dialog once the server refuses the test.
-  // Kept until a test passes, so retrying a failing server does not ask again.
-  const confirmPassword = ref('')
-  const stepUpOpen = ref(false)
-  const stepUpError = ref<string | null>(null)
+  // The step-up dialog for a test against a server other than the saved one
+  // (see useTestStepUp). `onTest` is a hoisted function declaration below.
+  const {
+    stepUpOpen,
+    stepUpError,
+    onStepUpConfirm,
+    confirmField,
+    onTestAnswered,
+    handledTestError,
+  } = useTestStepUp(onTest)
   const isPasswordSet = ref(false)
   const lastPollAt = ref<string | null>(null)
   const passwordTouched = ref(false)
@@ -97,11 +100,6 @@
     }
   }
 
-  function onStepUpConfirm(password: string) {
-    confirmPassword.value = password
-    void onTest()
-  }
-
   async function onTest() {
     testing.value = true
     testResult.value = null
@@ -115,31 +113,12 @@
         tls_mode: form.value.tls_mode,
         mailbox: form.value.mailbox,
         tls_insecure: form.value.tls_insecure,
-        ...(confirmPassword.value ? { confirm_password: confirmPassword.value } : {}),
+        ...confirmField(),
       })
       testResult.value = data
-      // Only clear the step-up password once the test actually passed; a
-      // server-side failure (`ok: false`) is a 200 and the admin will retry.
-      if (data.ok) {
-        confirmPassword.value = ''
-      }
-      stepUpOpen.value = false
+      onTestAnswered(data.ok)
     } catch (err) {
-      // Testing a server other than the saved one, while relying on the stored
-      // password, is the only case that can send that password somewhere new.
-      if (asEnvelope(err)?.code === 'STEP_UP_REQUIRED') {
-        confirmPassword.value = ''
-        stepUpError.value = null
-        stepUpOpen.value = true
-        return
-      }
-      // The dialog is open, so this answers the password it just sent (a wrong
-      // one, or the step-up rate limit): show it there.
-      if (stepUpOpen.value) {
-        confirmPassword.value = ''
-        stepUpError.value = describe(err)
-        return
-      }
+      if (handledTestError(err)) return
       errorMsg.value = describe(err)
     } finally {
       testing.value = false

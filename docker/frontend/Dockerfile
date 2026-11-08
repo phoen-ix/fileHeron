@@ -41,6 +41,7 @@ LABEL org.opencontainers.image.version="${FH_VERSION}" \
       org.opencontainers.image.source="https://github.com/phoen-ix/fileHeron"
 
 COPY docker/frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY docker/frontend/snippets/ /etc/nginx/snippets/
 COPY --from=build /build/dist /usr/share/nginx/html
 
 EXPOSE 80

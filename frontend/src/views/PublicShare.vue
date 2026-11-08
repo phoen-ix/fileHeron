@@ -24,6 +24,7 @@
   import { afterReadyLabel } from '@/utils/duration'
   import { groupByFolder } from '@/utils/folders'
   import { previewKind } from '@/utils/preview'
+  import { asEnvelope } from '@/api/client'
 
   const route = useRoute()
   const { t } = useI18n()
@@ -52,12 +53,9 @@
       const { data } = await fetchPublicShare(token.value)
       share.value = data
     } catch (err: unknown) {
-      interface AxiosLike {
-        response?: { data?: { error?: string; code?: string } }
-      }
-      const e = err as AxiosLike
-      errorCode.value = e.response?.data?.code ?? null
-      errorMsg.value = e.response?.data?.error ?? t('public_share.errors.generic')
+      const env = asEnvelope(err)
+      errorCode.value = env?.code ?? null
+      errorMsg.value = env?.error ?? t('public_share.errors.generic')
     } finally {
       loading.value = false
     }
@@ -71,20 +69,12 @@
       password.value = ''
       await load()
     } catch (err: unknown) {
-      interface AxiosLike {
-        response?: { data?: { error?: string; code?: string } }
-      }
-      const e = err as AxiosLike
-      const code = e.response?.data?.code
+      const env = asEnvelope(err)
       // Translate by code (INVALID_PUBLIC_PASSWORD / PUBLIC_LINK_LOCKED /
       // PUBLIC_LINK_EXHAUSTED) so the localized strings are actually used,
       // falling back to the server text then the generic message.
-      unlockError.value = code
-        ? t(
-            `public_share.errors.${code}`,
-            e.response?.data?.error ?? t('public_share.errors.unlock_failed'),
-          )
-        : (e.response?.data?.error ?? t('public_share.errors.unlock_failed'))
+      const fallback = env?.error ?? t('public_share.errors.unlock_failed')
+      unlockError.value = env ? t(`public_share.errors.${env.code}`, fallback) : fallback
     } finally {
       unlocking.value = false
     }

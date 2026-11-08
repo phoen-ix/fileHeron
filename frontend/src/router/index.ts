@@ -9,6 +9,7 @@ import { effectiveLandingPath } from '@/composables/useEffectiveLanding'
 import { i18n } from '@/i18n'
 import { takePostLoginRedirect } from '@/router/postLoginRedirect'
 import { useAuthStore } from '@/stores/auth'
+import { useSiteStore } from '@/stores/site'
 import type { MeResponse } from '@/types/api'
 
 declare module 'vue-router' {
@@ -786,13 +787,15 @@ router.beforeEach(async (to) => {
 // follows an in-session language switch.
 router.afterEach((to) => {
   const key = to.meta.titleKey as string | undefined
-  const brand = 'file:Heron'
+  // The instance's own name (branding), not a literal: an operator who renamed
+  // the app still saw "file:Heron" in every tab (audit 2026-11-08).
+  const brand = useSiteStore().appName || 'file:Heron'
   if (!key || key === 'home') {
     document.title = brand
     return
   }
-  const label = i18n.global.t(`page_title.${key}`)
-  document.title = label === `page_title.${key}` ? brand : `${label} · ${brand}`
+  const titleKey = `page_title.${key}`
+  document.title = i18n.global.te(titleKey) ? `${i18n.global.t(titleKey)} · ${brand}` : brand
 })
 
 export default router

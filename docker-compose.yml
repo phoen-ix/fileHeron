@@ -18,6 +18,75 @@
 # `backend/tests/infra/test_images_and_compose.py` pins every list exactly.
 # The in-app updater treats this as a compose-definition change and recreates
 # the infra services on the update that lands it.
+# The app containers' environment, shared by backend and worker (merged with
+# `<<:` below). `docker compose config` resolves it, so the updater's
+# definition check sees the same thing either way.
+x-app-environment: &app-environment
+  # Host-only secrets, blanked HERE so they do not reach this container.
+  #
+  # `env_file: .env` exists so every documented app setting arrives without
+  # having to enumerate it - but .env also holds credentials that belong to
+  # the OPERATOR's tooling, not the app: the DB *root* password (backup.sh,
+  # restore.sh, the drill) and the restic repository password. The app reads
+  # neither; it ignores them as extra keys. They were nonetheless present in
+  # the environment of the two containers that process untrusted uploads,
+  # readable by anything that gets code execution there and by anyone who
+  # can run `docker inspect` (audit 2026-07-30, docker-7).
+  #
+  # `environment:` wins over `env_file:`, so an empty value here removes
+  # them without asking operators to restructure their .env.
+  DB_ROOT_PASSWORD: ""
+  BACKUP_RESTIC_REPO: ""
+  BACKUP_RESTIC_PASSWORD: ""
+  # No `development` fallback: a .env without the key - an old hand-kept one,
+  # or a copy of the example with the line dropped - used to run a public
+  # instance with dev seeding, /docs exposed and token-bearing mail bodies
+  # in the container log. The dev/e2e/docs overrides set it explicitly.
+  ENVIRONMENT: ${ENVIRONMENT:?ENVIRONMENT is required - production, or development for a local stack}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  DB_HOST: db
+  DB_PORT: 3306
+  DB_NAME: ${DB_NAME:-fileheron}
+  DB_USER: ${DB_USER:-fileheron_app}
+  DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+  JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+  ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
+  REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
+  ARGON2_TIME_COST: ${ARGON2_TIME_COST:-3}
+  ARGON2_MEMORY_COST_KIB: ${ARGON2_MEMORY_COST_KIB:-65536}
+  ARGON2_PARALLELISM: ${ARGON2_PARALLELISM:-2}
+  ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-}
+  ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
+  TEST_ACCOUNT_EMAIL: ${TEST_ACCOUNT_EMAIL:-}
+  TEST_ACCOUNT_PASSWORD: ${TEST_ACCOUNT_PASSWORD:-}
+  TEST_ACCOUNT_DISPLAY_NAME: ${TEST_ACCOUNT_DISPLAY_NAME:-}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-noreply@fileheron.local}
+  SMTP_FROM_NAME: ${SMTP_FROM_NAME:-fileHeron}
+  APP_URL: ${APP_URL:-http://localhost:8080}
+  APP_NAME: ${APP_NAME:-fileHeron}
+  RATE_LIMIT_LOGIN: ${RATE_LIMIT_LOGIN:-10}
+  RATE_LIMIT_REGISTER: ${RATE_LIMIT_REGISTER:-3}
+  TUS_HOOK_SECRET: ${TUS_HOOK_SECRET:?TUS_HOOK_SECRET is required}
+  # Surfaced so backend can show "running on vX.Y.Z" on /admin/system
+  # (the new release_apply.get_version reads this directly).
+  FH_TAG: ${FH_TAG:?set FH_TAG in .env (vX.Y.Z or latest)}
+  MAX_DIRECT_UPLOAD_BYTES: ${MAX_DIRECT_UPLOAD_BYTES:-104857600}
+  CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
+  CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+  AV_SKIP: ${AV_SKIP:-false}
+  STORAGE_ROOT: ${STORAGE_ROOT:-/data/files}
+  TUS_UPLOAD_DIR: ${TUS_UPLOAD_DIR:-/data/uploads}
+  QUARANTINE_DIR: ${QUARANTINE_DIR:-/data/quarantine}
+  TUS_PUBLIC_BASE: ${TUS_PUBLIC_BASE:-/uploads/}
+
 services:
   db:
     image: mariadb:12.3.3@sha256:d46e102fa8b9b72bfcdeb56f9dd538742092119dc8b11f31fe662605cd234cd9
@@ -135,70 +204,7 @@ services:
       - path: .env
         required: false
     environment:
-      # Host-only secrets, blanked HERE so they do not reach this container.
-      #
-      # `env_file: .env` exists so every documented app setting arrives without
-      # having to enumerate it - but .env also holds credentials that belong to
-      # the OPERATOR's tooling, not the app: the DB *root* password (backup.sh,
-      # restore.sh, the drill) and the restic repository password. The app reads
-      # neither; it ignores them as extra keys. They were nonetheless present in
-      # the environment of the two containers that process untrusted uploads,
-      # readable by anything that gets code execution there and by anyone who
-      # can run `docker inspect` (audit 2026-07-30, docker-7).
-      #
-      # `environment:` wins over `env_file:`, so an empty value here removes
-      # them without asking operators to restructure their .env.
-      DB_ROOT_PASSWORD: ""
-      BACKUP_RESTIC_REPO: ""
-      BACKUP_RESTIC_PASSWORD: ""
-      # No `development` fallback: a .env without the key - an old hand-kept one,
-      # or a copy of the example with the line dropped - used to run a public
-      # instance with dev seeding, /docs exposed and token-bearing mail bodies
-      # in the container log. The dev/e2e/docs overrides set it explicitly.
-      ENVIRONMENT: ${ENVIRONMENT:?ENVIRONMENT is required - production, or development for a local stack}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      DB_HOST: db
-      DB_PORT: 3306
-      DB_NAME: ${DB_NAME:-fileheron}
-      DB_USER: ${DB_USER:-fileheron_app}
-      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
-      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
-      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}
-      ARGON2_TIME_COST: ${ARGON2_TIME_COST:-3}
-      ARGON2_MEMORY_COST_KIB: ${ARGON2_MEMORY_COST_KIB:-65536}
-      ARGON2_PARALLELISM: ${ARGON2_PARALLELISM:-2}
-      ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-}
-      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
-      TEST_ACCOUNT_EMAIL: ${TEST_ACCOUNT_EMAIL:-}
-      TEST_ACCOUNT_PASSWORD: ${TEST_ACCOUNT_PASSWORD:-}
-      TEST_ACCOUNT_DISPLAY_NAME: ${TEST_ACCOUNT_DISPLAY_NAME:-}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-noreply@fileheron.local}
-      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-fileHeron}
-      APP_URL: ${APP_URL:-http://localhost:8080}
-      APP_NAME: ${APP_NAME:-fileHeron}
-      RATE_LIMIT_LOGIN: ${RATE_LIMIT_LOGIN:-10}
-      RATE_LIMIT_REGISTER: ${RATE_LIMIT_REGISTER:-3}
-      TUS_HOOK_SECRET: ${TUS_HOOK_SECRET:?TUS_HOOK_SECRET is required}
-      # Surfaced so backend can show "running on vX.Y.Z" on /admin/system
-      # (the new release_apply.get_version reads this directly).
-      FH_TAG: ${FH_TAG:?set FH_TAG in .env (vX.Y.Z or latest)}
-      MAX_DIRECT_UPLOAD_BYTES: ${MAX_DIRECT_UPLOAD_BYTES:-104857600}
-      CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
-      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
-      AV_SKIP: ${AV_SKIP:-false}
-      STORAGE_ROOT: ${STORAGE_ROOT:-/data/files}
-      TUS_UPLOAD_DIR: ${TUS_UPLOAD_DIR:-/data/uploads}
-      QUARANTINE_DIR: ${QUARANTINE_DIR:-/data/quarantine}
-      TUS_PUBLIC_BASE: ${TUS_PUBLIC_BASE:-/uploads/}
+      <<: *app-environment
     volumes:
       - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/files:/data/files
       - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/uploads:/data/uploads
@@ -234,7 +240,7 @@ services:
     # reproducibility. Bump deliberately; check ClamAV release notes
     # for signature-DB format changes before moving.
     #
-    # 1.5.3 (2026-07-01) fixes six CVEs that all affect 1.5.2 and are reachable
+    # Never below 1.5.3 (2026-07-01), which fixes six CVEs that affect 1.5.2 and are reachable
     # by uploading a crafted file, since every upload and every inbound mail
     # attachment is fed to this clamd: CVE-2026-20213 (Aspack PE integer
     # overflow -> heap buffer overflow WRITE), -20214, -20215, -20216, -20217,
@@ -308,45 +314,11 @@ services:
       - path: .env
         required: false
     environment:
-      # Host-only secrets, blanked HERE so they do not reach this container.
-      #
-      # `env_file: .env` exists so every documented app setting arrives without
-      # having to enumerate it - but .env also holds credentials that belong to
-      # the OPERATOR's tooling, not the app: the DB *root* password (backup.sh,
-      # restore.sh, the drill) and the restic repository password. The app reads
-      # neither; it ignores them as extra keys. They were nonetheless present in
-      # the environment of the two containers that process untrusted uploads,
-      # readable by anything that gets code execution there and by anyone who
-      # can run `docker inspect` (audit 2026-07-30, docker-7).
-      #
-      # `environment:` wins over `env_file:`, so an empty value here removes
-      # them without asking operators to restructure their .env.
-      DB_ROOT_PASSWORD: ""
-      BACKUP_RESTIC_REPO: ""
-      BACKUP_RESTIC_PASSWORD: ""
-      # No `development` fallback: a .env without the key - an old hand-kept one,
-      # or a copy of the example with the line dropped - used to run a public
-      # instance with dev seeding, /docs exposed and token-bearing mail bodies
-      # in the container log. The dev/e2e/docs overrides set it explicitly.
-      ENVIRONMENT: ${ENVIRONMENT:?ENVIRONMENT is required - production, or development for a local stack}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      DB_HOST: db
-      DB_PORT: 3306
-      DB_NAME: ${DB_NAME:-fileheron}
-      DB_USER: ${DB_USER:-fileheron_app}
-      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      TUS_HOOK_SECRET: ${TUS_HOOK_SECRET:?TUS_HOOK_SECRET is required}
-      STORAGE_ROOT: ${STORAGE_ROOT:-/data/files}
-      TUS_UPLOAD_DIR: ${TUS_UPLOAD_DIR:-/data/uploads}
-      QUARANTINE_DIR: ${QUARANTINE_DIR:-/data/quarantine}
-      MAX_DIRECT_UPLOAD_BYTES: ${MAX_DIRECT_UPLOAD_BYTES:-104857600}
-      TUS_PUBLIC_BASE: ${TUS_PUBLIC_BASE:-/uploads/}
-      CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
-      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
-      AV_SKIP: ${AV_SKIP:-false}
+      # The backend's set, whole: the worker sends the mail and runs the crons,
+      # and a curated subset left it without the compose defaults the backend
+      # had (APP_URL, the SMTP keys) - the e2e overlay had to patch APP_URL
+      # back in (audit 2026-11-08).
+      <<: *app-environment
     volumes:
       - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/files:/data/files
       - ${COMPOSE_HOST_ROOT:-${PWD:-/opt/fileHeron}}/data/uploads:/data/uploads
@@ -488,8 +460,9 @@ services:
     # v1.0.0 architecture: tiny perpetual shim with Docker socket
     # access. Polls /state/current_job.json (written by backend on
     # admin Update click) and spawns the matching `updater-executor`
-    # container to do the real work. Designed to never need updating
-    # itself - ~50 lines of bash. Reachable only from the internal
+    # container to do the real work - after verifying that image's cosign
+    # signature and pinning it by digest, and refusing a downgrade (shim.sh;
+    # docs/engineering/self-update.md). It changes rarely. Reachable only from the internal
     # network (no Traefik, no published port). Trust to backend is
     # filesystem-membership via the shared /state bind mount.
     image: ghcr.io/phoen-ix/fileheron-updater-shim:${FH_TAG:?set FH_TAG in .env (vX.Y.Z or latest)}
@@ -518,7 +491,8 @@ services:
       UPDATER_HOST_WORKSPACE: ${UPDATER_HOST_WORKSPACE:-${PWD:-/opt/fileHeron}}
       UPDATER_HOST_STATE: ${UPDATER_HOST_STATE:-${PWD:-/opt/fileHeron}/data/updater}
       COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-fileheron}
-      GHCR_OWNER: phoen-ix
+      # A fork sets its own in .env; the shim verifies signatures against it.
+      GHCR_OWNER: ${GHCR_OWNER:-phoen-ix}
       HOME: /tmp
       # The executor image must carry a cosign signature from this repository's
       # release workflow (keyless, GitHub's OIDC issuer) or the shim refuses the

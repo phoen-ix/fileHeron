@@ -5,6 +5,7 @@
   import { getFilePreviewSettings, updateFilePreviewSettings } from '@/api/admin'
   import { useSettingsSection } from '@/composables/useSettingsSection'
   import { useAuthStore } from '@/stores/auth'
+  import SettingsSectionForm from '@/components/admin/SettingsSectionForm.vue'
 
   const { t } = useI18n()
   const auth = useAuthStore()
@@ -24,85 +25,28 @@
 </script>
 
 <template>
-  <div class="file-preview-section">
-    <p class="fh-field-help intro">{{ t('admin_file_preview.intro') }}</p>
+  <SettingsSectionForm
+    :intro="t('admin_file_preview.intro')"
+    :loading="loading"
+    :saving="saving"
+    :error-msg="errorMsg"
+    @save="onSave"
+  >
+    <label class="toggle-row">
+      <input v-model="enabled" type="checkbox" />
+      <span>
+        <span class="toggle-name">{{ t('admin_file_preview.toggle_label') }}</span>
+        <span class="toggle-help">{{ t('admin_file_preview.toggle_help') }}</span>
+      </span>
+    </label>
 
-    <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
-
-    <form v-else class="form" @submit.prevent="onSave">
-      <label class="toggle-row">
-        <input v-model="enabled" type="checkbox" />
-        <span>
-          <span class="toggle-name">{{ t('admin_file_preview.toggle_label') }}</span>
-          <span class="toggle-help">{{ t('admin_file_preview.toggle_help') }}</span>
-        </span>
-      </label>
-
-      <p class="fh-field-help types-note">{{ t('admin_file_preview.types_note') }}</p>
-
-      <div v-if="errorMsg" class="fh-notice" role="alert" data-tone="error">{{ errorMsg }}</div>
-
-      <div class="actions">
-        <button type="submit" class="fh-btn" :disabled="saving">
-          {{ saving ? t('common.loading') : t('common.save') }}
-        </button>
-      </div>
-    </form>
-  </div>
+    <p class="fh-field-help types-note">{{ t('admin_file_preview.types_note') }}</p>
+  </SettingsSectionForm>
 </template>
 
 <style scoped>
-  .file-preview-section {
-    max-width: 640px;
-  }
-
-  .intro {
-    margin: 0 0 var(--fh-space-3);
-    max-width: 64ch;
-  }
-
-  .loading {
-    color: var(--fh-subtle);
-    padding: var(--fh-space-4) 0;
-  }
-
-  .form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--fh-space-3);
-  }
-
-  .toggle-row {
-    display: flex;
-    gap: var(--fh-space-2);
-    align-items: flex-start;
-    cursor: pointer;
-    padding: var(--fh-space-3);
-    border: 1px solid var(--fh-rule);
-    border-radius: var(--fh-radius-sm);
-  }
-
-  .toggle-row > span {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .toggle-name {
-    font-weight: 500;
-  }
-
-  .toggle-help {
-    font-size: var(--fh-text-body-sm);
-    color: var(--fh-subtle);
-  }
-
   .types-note {
     margin: 0;
     max-width: 64ch;
-  }
-
-  .actions {
-    display: flex;
-    gap: var(--fh-space-3);
   }
 </style>

@@ -306,10 +306,12 @@ def test_operator_only_secrets_are_blanked_for_the_app_containers(compose, key):
     """`environment:` wins over `env_file:`, so an explicit empty value is what
     keeps these out of the containers that handle untrusted uploads."""
     # Both app services must blank it; the db service legitimately consumes
-    # DB_ROOT_PASSWORD as MYSQL_ROOT_PASSWORD.
-    assert compose.count(f'{key}: ""') >= 2, (
-        f"{key} is not blanked for backend and worker"
-    )
+    # DB_ROOT_PASSWORD as MYSQL_ROOT_PASSWORD. Read the RESOLVED mapping: since
+    # 2026-11-08 both services merge one shared `x-app-environment` block, so a
+    # text count would see the value once.
+    services = yaml.safe_load(compose)["services"]
+    for svc in ("backend", "worker"):
+        assert services[svc]["environment"].get(key) == "", f"{key} is not blanked for {svc}"
 
 
 def test_the_database_still_gets_its_root_password(compose):
@@ -436,12 +438,15 @@ def test_compose_has_no_development_fallback_for_the_environment():
     container log. Only `install.sh` flipped it, and only on a fresh .env.
     Compose must refuse instead (`:?`), the same way it refuses a missing
     `FH_TAG`, and the example must ship production (audit 2026-11-08)."""
-    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
-    lines = [ln for ln in compose.splitlines() if ln.strip().startswith("ENVIRONMENT:")]
-    assert len(lines) == 2, lines  # backend + worker
-    for ln in lines:
-        assert "${ENVIRONMENT:?" in ln, f"ENVIRONMENT has a fallback again: {ln.strip()}"
-        assert "development" not in ln.split("?")[0], ln
+    import yaml
+
+    compose_text = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    compose = yaml.safe_load(compose_text)
+    for svc in ("backend", "worker"):
+        value = compose["services"][svc]["environment"]["ENVIRONMENT"]
+        assert value.startswith("${ENVIRONMENT:?"), f"{svc}: ENVIRONMENT has a fallback again: {value}"
+    lines = [ln for ln in compose_text.splitlines() if ln.strip().startswith("ENVIRONMENT:")]
+    assert len(lines) == 1, lines  # one definition, in the shared x-app-environment anchor
     env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
     m = re.search(r"^ENVIRONMENT=(.*)$", env_example, re.M)
     assert m is not None and m.group(1).strip() == "production", (
@@ -451,3 +456,24 @@ def test_compose_has_no_development_fallback_for_the_environment():
     for override in ("docker-compose.dev.yml", "docker-compose.e2e.yml"):
         text = (ROOT / override).read_text(encoding="utf-8")
         assert text.count("ENVIRONMENT: development") == 2, override
+
+
+def test_scripts_pull_the_alpine_the_shim_is_built_on():
+    """The host scripts ran a bare `alpine` for their chown/rm helpers - the one
+    image in the repo outside every pin and Dependabot (audit 2026-11-08). They
+    now name the tag the updater-shim Dockerfile is built FROM, which
+    Dependabot does bump, and this keeps the two in lockstep."""
+    shim = (ROOT / "docker" / "updater-shim" / "Dockerfile").read_text(encoding="utf-8")
+    m = re.search(r"^FROM (alpine:\S+)", shim, re.M)
+    assert m, "the shim is no longer built FROM alpine - pick another reference"
+    pinned = m.group(1).split("@")[0]
+    sources = [ROOT / "install.sh", *(ROOT / "scripts").glob("*.sh"), *(ROOT / "scripts" / "lib").glob("*.sh")]
+    runs = [
+        (p.name, line.strip())
+        for p in sources
+        for line in p.read_text(encoding="utf-8").splitlines()
+        if "docker run" in line and re.search(r"\salpine[:\s]|\salpine$", line)
+    ]
+    assert runs, "vacuity guard: no `docker run ... alpine` found"
+    stray = [f"{name}: {line[:100]}" for name, line in runs if f" {pinned} " not in f"{line} "]
+    assert not stray, f"`docker run` of an alpine other than {pinned}: {stray}"

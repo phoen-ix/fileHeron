@@ -15,6 +15,7 @@
   import { useAuthStore } from '@/stores/auth'
   import type { SecretListItem, SecretRecipientSummary, SecretState } from '@/types/api'
   import { secretStatePill } from '@/utils/statePill'
+  import { secretAudience } from '@/utils/secretAudience'
 
   const { t } = useI18n()
   const { formatDate, formatExpiry } = useSiteDateFormat()
@@ -82,13 +83,7 @@
   }
 
   function audience(sum: SecretRecipientSummary | null | undefined): string {
-    if (!sum) return '-'
-    const parts: string[] = []
-    if (sum.users) parts.push(t('secrets.audience.users', { n: sum.users }, sum.users))
-    if (sum.groups) parts.push(t('secrets.audience.groups', { n: sum.groups }, sum.groups))
-    if (sum.emails) parts.push(t('secrets.audience.emails', { n: sum.emails }, sum.emails))
-    if (sum.link) parts.push(t('secrets.audience.link'))
-    return parts.join(' · ') || '-'
+    return secretAudience(t, sum)
   }
 
   onMounted(load)

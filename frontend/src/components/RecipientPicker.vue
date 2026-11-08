@@ -182,6 +182,7 @@
   import { searchUsers } from '@/api/users'
   import { useApiError } from '@/composables/useApiError'
   import type { GroupResponse, ShareRecipientsRequest, UserSearchItem } from '@/types/api'
+  import { EMAIL_RE } from '@/utils/email'
 
   const props = defineProps<{
     modelValue: ShareRecipientsRequest
@@ -307,7 +308,6 @@
 
   // Same shape the backend's EmailLike accepts, so an offered address is never
   // one the server then refuses as malformed.
-  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
   /** The query as an address, or null when it does not look like one. */
   const queryEmail = computed(() => {

@@ -45,10 +45,6 @@ services:
     environment:
       ENVIRONMENT: development
       AV_SKIP: "true"
-      # The base file hands the worker APP_URL only through .env, which this
-      # stack has none of: its notification and mail links pointed at the
-      # 8080 default whatever the stack's port.
-      APP_URL: ${APP_URL:-http://localhost:8080}
 
   frontend:
     build:

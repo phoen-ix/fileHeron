@@ -2,8 +2,12 @@
   import { computed, onMounted, ref } from 'vue'
   import { useI18n } from 'vue-i18n'
 
-  import api from '@/api/client'
-  import { adminListFiles, adminQuarantinePurge, adminQuarantineRelease } from '@/api/admin'
+  import {
+    adminListFiles,
+    adminQuarantineDownload,
+    adminQuarantinePurge,
+    adminQuarantineRelease,
+  } from '@/api/admin'
   import Pager from '@/components/Pager.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
@@ -13,6 +17,7 @@
   import { useUiStore } from '@/stores/ui'
   import type { AdminFileItem } from '@/types/api'
   import { formatBytes } from '@/utils/bytes'
+  import { downloadBlob } from '@/utils/downloadBlob'
 
   const { t } = useI18n()
   const { formatDate } = useSiteDateFormat()
@@ -46,17 +51,10 @@
 
   async function onDownload(file: AdminFileItem) {
     try {
-      const resp = await api.get(`/admin/files/${file.file_id}/quarantine/download`, {
-        responseType: 'blob',
-      })
-      const url = URL.createObjectURL(resp.data as Blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${file.filename}.quarantined`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      // Through api/admin.ts and utils/downloadBlob like every other admin
+      // download; this was the one view calling the axios client itself.
+      const resp = await adminQuarantineDownload(file.file_id)
+      downloadBlob(resp.data, `${file.filename}.quarantined`)
     } catch (err) {
       // axios with responseType=blob delivers the ERROR body as a Blob too, so
       // describe() cannot see the envelope. This view had its own inline

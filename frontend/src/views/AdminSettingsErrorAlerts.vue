@@ -6,6 +6,7 @@
   import TunableFields from '@/components/admin/TunableFields.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useUiStore } from '@/stores/ui'
+  import { EMAIL_RE } from '@/utils/email'
 
   const { t } = useI18n()
   const { describe } = useApiError()
@@ -30,8 +31,6 @@
   const capture4xx = ref(false)
   const codes4xxText = ref('')
   const retentionDays = ref(90)
-
-  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
   const parsedRecipients = computed<string[]>(() =>
     customRecipientsText.value

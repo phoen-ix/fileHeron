@@ -61,9 +61,11 @@
   } from '@/api/notificationSubscriptions'
   import NotificationPreferencesTable from '@/components/NotificationPreferencesTable.vue'
   import type { NotificationCategory, NotificationChannel, PreferenceItem } from '@/types/api'
+  import { asEnvelope } from '@/api/client'
+  import { useSavedFlash } from '@/composables/useSavedFlash'
 
   const route = useRoute()
-  const { t } = useI18n()
+  const { t, te } = useI18n()
 
   const token = computed(() => String(route.params.token))
 
@@ -72,7 +74,7 @@
   const loading = ref(true)
   const saving = ref(false)
   const errorCode = ref<string | null>(null)
-  const savedAt = ref<number | null>(null)
+  const { savedAt, flashSaved } = useSavedFlash()
   const saveError = ref(false)
 
   const confirmedCategory = ref<string | null>(null)
@@ -81,22 +83,11 @@
   const confirmedLabel = computed(() => {
     if (!confirmedCategory.value) return ''
     const key = `notif_bell.cat.${confirmedCategory.value}`
-    const label = t(key)
-    return label === key ? confirmedCategory.value : label
+    return te(key) ? t(key) : confirmedCategory.value
   })
 
-  interface AxiosLike {
-    response?: { data?: { code?: string } }
-  }
   function codeOf(err: unknown): string {
-    return (err as AxiosLike).response?.data?.code ?? 'generic'
-  }
-
-  function flashSaved() {
-    savedAt.value = Date.now()
-    setTimeout(() => {
-      if (savedAt.value && Date.now() - savedAt.value > 1500) savedAt.value = null
-    }, 1700)
+    return asEnvelope(err)?.code ?? 'generic'
   }
 
   async function load() {

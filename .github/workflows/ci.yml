@@ -347,10 +347,10 @@ jobs:
         run: |
           IMAGE=$(sed -n 's/^FROM \([^ ]*\) AS shellcheck$/\1/p' .github/ci-tools/Dockerfile)
           docker run --rm -v "$PWD:/mnt" -w /mnt "${IMAGE:?no shellcheck pin in .github/ci-tools/Dockerfile}" \
-            shellcheck --severity=warning install.sh scripts/*.sh scripts/ops/*.sh \
+            shellcheck --severity=warning install.sh scripts/*.sh scripts/ops/*.sh scripts/lib/*.sh \
             docker/updater-shim/shim.sh docker/backend/entrypoint.sh \
             docker/mariadb/init.sh
-      # `docker/updater-executor/run.py` is 562 lines that run as root with the
+      # `docker/updater-executor/run.py` runs as root with the
       # host docker socket AND the host workspace mounted, and it was in
       # neither ruff's nor mypy's scope: both run with working-directory
       # `backend`. It carries its own ruff.toml that `extend`s the backend
@@ -424,7 +424,8 @@ jobs:
         run: |
           docker build -q -f docker/updater-shim/Dockerfile -t ci-updater-shim .
           docker build -q -f docker/updater-executor/Dockerfile -t ci-updater-executor .
-      # nginx resolves proxy_pass upstreams at CONFIG-PARSE time, so the compose
+      # A literal proxy_pass upstream is resolved at CONFIG-PARSE time, so this
+      # step once needed --add-host stubs for the compose service names.
       # The upstreams are now named through variables, so nginx no longer
       # resolves them at config load and `nginx -t` needs no --add-host stubs.
       # (That is the point of docker-9: a literal hostname made an unresolvable
@@ -433,6 +434,7 @@ jobs:
         run: |
           docker run --rm \
             -v "$PWD/docker/frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
+            -v "$PWD/docker/frontend/snippets:/etc/nginx/snippets:ro" \
             nginx:1.31.8-alpine3.24 nginx -t
 
   # Supply-chain audit of the deps that actually ship. Python: the hash-locked

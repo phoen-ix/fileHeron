@@ -34,7 +34,11 @@
           required
         />
       </label>
-      <ExpiryPicker v-model="expiresAtLocal" :presets="TOKEN_PRESETS" :disabled="creatingBusy" />
+      <ExpiryPicker
+        v-model="expiresAtLocal"
+        :presets="TOKEN_EXPIRY_PRESETS"
+        :disabled="creatingBusy"
+      />
       <span class="fh-field-help">{{ t('api_tokens.expiry_help') }}</span>
 
       <fieldset class="scopes-field">
@@ -168,13 +172,7 @@
   import { useUiStore } from '@/stores/ui'
   import type { ApiTokenListItem, CreateApiTokenResponse } from '@/types/api'
   import { defaultTokenExpiryLocal, parseServerDate, siteLocalIsoToUtcIso } from '@/utils/datetime'
-  import { TOKEN_SCOPE_GROUPS, scopeLabelKey } from '@/utils/tokenScopes'
-
-  // Token-appropriate durations. The form opens on defaultTokenExpiryLocal() (90 days,
-  // see below); "never" is offered but has to be picked.
-  const TOKEN_PRESETS = ['7d', '30d', '90d', '1y', 'never'] as const
-
-  /** Shared with AdminApiTokens.vue so the two forms cannot drift apart. */
+  import { TOKEN_EXPIRY_PRESETS, TOKEN_SCOPE_GROUPS, scopeLabelKey } from '@/utils/tokenScopes'
 
   const { t } = useI18n()
   const { formatDate } = useSiteDateFormat()

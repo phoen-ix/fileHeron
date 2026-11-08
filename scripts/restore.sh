@@ -99,7 +99,7 @@ if [ "$MODE" = full ]; then
     # at the worst possible moment. install.sh and restore_drill_e2e.sh both already
     # do this; restore.sh was the outlier (audit 2026-07-30).
     echo "[restore] fixing ownership for the containers (UID 1000) …"
-    docker run --rm -v "$ROOT/data":/d alpine chown -R 1000:1000 /d/files /d/quarantine
+    docker run --rm -v "$ROOT/data":/d alpine:3.24.4 chown -R 1000:1000 /d/files /d/quarantine
 else
     echo "[restore] database backup: data/files and data/quarantine are left as they are"
 fi
@@ -124,9 +124,9 @@ docker compose up -d redis
 sleep 2
 REDIS_CID="$(docker compose ps -q redis)"
 docker compose stop redis
-docker run --rm -v "$ROOT/data/redis":/d alpine sh -c 'rm -rf /d/appendonlydir /d/dump.rdb'
+docker run --rm -v "$ROOT/data/redis":/d alpine:3.24.4 sh -c 'rm -rf /d/appendonlydir /d/dump.rdb'
 docker cp "$BACKUP/redis.rdb" "$REDIS_CID:/data/dump.rdb"
-docker run --rm -v "$ROOT/data/redis":/d alpine chown 999:999 /d/dump.rdb
+docker run --rm -v "$ROOT/data/redis":/d alpine:3.24.4 chown 999:999 /d/dump.rdb
 
 # The loader below holds ./data/redis. v2.13.1 hardened this whole sequence in
 # scripts/restore_drill_e2e.sh and the fixes were never brought back here - to

@@ -19,6 +19,7 @@
     SecretRequestState,
   } from '@/types/api'
   import { secretRequestPill, secretRequestStateKey } from '@/utils/statePill'
+  import { secretAudience } from '@/utils/secretAudience'
 
   const { t } = useI18n()
   const { describe } = useApiError()
@@ -42,13 +43,7 @@
   useDebouncedSearch(q, resetAndLoad)
 
   function audience(sum: SecretRecipientSummary | null | undefined): string {
-    if (!sum) return '-'
-    const parts: string[] = []
-    if (sum.users) parts.push(t('secrets.audience.users', { n: sum.users }, sum.users))
-    if (sum.groups) parts.push(t('secrets.audience.groups', { n: sum.groups }, sum.groups))
-    if (sum.emails) parts.push(t('secrets.audience.emails', { n: sum.emails }, sum.emails))
-    if (sum.link) parts.push(t('secrets.audience.link'))
-    return parts.join(' · ') || '-'
+    return secretAudience(t, sum)
   }
 
   async function onCancel(r: AdminSecretRequestListItem) {

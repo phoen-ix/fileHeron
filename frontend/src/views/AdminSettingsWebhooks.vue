@@ -18,7 +18,7 @@
   import { useUiStore } from '@/stores/ui'
   import type { WebhookDeliveryItem, WebhookItem } from '@/types/api'
 
-  const { t } = useI18n()
+  const { t, te } = useI18n()
   const { describe } = useApiError()
   const ui = useUiStore()
 
@@ -86,21 +86,35 @@
     }
   }
 
+  // One action per webhook (and per delivery) at a time: a double click sent
+  // two test deliveries, or toggled a webhook off and straight back on
+  // (audit 2026-11-08).
+  const busyHook = ref<number | null>(null)
+  const busyDelivery = ref<number | null>(null)
+
   async function onToggleActive(w: WebhookItem) {
+    if (busyHook.value !== null) return
+    busyHook.value = w.id
     try {
       await updateWebhook(w.id, { active: !w.active })
       w.active = !w.active
     } catch (err) {
       ui.pushToast(describe(err), 'error')
+    } finally {
+      busyHook.value = null
     }
   }
 
   async function onTest(w: WebhookItem) {
+    if (busyHook.value !== null) return
+    busyHook.value = w.id
     try {
       await testWebhook(w.id)
       ui.pushToast(t('admin_webhooks.test_queued'), 'success')
     } catch (err) {
       ui.pushToast(describe(err), 'error')
+    } finally {
+      busyHook.value = null
     }
   }
 
@@ -140,11 +154,15 @@
   }
 
   async function onRetry(d: WebhookDeliveryItem) {
+    if (busyDelivery.value !== null) return
+    busyDelivery.value = d.id
     try {
       await retryWebhookDelivery(d.id)
       ui.pushToast(t('admin_webhooks.retry_queued'), 'success')
     } catch (err) {
       ui.pushToast(describe(err), 'error')
+    } finally {
+      busyDelivery.value = null
     }
   }
 
@@ -165,8 +183,7 @@
   // backend adds before it's translated (vue-i18n returns the key path on miss).
   function eventLabel(e: string): string {
     const key = `admin_webhooks.event.${e.replace(/\./g, '_')}`
-    const label = t(key)
-    return label === key ? e : label
+    return te(key) ? t(key) : e
   }
 
   onMounted(load)
@@ -252,13 +269,23 @@
             </span>
           </div>
           <div class="hook-actions">
-            <button type="button" class="fh-btn-text" @click="onTest(w)">
+            <button
+              type="button"
+              class="fh-btn-text"
+              :disabled="busyHook === w.id"
+              @click="onTest(w)"
+            >
               {{ t('admin_webhooks.test') }}
             </button>
             <button type="button" class="fh-btn-text" @click="toggleDeliveries(w)">
               {{ t('admin_webhooks.deliveries') }}
             </button>
-            <button type="button" class="fh-btn-text" @click="onToggleActive(w)">
+            <button
+              type="button"
+              class="fh-btn-text"
+              :disabled="busyHook === w.id"
+              @click="onToggleActive(w)"
+            >
               {{ w.active ? t('admin_webhooks.disable') : t('admin_webhooks.enable') }}
             </button>
             <button type="button" class="fh-btn-text danger" @click="onDelete(w)">
@@ -298,7 +325,12 @@
                   <td class="num fh-mono">{{ d.response_code ?? '-' }}</td>
                   <td class="num fh-mono">{{ d.attempts }}</td>
                   <td class="num">
-                    <button type="button" class="fh-btn-text" @click="onRetry(d)">
+                    <button
+                      type="button"
+                      class="fh-btn-text"
+                      :disabled="busyDelivery === d.id"
+                      @click="onRetry(d)"
+                    >
                       {{ t('admin_webhooks.retry') }}
                     </button>
                   </td>

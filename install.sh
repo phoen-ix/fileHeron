@@ -263,7 +263,7 @@ chmod 600 .env
 #  requiring `sudo` in the installer itself.)
 echo "[install] ensuring data bind-mount dirs are writable by the app (UID 1000)"
 for d in updater uploads quarantine files; do mkdir -p "data/$d"; done
-docker run --rm -v "$(pwd)/data:/data" alpine \
+docker run --rm -v "$(pwd)/data:/data" alpine:3.24.4 \
     chown -R 1000:1000 /data/updater /data/uploads /data/quarantine /data/files >/dev/null
 
 # ---- pull + up -d ----------------------------------------------------

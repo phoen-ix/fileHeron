@@ -52,7 +52,16 @@ def _strip_comments(text: str) -> str:
 
 @pytest.fixture(scope="module")
 def conf() -> str:
-    return _strip_comments(CONF.read_text(encoding="utf-8"))
+    """The config as nginx sees it: each `include /etc/nginx/snippets/<f>;` is
+    replaced by that snippet's text (docker/frontend/snippets/, copied there by
+    the frontend Dockerfile), so every check below reads what is in force."""
+    text = CONF.read_text(encoding="utf-8")
+
+    def _inline(m: re.Match) -> str:
+        return (CONF.parent / "snippets" / m.group(1)).read_text(encoding="utf-8")
+
+    text = re.sub(r"include /etc/nginx/snippets/([\w.-]+);", _inline, text)
+    return _strip_comments(text)
 
 
 def _location_blocks(text: str) -> dict[str, str]:

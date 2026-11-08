@@ -446,8 +446,9 @@ request), and lets a Rollback return only to the version that was running before
 the last update - it records that itself in `data/updater-private/`, a
 root-owned directory the app containers never see (the first Rollback after
 v2.29.0 has no record yet and is allowed with a warning). **If you publish your
-own images** (a fork), set `SHIM_REQUIRE_SIGNATURE=false` in `.env` - you are
-then trusting your registry account alone - or sign them the same way and set
+own images** (a fork), set `GHCR_OWNER` in `.env` to your registry owner and either `SHIM_REQUIRE_SIGNATURE=false` - you are
+then trusting your registry account alone - or sign them the same way (the default
+identity already follows `GHCR_OWNER`) and set
 `SHIM_SIGNER_IDENTITY_RE` to your workflow's identity if you renamed the
 repository. The database, Redis, ClamAV and tusd images are pinned by digest in
 `docker-compose.yml`, so a rebuild on Docker Hub arrives as a Dependabot pull

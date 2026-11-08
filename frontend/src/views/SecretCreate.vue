@@ -20,6 +20,7 @@
   import { useUiStore } from '@/stores/ui'
   import type { SecretRecipientsRequest, SecretResponse, SecretViewScope } from '@/types/api'
   import { siteLocalIsoToEpochMs, siteLocalIsoToUtcIso } from '@/utils/datetime'
+  import { DEFAULT_SECRET_LIMITS } from '@/utils/secretLimits'
 
   const router = useRouter()
   const auth = useAuthStore()
@@ -34,16 +35,7 @@
   const isClient = computed(() => auth.user?.role === 'client')
   const isAdmin = computed(() => auth.user?.role === 'admin')
   const canExternal = computed(() => auth.user?.can_send_secrets_external === true)
-  const limits = computed(
-    () =>
-      auth.user?.secret_limits ?? {
-        max_views: 100,
-        max_expiry_days: 90,
-        max_lifetime_days: 90,
-        passphrase_failure_mode: 'lock',
-        passphrase_max_failures: 10,
-      },
-  )
+  const limits = computed(() => auth.user?.secret_limits ?? DEFAULT_SECRET_LIMITS)
   const adminBurns = computed(() => limits.value.passphrase_failure_mode === 'burn')
 
   const content = ref('')

@@ -913,6 +913,11 @@ export function adminQuarantineRelease(fileId: string, payload: QuarantineAction
   return api.post<void>(`/admin/files/${fileId}/quarantine/release`, payload)
 }
 
+/** The quarantined bytes, for analysis. A Blob: the caller saves it. */
+export function adminQuarantineDownload(fileId: string) {
+  return api.get<Blob>(`/admin/files/${fileId}/quarantine/download`, { responseType: 'blob' })
+}
+
 export function adminQuarantinePurge(fileId: string) {
   return api.delete<void>(`/admin/files/${fileId}/quarantine`)
 }

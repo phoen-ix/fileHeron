@@ -3,10 +3,10 @@
   import { useI18n } from 'vue-i18n'
 
   import { getEmailSettings, testEmailSend, updateEmailSettings } from '@/api/admin'
-  import { asEnvelope } from '@/api/client'
   import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
   import StepUpDialog from '@/components/StepUpDialog.vue'
   import { useApiError } from '@/composables/useApiError'
+  import { useTestStepUp } from '@/composables/useTestStepUp'
   import { useUiStore } from '@/stores/ui'
   import type {
     EmailSettingsResponse,
@@ -26,13 +26,16 @@
   const current = ref<EmailSettingsResponse | null>(null)
   const testResult = ref<TestEmailResponse | null>(null)
   const testTo = ref('')
-  // Revealed only when the backend asks for it: testing a server other than
-  // the saved one while relying on the stored mail password.
-  // The step-up password, asked in a dialog once the server refuses the test.
-  // Kept until a test passes, so retrying a failing server does not ask again.
-  const confirmPassword = ref('')
-  const stepUpOpen = ref(false)
-  const stepUpError = ref<string | null>(null)
+  // The step-up dialog for a test against a server other than the saved one
+  // (see useTestStepUp). `onTest` is a hoisted function declaration below.
+  const {
+    stepUpOpen,
+    stepUpError,
+    onStepUpConfirm,
+    confirmField,
+    onTestAnswered,
+    handledTestError,
+  } = useTestStepUp(onTest)
   // Most MTAs require SMTP AUTH. We block save/test on blank credentials
   // unless the admin explicitly opts into an anonymous (no-auth) relay.
   const allowAnonymous = ref(false)
@@ -151,11 +154,6 @@
     }
   }
 
-  function onStepUpConfirm(password: string) {
-    confirmPassword.value = password
-    void onTest()
-  }
-
   async function onTest() {
     if (authBlocked.value) {
       testResult.value = {
@@ -183,35 +181,12 @@
       const { data } = await testEmailSend({
         to: testTo.value,
         override: buildPayload(),
-        ...(confirmPassword.value ? { confirm_password: confirmPassword.value } : {}),
+        ...confirmField(),
       })
       testResult.value = data
-      // Only clear on success. A test that reached the server but failed there
-      // (`ok: false` - a wrong SMTP password, an unreachable host) comes back as
-      // a 200, and clearing here made the admin retype the step-up password to
-      // try again. A wrong step-up password is a thrown INVALID_PASSWORD below.
-      if (data.ok) {
-        confirmPassword.value = ''
-      }
-      stepUpOpen.value = false
+      onTestAnswered(data.ok)
     } catch (err) {
-      // Testing a server other than the saved one, while relying on the stored
-      // password, is the only case that can send that password somewhere new. The
-      // backend refuses it until the admin re-authenticates; ask in the dialog.
-      if (asEnvelope(err)?.code === 'STEP_UP_REQUIRED') {
-        confirmPassword.value = ''
-        stepUpError.value = null
-        stepUpOpen.value = true
-        testResult.value = null
-        return
-      }
-      // The dialog is open, so this answers the password it just sent (a wrong
-      // one, or the step-up rate limit): show it there.
-      if (stepUpOpen.value) {
-        confirmPassword.value = ''
-        stepUpError.value = describe(err)
-        return
-      }
+      if (handledTestError(err)) return
       testResult.value = {
         ok: false,
         error_class: 'RequestError',

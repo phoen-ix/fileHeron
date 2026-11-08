@@ -20,6 +20,7 @@
   import { useUiStore } from '@/stores/ui'
   import { getPreferences, updatePreferences } from '@/api/notifications'
   import type { NotificationCategory, NotificationChannel, PreferenceItem } from '@/types/api'
+  import { useSavedFlash } from '@/composables/useSavedFlash'
 
   const { t } = useI18n()
   const ui = useUiStore()
@@ -28,7 +29,7 @@
   const items = ref<PreferenceItem[]>([])
   const loading = ref(true)
   const saving = ref(false)
-  const savedAt = ref<number | null>(null)
+  const { savedAt, flashSaved } = useSavedFlash()
 
   async function load() {
     loading.value = true
@@ -58,10 +59,7 @@
       >)
       // Reflect the saved value locally (the table is now controlled via props).
       if (row) row.channel = channel
-      savedAt.value = Date.now()
-      setTimeout(() => {
-        if (savedAt.value && Date.now() - savedAt.value > 1500) savedAt.value = null
-      }, 1700)
+      flashSaved()
     } catch (err) {
       if (row && previous !== undefined) row.channel = previous
       ui.pushToast(describe(err), 'error')

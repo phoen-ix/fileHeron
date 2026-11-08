@@ -26,22 +26,10 @@ ARTIFACTS="$(cd "$ARTIFACTS" && pwd)"
 PORT_BASE="${PORT_BASE:-24300}"
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-fileheron_e2e}"
 
-case "${COMPOSE_PROJECT_NAME,,}" in
-  *_e2e | *_docs) ;;
-  *)
-    echo "e2e: refusing the project name '$COMPOSE_PROJECT_NAME' (must end in _e2e or _docs)" >&2
-    exit 1 ;;
-esac
-if [ -e .env ]; then
-  echo "e2e: this checkout has a .env (a local instance?); run from a clean clone" >&2
-  exit 1
-fi
-if [ -n "$(find data -mindepth 2 ! -name .gitkeep -print -quit 2>/dev/null)" ]; then
-  echo "e2e: data/ holds files (a local stack?) - refusing to start on top of it" >&2
-  exit 1
-fi
+# shellcheck source=lib/throwaway-stack.sh
+. "$ROOT/scripts/lib/throwaway-stack.sh"
+throwaway_stack_guards e2e
 
-unset COMPOSE_HOST_ROOT
 export APP_FRONTEND_PORT="$PORT_BASE" APP_BACKEND_PORT="$((PORT_BASE + 3))"
 # The stand-in OIDC provider's sign-in form (e2e/oidc/idp.py).
 export E2E_IDP_PORT="$((PORT_BASE + 4))"
@@ -62,19 +50,8 @@ export E2E_IMAGE_TAG="${COMPOSE_PROJECT_NAME,,}"
 compose() {
   docker compose -f docker-compose.yml -f docker-compose.e2e.yml "$@"
 }
-teardown() {
-  rc=$?
-  [ "$rc" = 0 ] || compose logs --tail=300 >"$ARTIFACTS/stack.log" 2>&1 || true
-  compose down -v --remove-orphans --rmi local || true
-  docker run --rm -v "$ROOT/data":/d alpine sh -c \
-    'for x in db redis files uploads quarantine updater; do [ -d /d/$x ] && find /d/$x -mindepth 1 ! -name .gitkeep -exec rm -rf {} +; done; chown -R 1000:1000 /d' || true
-  exit "$rc"
-}
-trap teardown EXIT
-
-mkdir -p data/files data/uploads data/quarantine data/updater
-# The containers write as UID 1000.
-docker run --rm -v "$ROOT/data":/d alpine chown -R 1000:1000 /d/files /d/uploads /d/quarantine /d/updater
+trap throwaway_teardown EXIT
+throwaway_prepare_data
 # No clamav (AV_SKIP) and no updater-shim - unless E2E_FULL_STACK=1 (CI): this
 # stack is the one place the capability policy (cap_drop ALL + a measured
 # cap_add per service, docker-compose.yml) is exercised, so CI runs them too.

@@ -139,7 +139,10 @@ describe('ManageNotifications', () => {
   })
 
   it('shows the invalid-link state on a bad token', async () => {
-    fetchSubscriptions.mockRejectedValueOnce({ response: { data: { code: 'MANAGE_TOKEN_EXPIRED' } } })
+    fetchSubscriptions.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { data: { code: 'MANAGE_TOKEN_EXPIRED', error: 'expired' } },
+    })
     const w = makeWrapper()
     await flushPromises()
     expect(w.text()).toContain('no longer valid')

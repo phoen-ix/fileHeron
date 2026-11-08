@@ -100,6 +100,8 @@ def harness(tmp_path: Path):
     (tree / "scripts").mkdir(parents=True)
     for name in ("deploy.sh", "rollback.sh"):
         shutil.copy(_SCRIPTS / name, tree / "scripts" / name)
+    # Both source their shared definitions and health wait from here.
+    shutil.copytree(_SCRIPTS / "lib", tree / "scripts" / "lib")
     log = tmp_path / "log"
 
     def run(script: str, *args: str, **env: str):
@@ -362,24 +364,21 @@ def test_a_published_tag_missing_only_its_first_image_refuses(harness) -> None:
     assert "compose up -d" not in log, f"rolled a mixed-version stack:\n{log}"
 
 
-def test_both_scripts_agree_on_the_service_list(harness) -> None:
-    """The de-duplication only helps if the two scripts still match each other.
-
-    The five-versus-four bug came from two hand-written lists drifting. Each
-    script now derives its images from its OWN SERVICES array, so a drift
-    between the two scripts would reintroduce exactly the same class of defect
-    one level up.
-    """
+def test_both_scripts_take_the_service_list_from_one_place(harness) -> None:
+    """The five-versus-four bug came from two hand-written lists drifting, then
+    the fix left one SERVICES array in each script, which could drift the same
+    way one level up. Since 2026-11-08 there is ONE, in scripts/lib/
+    release-common.sh, and both scripts source it - so neither may define its
+    own again."""
     import re
 
-    def services(path):
-        m = re.search(r"^SERVICES=\(([^)]*)\)", (_SCRIPTS / path).read_text(), re.M)
-        assert m, f"no SERVICES array in {path}"
-        return tuple(m.group(1).split())
-
-    d, r = services("deploy.sh"), services("rollback.sh")
-    assert d == r, f"deploy.sh {d} != rollback.sh {r}"
-    assert d == _SERVICES, (
-        f"this test file's own _SERVICES {_SERVICES} has drifted from the scripts {d} - "
-        "it is a third copy of the same list and must track them"
+    for path in ("deploy.sh", "rollback.sh"):
+        text = (_SCRIPTS / path).read_text()
+        assert not re.search(r"^SERVICES=\(", text, re.M), f"{path} defines its own SERVICES again"
+        assert '. "$SCRIPT_DIR/lib/release-common.sh"' in text, f"{path} no longer sources the shared list"
+    m = re.search(r"^SERVICES=\(([^)]*)\)", (_SCRIPTS / "lib" / "release-common.sh").read_text(), re.M)
+    assert m, "no SERVICES array in scripts/lib/release-common.sh"
+    assert tuple(m.group(1).split()) == _SERVICES, (
+        f"this test file's own _SERVICES {_SERVICES} has drifted from the scripts {m.group(1)} - "
+        "it is a second copy of the same list and must track it"
     )

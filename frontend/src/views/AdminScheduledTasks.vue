@@ -80,12 +80,17 @@
     }
   }
 
+  let reloadTimer: ReturnType<typeof setTimeout> | null = null
+
   async function onRun(it: CronScheduleItem) {
     runningName.value = it.name
     try {
       await runCron(it.name)
       ui.pushToast(t('admin_scheduled_tasks.run_queued', { name: it.name }), 'success')
-      setTimeout(() => void load(), 1500)
+      if (reloadTimer) clearTimeout(reloadTimer)
+      // The same timer the stream uses, so unmount clears it (it outlived the
+      // page before, audit 2026-11-08).
+      reloadTimer = setTimeout(() => void load(), 1500)
     } catch (err) {
       ui.pushToast(describe(err), 'warn')
     } finally {
@@ -100,7 +105,6 @@
     return ''
   }
 
-  let reloadTimer: ReturnType<typeof setTimeout> | null = null
   const sse = useSSE({
     async url() {
       const { data } = await getStreamToken()

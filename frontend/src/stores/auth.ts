@@ -138,12 +138,19 @@ export const useAuthStore = defineStore('auth', () => {
     return me
   }
 
-  async function login(email: string, password: string, totpCode?: string) {
-    const resp = await authApi.login({ email, password, totp_code: totpCode })
-    setAccessToken(resp.data.access_token)
+  /** Every sign-in ends the same way: take the access token, load `/me`,
+   *  switch the UI to the user's language. Six paths spelled it out
+   *  (audit 2026-11-08). */
+  async function adoptSession(accessToken: string): Promise<MeResponse> {
+    setAccessToken(accessToken)
     const me = await getMe()
     user.value = me.data
     return applyUserLocale(me.data)
+  }
+
+  async function login(email: string, password: string, totpCode?: string) {
+    const resp = await authApi.login({ email, password, totp_code: totpCode })
+    return adoptSession(resp.data.access_token)
   }
 
   async function loginWithRecovery(email: string, password: string, recoveryCode: string) {
@@ -152,10 +159,7 @@ export const useAuthStore = defineStore('auth', () => {
       password,
       recovery_code: recoveryCode,
     })
-    setAccessToken(resp.data.access_token)
-    const me = await getMe()
-    user.value = me.data
-    return applyUserLocale(me.data)
+    return adoptSession(resp.data.access_token)
   }
 
   /** Finish a login whose FIRST factor was SSO or a passkey.
@@ -173,10 +177,7 @@ export const useAuthStore = defineStore('auth', () => {
       totp_code: factor.totpCode,
       recovery_code: factor.recoveryCode,
     })
-    setAccessToken(resp.data.access_token)
-    const me = await getMe()
-    user.value = me.data
-    return applyUserLocale(me.data)
+    return adoptSession(resp.data.access_token)
   }
 
   /** Passkey-as-second-factor login. Validates email + password,
@@ -206,10 +207,7 @@ export const useAuthStore = defineStore('auth', () => {
       // answering 200 with HTML. Refuse rather than adopt an empty token.
       throw new Error('passkey login returned no session')
     }
-    setAccessToken(resp.data.access_token)
-    const me = await getMe()
-    user.value = me.data
-    return { status: 'ok', me: applyUserLocale(me.data) }
+    return { status: 'ok', me: await adoptSession(resp.data.access_token) }
   }
 
   /** Sign in with a passkey alone (v2.27.0, while an admin has it on): no
@@ -252,10 +250,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function adoptPasskeySession(data: { access_token?: unknown } | null | undefined) {
     const token = data?.access_token
     if (typeof token !== 'string' || !token) throw new Error('passkey sign-in returned no session')
-    setAccessToken(token)
-    const me = await getMe()
-    user.value = me.data
-    return applyUserLocale(me.data)
+    return adoptSession(token)
   }
 
   async function registerFromInvite(payload: {
@@ -265,10 +260,7 @@ export const useAuthStore = defineStore('auth', () => {
     locale: Locale
   }) {
     const resp = await authApi.registerFromInvite(payload)
-    setAccessToken(resp.data.access_token)
-    const me = await getMe()
-    user.value = me.data
-    return applyUserLocale(me.data)
+    return adoptSession(resp.data.access_token)
   }
 
   /** Returns true when the server-side session was actually revoked. */

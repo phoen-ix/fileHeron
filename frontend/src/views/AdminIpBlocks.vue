@@ -299,9 +299,11 @@
     busyId.value = row.id
     try {
       const { data } = await allowIpBlock(row.id)
+      // The route answers with the updated allowlist; reading it back again
+      // was a second request for the same list (audit 2026-11-08).
       allowEntries.value = data.allowlist
       ui.pushToast(t('admin_ip_blocks.allowed_toast', { subject: row.subject }), 'success')
-      await Promise.all([load(), loadAllowlist(), loadWatchlist()])
+      await Promise.all([load(), loadWatchlist()])
     } catch (err) {
       ui.pushToast(describe(err), 'error')
     } finally {

@@ -61,14 +61,13 @@
     change: [category: NotificationCategory, channel: NotificationChannel]
   }>()
 
-  const { t } = useI18n()
+  const { t, te } = useI18n()
 
   const channels: NotificationChannel[] = ['off', 'email', 'in_app', 'both']
 
   function catLabel(category: NotificationCategory): string {
     const key = `notif_bell.cat.${category}`
-    const label = t(key)
-    return label === key ? category : label
+    return te(key) ? t(key) : category
   }
 
   function onChange(category: NotificationCategory, channel: NotificationChannel) {

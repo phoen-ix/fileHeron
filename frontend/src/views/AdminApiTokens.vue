@@ -20,7 +20,7 @@
   import { useCopyToClipboard } from '@/composables/useCopyToClipboard'
   import { useUiStore } from '@/stores/ui'
   import { defaultTokenExpiryLocal, siteLocalIsoToUtcIso } from '@/utils/datetime'
-  import { TOKEN_SCOPE_GROUPS, scopeLabelKey } from '@/utils/tokenScopes'
+  import { TOKEN_EXPIRY_PRESETS, TOKEN_SCOPE_GROUPS, scopeLabelKey } from '@/utils/tokenScopes'
   import type {
     AdminApiTokenItem,
     CreateApiTokenResponse,
@@ -113,8 +113,6 @@
   const selectedScopes = ref<string[]>([])
   const creating = ref(false)
   const createError = ref<string | null>(null)
-  const TOKEN_PRESETS = ['7d', '30d', '90d', '1y', 'never'] as const
-
   function scopeLabel(scope: string): string {
     return t(scopeLabelKey(scope))
   }
@@ -195,13 +193,7 @@
       })
       stepUpOpen.value = false
       plaintextResult.value = data
-      showCreateForm.value = false
-      userQuery.value = ''
-      selectedUser.value = null
-      newName.value = ''
-      tokenExpiresAt.value = defaultTokenExpiryLocal()
-      scopeMode.value = 'limited'
-      selectedScopes.value = []
+      resetCreateForm()
       await load()
     } catch (err) {
       stepUpError.value = describe(err)
@@ -277,7 +269,7 @@
         />
       </label>
 
-      <ExpiryPicker v-model="tokenExpiresAt" :presets="TOKEN_PRESETS" :disabled="creating" />
+      <ExpiryPicker v-model="tokenExpiresAt" :presets="TOKEN_EXPIRY_PRESETS" :disabled="creating" />
       <span class="fh-field-help">{{ t('api_tokens.expiry_help') }}</span>
 
       <fieldset class="scopes-field">

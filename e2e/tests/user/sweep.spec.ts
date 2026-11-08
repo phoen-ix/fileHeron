@@ -13,7 +13,7 @@ import {
   watch,
   type Persona,
 } from './lib'
-import { apiFetch } from '../../helpers'
+import { apiFetch, appName } from '../../helpers'
 
 /* Breadth: every route outside /admin, as every role. Each visit lands where
  * the router sends that role, shows a level-1 heading and a titled tab, and
@@ -152,7 +152,8 @@ for (const who of WHO) {
           await expect(page).toHaveURL((u) => u.pathname === target.split('#')[0])
         }
         await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible()
-        await expect(page).toHaveTitle(/file:Heron$/)
+        const brand = (await appName()).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        await expect(page).toHaveTitle(new RegExp(`${brand}$`))
         await expect(page.getByText('Loading…', { exact: true })).toHaveCount(0)
       })
     }

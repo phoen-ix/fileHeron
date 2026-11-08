@@ -43,6 +43,14 @@ export async function apiLogin(email: string, password: string): Promise<string>
   return (await r.json()).access_token as string
 }
 
+/** The brand the instance reports (`branding.app_name`, else env `APP_NAME`).
+ * Every tab title ends in it, and the e2e stack runs on the env default. */
+export async function appName(): Promise<string> {
+  const r = await fetch(`${BASE}/api/config-public`)
+  if (!r.ok) throw new Error(`[e2e] config-public failed: ${r.status}`)
+  return (await r.json()).app_name as string
+}
+
 /** Authenticated JSON request against the API with a bearer token. */
 export async function apiFetch(
   token: string,

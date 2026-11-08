@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 
-import { apiFetch, tokenFromStdout } from '../helpers'
+import { apiFetch, appName, tokenFromStdout } from '../helpers'
 import {
   ADMIN_EMAIL,
   ADMIN_PASSWORD,
@@ -215,7 +215,7 @@ async function signIn(page: Page, email: string, password: string): Promise<void
 const ADMIN_HEIGHT = 640
 const ADMIN_CROP = { within: '.admin-content' }
 
-const title = (page: Page, t: string) => expect(page).toHaveTitle(`${t} · file:Heron`)
+const title = async (page: Page, t: string) => expect(page).toHaveTitle(`${t} · ${await appName()}`)
 
 /** The lowest y at or above `limit` that cuts through no line of text, control
  * or table row inside `selector`, plus a little of the gap below it - so a

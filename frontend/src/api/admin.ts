@@ -274,9 +274,10 @@ export interface CronRunDTO {
 export interface LiveChecks {
   /** Server time the probes ran (naive UTC ISO) - for "checked <time>". */
   checked_at: string | null
-  db: { status: string; error: string | null }
-  redis: { status: string; error: string | null }
-  av: { status: string; error: string | null }
+  /** `error_type` is the failed probe's exception class; the message is in the server log. */
+  db: { status: string; error_type: string | null }
+  redis: { status: string; error_type: string | null }
+  av: { status: string; error_type: string | null }
 }
 
 export interface SystemStatusResponse {

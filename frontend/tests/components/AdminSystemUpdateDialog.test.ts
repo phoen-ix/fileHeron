@@ -20,9 +20,9 @@ const getTransferActivity = vi.fn()
 const systemStatus = {
   live: {
     checked_at: null,
-    db: { status: 'ok', error: null },
-    redis: { status: 'ok', error: null },
-    av: { status: 'ok', error: null },
+    db: { status: 'ok', error_type: null },
+    redis: { status: 'ok', error_type: null },
+    av: { status: 'ok', error_type: null },
   },
   crons: [],
   recent_failures: [],

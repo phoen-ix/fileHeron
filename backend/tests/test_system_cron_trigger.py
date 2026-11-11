@@ -2,9 +2,12 @@
 
 - POST /system/crons/{job}/run enqueues a known cron (allowlisted),
   audits cron_run_triggered, and is admin-only.
-- GET /system/live returns the liveness probes with a checked_at stamp.
+- GET /system/live returns the liveness probes with a checked_at stamp; a
+  failed probe answers its exception class only, the message goes to the log.
 """
 from __future__ import annotations
+
+import logging
 
 import pytest
 
@@ -75,3 +78,38 @@ async def test_live_endpoint_has_checked_at_and_probes(client, db, make_user, lo
     for probe in ("db", "redis", "av"):
         assert probe in live
         assert "status" in live[probe]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_probe_answers_its_class_and_logs_the_message(
+    client, db, make_user, login_as, monkeypatch, caplog
+):
+    _admin, headers = await _admin_headers(make_user, db, login_as)
+    detail = "connect to redis-internal.example:6379 refused"
+
+    class _DeadRedis:
+        def ping(self):
+            raise ConnectionError(detail)
+
+    def _av_ping():
+        raise TimeoutError(detail)
+
+    from app.config import settings
+    from app.routers.admin import system
+    from app.services import av_scan
+
+    monkeypatch.setattr(system, "get_redis", lambda: _DeadRedis())
+    monkeypatch.setattr(settings, "AV_SKIP", False)
+    monkeypatch.setattr(av_scan, "ping", _av_ping)
+
+    for path in ("/api/admin/system/live", "/api/admin/system/status"):
+        caplog.clear()
+        with caplog.at_level(logging.WARNING, logger="fileheron.admin.system"):
+            r = await client.get(path, headers=headers)
+        assert r.status_code == 200, r.text
+        live = r.json()["live"]
+        assert live["redis"] == {"status": "down", "error_type": "ConnectionError"}
+        assert live["av"] == {"status": "down", "error_type": "TimeoutError"}
+        assert detail not in r.text
+        logged = [rec for rec in caplog.records if rec.name == "fileheron.admin.system"]
+        assert [str(rec.exc_info[1]) for rec in logged] == [detail, detail]

@@ -18,7 +18,8 @@ from .common import APIBaseModel
 
 class ProbeResult(APIBaseModel):
     status: str
-    error: str | None = None
+    # The failed probe's exception class name only; the message is logged.
+    error_type: str | None = None
 
 
 class LiveChecks(APIBaseModel):

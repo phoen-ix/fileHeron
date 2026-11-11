@@ -444,7 +444,7 @@ def _invalidate_at_transaction_end(session: Session) -> None:
     _drop_cache(session)
 
 
-def _decode(key: str, value: str, is_encrypted: bool, *, where: str) -> str | None:
+def _decode(value: str, is_encrypted: bool, *, where: str) -> str | None:
     if not is_encrypted:
         return value
     try:
@@ -452,8 +452,9 @@ def _decode(key: str, value: str, is_encrypted: bool, *, where: str) -> str | No
     except Exception:
         # Decryption failure (e.g. JWT_SECRET was rotated without
         # re-encrypting). Treat as missing rather than crashing -
-        # the env fallback will kick in.
-        logger.warning("settings.%s: decryption failed for key=%s", where, key)
+        # the env fallback will kick in. The key stays out of the log: it
+        # names a secret (CodeQL py/clear-text-logging-sensitive-data).
+        logger.warning("settings.%s: a stored setting failed to decrypt", where)
         return None
 
 
@@ -463,11 +464,11 @@ def get(db: Session, key: str) -> str | None:
     cache = _cached(db)
     if cache is not None:
         hit = cache.get(key)
-        return None if hit is None else _decode(key, hit[0], hit[1], where="get")
+        return None if hit is None else _decode(hit[0], hit[1], where="get")
     row = db.query(AppSetting).filter(AppSetting.key == key).one_or_none()
     if row is None:
         return None
-    return _decode(key, row.value, row.is_encrypted, where="get")
+    return _decode(row.value, row.is_encrypted, where="get")
 
 
 def set_value(
@@ -543,7 +544,7 @@ def get_many(db: Session, *, prefix: str) -> dict[str, str]:
         ]
     out: dict[str, str] = {}
     for key, value, is_encrypted in pairs:
-        decoded = _decode(key, value, is_encrypted, where="get_many")
+        decoded = _decode(value, is_encrypted, where="get_many")
         if decoded is not None:
             out[key] = decoded
     return out

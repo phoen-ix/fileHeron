@@ -25,8 +25,6 @@ _LITERAL_CLIP = re.compile(r"\[:[0-9]+\]|\[-[0-9]+:\]")
 _KNOWN_NON_COLUMN_CLIPS: set[tuple[str, str]] = {
     ('routers/admin/imap.py', '"attachments": filenames[:20],'),
     ('routers/admin/settings/branding.py', 'content_type = _sniff_image_type(content[:16])'),
-    ('routers/admin/system.py', 'out["av"] = {"status": "down", "error": str(e)[:200]}'),
-    ('routers/admin/system.py', 'out["redis"] = {"status": "down", "error": str(e)[:200]}'),
     ('routers/files.py', 'f"share-{share.id[:8]}",'),
     ('routers/oidc_connect.py', 'return f"…{sub[-4:]}"'),
     ('routers/public.py', 'f"share-{share.id[:8]}",'),

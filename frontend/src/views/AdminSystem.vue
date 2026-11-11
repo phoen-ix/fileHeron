@@ -649,21 +649,25 @@
           <dt>{{ t('admin_system.live.db') }}</dt>
           <dd>
             <span :class="statusClass(status.live.db.status)">{{ status.live.db.status }}</span>
-            <span v-if="status.live.db.error" class="error-line">{{ status.live.db.error }}</span>
+            <span v-if="status.live.db.error_type" class="error-line">{{
+              status.live.db.error_type
+            }}</span>
           </dd>
           <dt>{{ t('admin_system.live.redis') }}</dt>
           <dd>
             <span :class="statusClass(status.live.redis.status)">{{
               status.live.redis.status
             }}</span>
-            <span v-if="status.live.redis.error" class="error-line">{{
-              status.live.redis.error
+            <span v-if="status.live.redis.error_type" class="error-line">{{
+              status.live.redis.error_type
             }}</span>
           </dd>
           <dt>{{ t('admin_system.live.av') }}</dt>
           <dd>
             <span :class="statusClass(status.live.av.status)">{{ status.live.av.status }}</span>
-            <span v-if="status.live.av.error" class="error-line">{{ status.live.av.error }}</span>
+            <span v-if="status.live.av.error_type" class="error-line">{{
+              status.live.av.error_type
+            }}</span>
           </dd>
         </dl>
       </section>

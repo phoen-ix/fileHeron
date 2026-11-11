@@ -15,6 +15,7 @@ Read-only. No mutating endpoints - the cron_tracker writes the rows.
 """
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Header, Query, Request
@@ -44,6 +45,8 @@ from ...schemas.system import (
 from ...services import admin_alerts, cron_schedule, cron_tracker
 from ...utils.timeutil import utc_now
 
+logger = logging.getLogger("fileheron.admin.system")
+
 router = APIRouter()
 
 # The SSE stream lives on its own router because it CANNOT sit behind the
@@ -63,29 +66,32 @@ _KNOWN_CRONS = list(cron_schedule.REGISTRY)
 
 def _live_checks() -> dict:
     """Mirror /api/health's probes - DB, Redis, AV. Probes run fresh on every
-    call; `checked_at` records when, so the UI can show 'checked <time>'."""
+    call; `checked_at` records when, so the UI can show 'checked <time>'.
+
+    A failed probe answers only the exception's class name; its message (a
+    host, a port, a path) goes to the server log (CodeQL
+    py/stack-trace-exposure, owner decision 2026-11-11)."""
     out: dict = {"checked_at": utc_now().isoformat()}
 
     # DB - if we got this far the request session worked, so just label OK.
-    out["db"] = {"status": "ok", "error": None}
+    out["db"] = {"status": "ok", "error_type": None}
 
     try:
         get_redis().ping()
-        out["redis"] = {"status": "ok", "error": None}
+        out["redis"] = {"status": "ok", "error_type": None}
     except Exception as e:
-        out["redis"] = {"status": "down", "error": str(e)[:200]}
+        logger.warning("live check: redis ping failed", exc_info=True)
+        out["redis"] = {"status": "down", "error_type": type(e).__name__}
 
     if getattr(settings, "AV_SKIP", False):
-        out["av"] = {"status": "skipped", "error": None}
+        out["av"] = {"status": "skipped", "error_type": None}
     else:
         try:
             from ...services import av_scan
-            if av_scan.ping():
-                out["av"] = {"status": "ok", "error": None}
-            else:
-                out["av"] = {"status": "down", "error": "ping returned false"}
+            out["av"] = {"status": "ok" if av_scan.ping() else "down", "error_type": None}
         except Exception as e:
-            out["av"] = {"status": "down", "error": str(e)[:200]}
+            logger.warning("live check: clamav ping failed", exc_info=True)
+            out["av"] = {"status": "down", "error_type": type(e).__name__}
 
     return out
 

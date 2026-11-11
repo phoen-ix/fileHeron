@@ -2,6 +2,8 @@
 audit-row shape on settings_changed."""
 from __future__ import annotations
 
+import logging
+
 from app.models.app_setting import AppSetting
 from app.models.audit_log import AuditEventType, AuditLog
 from app.models.user import UserRole
@@ -152,9 +154,10 @@ def test_audit_settings_change_records_sorted_keys(make_user, db):
     assert rows[0].extra["keys"] == ["smtp.host", "smtp.port"]
 
 
-def test_decryption_failure_returns_none(make_user, db):
+def test_decryption_failure_returns_none(make_user, db, caplog):
     """If JWT_SECRET rotates and an encrypted row can't be decrypted, get()
-    falls back to None rather than crashing - env fallback then wins."""
+    falls back to None rather than crashing - env fallback then wins. The
+    warning it logs does not name the key: that names a secret."""
     admin = make_user(email="admin@test.local", role=UserRole.admin)
     settings_svc.set_value(
         db, key=settings_svc.Keys.SMTP_PASSWORD, value="real-secret", actor=admin
@@ -169,4 +172,7 @@ def test_decryption_failure_returns_none(make_user, db):
     row.value = "not-a-fernet-token"
     db.commit()
 
-    assert settings_svc.get(db, settings_svc.Keys.SMTP_PASSWORD) is None
+    with caplog.at_level(logging.WARNING, logger="fileheron.settings"):
+        assert settings_svc.get(db, settings_svc.Keys.SMTP_PASSWORD) is None
+    (record,) = [r for r in caplog.records if r.name == "fileheron.settings"]
+    assert record.getMessage() == "settings.get: a stored setting failed to decrypt"

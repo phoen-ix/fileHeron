@@ -213,6 +213,12 @@ def test_the_tus_path_stays_uncapped(conf):
     assert "client_max_body_size 0;" in _location_blocks(conf)["/uploads/"]
 
 
+def test_the_version_banner_is_off(conf):
+    """`server: nginx/<version>` on every response tells a scanner which CVEs to
+    try (host audit 2026-11-14)."""
+    assert re.search(r"^\s*server_tokens\s+off;", conf, re.M)
+
+
 # --- fe-xss-5 / fe-auth-10 --------------------------------------------------
 
 

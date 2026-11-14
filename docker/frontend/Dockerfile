@@ -42,6 +42,10 @@ LABEL org.opencontainers.image.version="${FH_VERSION}" \
 
 COPY docker/frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY docker/frontend/snippets/ /etc/nginx/snippets/
+# Rendered into conf.d at container start by the image's envsubst step (CSP mode). The
+# default keeps the variable defined, so the template never reaches nginx unrendered.
+ENV FH_CSP_ENFORCE=false
+COPY docker/frontend/templates/ /etc/nginx/templates/
 COPY --from=build /build/dist /usr/share/nginx/html
 
 EXPOSE 80

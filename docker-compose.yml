@@ -433,6 +433,12 @@ services:
       - SETUID
     mem_limit: ${FRONTEND_MEM_LIMIT:-256m}
     cpus: ${FRONTEND_CPUS:-0.5}
+    environment:
+      # "true" enforces the SPA's Content-Security-Policy; anything else only reports
+      # violations to the admin error log (docker/frontend/nginx.conf). Report-only by
+      # default: on the S3 storage backend previews redirect to a presigned bucket URL
+      # the policy does not allow.
+      FH_CSP_ENFORCE: ${CSP_ENFORCE:-false}
     ports:
       - "127.0.0.1:${APP_FRONTEND_PORT:-8080}:80"
     networks: [internal]

@@ -1,0 +1,13 @@
+# Whether the Content-Security-Policy of docker/frontend/nginx.conf is enforced or only
+# reported. The nginx image renders this file at container start (envsubst over
+# /etc/nginx/templates) into /etc/nginx/conf.d/fh-csp-mode.conf, which the http block
+# includes next to default.conf; docker-compose.yml sets FH_CSP_ENFORCE from CSP_ENFORCE
+# in .env.
+#
+# Anything but "true" or "1" - an unset variable, a typo - keeps the policy report-only:
+# a wrongly enforced policy is a blank SPA.
+map "${FH_CSP_ENFORCE}" $fh_csp_enforce {
+    default 0;
+    "true"  1;
+    "1"     1;
+}

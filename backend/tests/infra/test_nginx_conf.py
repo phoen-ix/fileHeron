@@ -226,11 +226,38 @@ def test_a_csp_is_shipped(conf):
     assert "Content-Security-Policy" in conf
 
 
-def test_the_csp_is_report_only_for_now(conf):
-    """Enforcing is a separate, deliberate release step: a wrong policy is a
-    blank SPA, which reads as a total outage."""
-    assert "Content-Security-Policy-Report-Only" in conf
-    assert re.search(r"add_header\s+Content-Security-Policy\s", conf) is None
+def test_the_csp_goes_out_under_exactly_one_header_name(conf):
+    """Enforcing or report-only, chosen by the operator (CSP_ENFORCE): each
+    add_header carries its own mapped variable, and nginx sends no header for
+    an empty value. A literal `$fh_csp` on either line would send both."""
+    enforced = re.findall(r"add_header\s+Content-Security-Policy\s+(\S+)\s+always;", conf)
+    reported = re.findall(r"add_header\s+Content-Security-Policy-Report-Only\s+(\S+)\s+always;", conf)
+    assert enforced and set(enforced) == {"$fh_csp_enforced"}
+    assert reported and set(reported) == {"$fh_csp_reported"}
+    assert len(enforced) == len(reported)
+    assert re.search(r"map\s+\$fh_csp_enforce\s+\$fh_csp_enforced\s*\{\s*default\s+\"\";\s*1\s+\$fh_csp;\s*\}", conf)
+    assert re.search(r"map\s+\$fh_csp_enforce\s+\$fh_csp_reported\s*\{\s*default\s+\$fh_csp;\s*1\s+\"\";\s*\}", conf)
+
+
+def test_the_csp_is_report_only_unless_the_operator_says_true():
+    """A wrongly enforced policy is a blank SPA, which reads as a total outage,
+    and on the S3 backend the shipped policy does block previews. So the
+    default, an unset variable and a typo all mean report-only."""
+    root = CONF.parent
+    template = _strip_comments((root / "templates" / "fh-csp-mode.conf.template").read_text(encoding="utf-8"))
+    body = re.search(r"map\s+\"\$\{FH_CSP_ENFORCE\}\"\s+\$fh_csp_enforce\s*\{([^}]*)\}", template)
+    assert body, "the template no longer maps FH_CSP_ENFORCE to $fh_csp_enforce"
+    entries = dict(re.findall(r"(\S+)\s+(\S+);", body.group(1)))
+    assert entries.pop("default") == "0"
+    assert entries == {'"true"': "1", '"1"': "1"}
+
+    dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
+    assert "COPY docker/frontend/templates/ /etc/nginx/templates/" in dockerfile
+    # Defined in the image, so envsubst always renders the template.
+    assert re.search(r"^ENV FH_CSP_ENFORCE=false$", dockerfile, re.M)
+
+    compose = (root.parent.parent / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "FH_CSP_ENFORCE: ${CSP_ENFORCE:-false}" in compose
 
 
 def test_the_policy_has_somewhere_to_report_to(conf):

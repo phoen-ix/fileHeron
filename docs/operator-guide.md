@@ -127,6 +127,14 @@ write `.env` by hand, confirm each of these before going live:
   is disabled) and `TUS_HOOK_ALLOWED_IPS` to restrict the internal hook surface.
 - **Backups + drills** - enable the nightly backup timer + weekly restore drill
   (see [Backups](#backups)).
+- **`CSP_ENFORCE=true`** (local storage) - the SPA's Content-Security-Policy is only
+  *reported* by default: a violation lands in **Admin → Error log** with source `csp`
+  and nothing is blocked. Once that log has stayed free of `csp` rows over normal use,
+  set `CSP_ENFORCE=true` in `.env` and recreate the frontend
+  (`docker compose up -d frontend`); `curl -sI https://<host>/` then shows
+  `content-security-policy` instead of `content-security-policy-report-only`. Leave it
+  off on the S3 storage backend: previews and downloads there redirect to a presigned
+  bucket URL, which the policy does not allow.
 
 The runtime applies `no-new-privileges` to every container and drops **all Linux
 capabilities** from each, adding back only what the image's root phase needs to

@@ -7,7 +7,14 @@ summary and points here. Read this before changing the code listed below.
 
 ## Current state
 
-Backend **`v2.30.0`** is the newest tag (2026-11-08): the round-2 audit - disabling 2FA and
+Backend **`v2.30.1`** is the newest tag (2026-11-15): `CSP_ENFORCE` in `.env` switches the
+SPA's Content-Security-Policy from report-only (still the default: the S3 backend's presigned
+redirects are outside the policy) to enforcing - `templates/fh-csp-mode.conf.template` is
+rendered by the nginx image at start and two maps send the one policy under exactly one header
+name; nginx sends no version (`server_tokens off`); dnspython 2.9.2 and opentelemetry-api
+1.45.2 in the lock (CVE-2026-128089, CVE-2026-126360); CI's `nginx -t` renders the template
+for both modes. A patch: automatic updates install it. No migration, no host step, no default
+move; no client tag. **`v2.30.0`** (2026-11-08): the round-2 audit - disabling 2FA and
 regenerating recovery codes go through `step_up` (403, throttled over both secrets), removing a
 passkey is step-up gated, right-to-erasure clears `audit_log.ip` on the subject's own rows, a
 request Session reads the settings table once, `admin_alerts.notify_admins` is pinned by an AST
@@ -208,6 +215,7 @@ record.
 | v2.29.3 | - | - (a patch: automatic updates install it; no infra change) | - (mail: EHLO defaults to the From domain; a placeholder From is refused at send time) |
 | v2.29.4 | - | `.env` must carry `FH_TAG` - compose has no `latest` default from this tag on; the in-app updater and `install.sh` write the line, a hand-kept `.env` without it makes `docker compose` refuse until `FH_TAG=v2.29.4` (or `latest`) is added (otherwise a patch: automatic updates install it; no infra change) | - (the 2026-11-07 audit: tracked crons report swallowed failures through `cron_tracker.mark_failed`, session re-mints are not recorded as logins, one account gate / cookie policy / IP helper / admin fan-out; a Scheduled-tasks row may turn red where a failure was hidden. Desktop `client-v1.6.2` beside it: housekeeping only) |
 | v2.30.0 | - | `.env` must carry `ENVIRONMENT` - compose has no `development` default from this tag on (`${ENVIRONMENT:?}`); `install.sh` and `.env.example` set `production`, a hand-kept `.env` without the line makes `docker compose` refuse until `ENVIRONMENT=production` is added. Minor, so patch-only automatic updates do not install it. backend + worker share one `x-app-environment` block, so the worker gains the backend's compose defaults; `GHCR_OWNER` is read from `.env` for the shim | - (the 2026-11-08 round-2 audit: 2FA disable/regenerate through `step_up` (403, throttled over both secrets), passkey delete step-up gated, erasure clears `audit_log.ip` on actor rows, request-scoped settings cache, `admin_alerts.notify_admins` pinned by an AST test, TRY400/LOG004/RUF100/PLW2901 enabled; desktop client 1.6.3) |
+| v2.30.1 | - | - (a patch: automatic updates install it; `CSP_ENFORCE=true` in `.env` is optional and needs `docker compose up -d frontend`) | - (the SPA's CSP can be enforced; nginx sends no version; dnspython 2.9.2, opentelemetry-api 1.45.2) |
 
 Per-release admin-facing notes for v2.13.0 and newer are in `RELEASE_NOTES.md`,
 one `# file:Heron vX.Y.Z` section each, newest first; older releases live in

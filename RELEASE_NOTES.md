@@ -1,3 +1,33 @@
+# file:Heron v2.30.1
+
+**The web app's Content-Security-Policy can now be enforced.** Until now the
+policy was only *reported*: a violation went to **Admin → Error log** (source
+`csp`) and nothing was blocked. An operator can now enforce it with
+`CSP_ENFORCE=true` in `.env` (operator guide, "Production hardening
+checklist"), once that log has stayed free of `csp` entries. It stays
+report-only by default: on the S3 storage backend previews and downloads
+redirect to a presigned bucket URL, which the policy does not allow.
+
+**Fixes.**
+
+- The web server no longer announces its nginx version in the `Server` header
+  and on error pages.
+- A stored setting that cannot be decrypted is logged without the setting's
+  name, and a failed Redis or ClamAV check on **Admin → System** shows only the
+  kind of error; the full message goes to the server log.
+
+**Dependencies.** dnspython 2.9.2 and opentelemetry-api 1.45.2 (two
+denial-of-service advisories, CVE-2026-128089 and CVE-2026-126360), and the
+weekly minor and patch updates of the web app's libraries.
+
+## On this update
+
+- A patch release: automatic updates install it. No migration, no default
+  change.
+- New and optional: `CSP_ENFORCE` in `.env` (default `false`). The frontend
+  container reads it when it starts, so after changing it run
+  `docker compose up -d frontend`.
+
 # file:Heron v2.30.0
 
 **Turning off two-factor sign-in now takes your password through the same

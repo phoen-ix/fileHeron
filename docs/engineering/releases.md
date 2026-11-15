@@ -142,8 +142,11 @@ audit on three anyio CVEs; tags are immutable, so the same commits shipped as
 v2.17.1 plus the anyio bump). **v2.17.1 shipped a sidebar showing nothing but
 "Overview"** (a `v-if` on the Overview link captured the categories' `v-else`;
 no test mounted AdminLayout); v2.17.2 is that one-line fix plus
-`tests/components/AdminLayout.test.ts`. **The reference host runs v2.29.0**
-(a manual Update from v2.28.0, 2026-10-30 22:55 UTC: the new executor verified
+`tests/components/AdminLayout.test.ts`. **The reference host runs v2.30.1**
+(`scripts/deploy.sh` on 2026-11-15, after the nightly backup unit run by hand; `CSP_ENFORCE=true`
+there, so its SPA policy is enforced: no `csp` row in its error log from 2026-08-16 to
+2026-11-14). Its move to v2.29.0 was
+a manual Update from v2.28.0 (2026-10-30 22:55 UTC: the new executor verified
 every image's signature and recreated db, redis and clamav onto the digest pins;
 tusd kept its old container, without the capability drop, because the checkout
 was already at the tag, so the definition check compared the file with itself -

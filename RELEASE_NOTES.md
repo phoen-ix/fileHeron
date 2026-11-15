@@ -1,3 +1,14 @@
+# file:Heron v2.30.2
+
+**A maintenance release: nothing changes in how file:Heron behaves.** The
+rich-text editor's library prosemirror-model moves to 1.25.13 (was 1.25.12),
+and the web app is built with Node.js 26.13.1 (was 26.13.0).
+
+## On this update
+
+- A patch release: automatic updates install it. No migration, no default
+  change, nothing to do on the host.
+
 # file:Heron v2.30.1
 
 **The web app's Content-Security-Policy can now be enforced.** Until now the

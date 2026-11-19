@@ -1,3 +1,19 @@
+# Desktop client 1.6.4
+
+**Security fixes.**
+
+Requires server **v2.6.1 or newer** (unchanged).
+
+---
+
+- **Open** on a public link now opens only a web address (`https://` or
+  `http://`). The address comes from the server, and on Windows the browser
+  call it used would also have run a file path or a network-share path.
+- **Save all** also renames files called like the console devices
+  `CONIN$` / `CONOUT$`, and names with spaces before the extension such as
+  `NUL .log`, which Windows would otherwise treat as devices rather than files.
+- Released beside server v2.31.0.
+
 # Desktop client 1.6.3
 
 **Bug fixes.**

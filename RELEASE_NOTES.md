@@ -1,3 +1,50 @@
+# file:Heron v2.31.0
+
+**Security fixes from an audit, and one change for staff who sign in with
+single sign-on.**
+
+**Change: staff link single sign-on from their account page.** An admin or
+employee who has never signed in through SSO is no longer linked automatically
+because the identity provider reports their email address; the sign-in page now
+says to sign in with the password once and connect SSO under **Account**.
+Accounts already linked, and client accounts, are unchanged. (Admins were
+already handled this way; employees can read every client's uploads, so a
+provider whose email claim can be influenced must not be able to take one over.)
+
+**Fixes.**
+
+- **Sign out other sessions** keeps your own session as it was. It used to
+  start a new one, which restarted the 30-day session limit, and it could hand
+  a new session to someone holding only a short-lived access token.
+- Typing a wrong current password when changing your password or email now
+  counts towards the same per-person limit as the other password prompts, and
+  each miss is in the audit log (`step_up_failed`).
+- Download and preview links from the web app stop working as soon as you
+  **Sign out everywhere**, reset or change your password. A link opened before
+  this update needs one more click.
+- API tokens keep working while an account's password sign-in is temporarily
+  locked after wrong passwords - that lock could be set by anyone who knew the
+  address. Disabling the account still stops its tokens.
+- The in-app updater refuses an update job that was changed after the updater
+  checked it, and a **Rollback** now runs the current release's updater rather
+  than the older one it returns to.
+- Entering your password for a passkey, a backup import or a mail test no
+  longer freezes the server for everyone else for a moment; neither does
+  setting a new password.
+- A rate-limit counter can no longer end up blocking an address for good after
+  a brief Redis outage.
+
+## On this update
+
+- A minor release: automatic updates set to **patches only** do not install
+  it; install it from **Admin → System** or wait for an automatic update that
+  allows minor versions. No migration, nothing to do on the host.
+- Tell staff who use SSO but never signed in with it yet: they sign in with
+  their password once and connect SSO under **Account**. Someone whose account
+  an admin activated directly (**Activate** on an invite) has no password yet
+  and uses **Forgot password** first.
+- Desktop client **1.6.4** is released beside it.
+
 # file:Heron v2.30.2
 
 **A maintenance release: nothing changes in how file:Heron behaves.** The

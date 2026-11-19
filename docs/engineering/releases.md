@@ -7,7 +7,17 @@ summary and points here. Read this before changing the code listed below.
 
 ## Current state
 
-Backend **`v2.30.2`** is the newest tag (2026-11-15): prosemirror-model 1.25.13 (Dependabot
+Backend **`v2.31.0`** is the newest tag (2026-11-19): the round-3 audit - sign-out-others
+continues the caller's session instead of minting one from a bare access token, the updater
+executor acts on the job the shim validated and enforces the shim's downgrade/rollback rules
+itself (a rollback runs the RUNNING release's executor), change password/email spend the
+per-user step-up window, `?dt=` URLs honour the revocation mark, no Argon2id on the event loop,
+the tus hook answers only its literal path, rate-limit windows self-repair their TTL; owner
+decisions: staff (admin + employee) never auto-link SSO by email (`OIDC_LINK_FROM_ACCOUNT`) and
+API tokens ignore the password-login lock. Minor because of the SSO change, so patch-only
+automatic updates do not install it. No migration, no host step. Desktop **`client-v1.6.4`**
+beside it: only http(s) URLs reach the browser, `CONIN$`/`CONOUT$`/`NUL .log` are device
+names. **`v2.30.2`** (2026-11-15): prosemirror-model 1.25.13 (Dependabot
 #80) and node 26.13.1 for the frontend's build stage. A patch: automatic updates install it. No
 migration, no host step, no default move; no client tag. **`v2.30.1`** (same day):
 `CSP_ENFORCE` in `.env` switches the

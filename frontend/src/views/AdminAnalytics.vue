@@ -234,8 +234,8 @@
               <tbody>
                 <tr v-for="u in data.top_uploaders" :key="u.user_id">
                   <td>
-                    <span class="cell-name">{{ u.display_name }}</span
-                    ><span class="cell-sub fh-mono">{{ u.email }}</span>
+                    <span class="cell-name">{{ u.display_name }}</span>
+                    <span class="cell-sub fh-mono">{{ u.email }}</span>
                   </td>
                   <td class="num fh-mono">{{ formatBytes(u.bytes) }}</td>
                 </tr>
@@ -259,8 +259,8 @@
               <tbody>
                 <tr v-for="s in data.top_shares" :key="s.share_id">
                   <td>
-                    <span class="cell-name">{{ s.subject || t('admin_analytics.untitled') }}</span
-                    ><span class="cell-sub fh-mono">{{ s.share_id.slice(0, 8) }}</span>
+                    <span class="cell-name">{{ s.subject || t('admin_analytics.untitled') }}</span>
+                    <span class="cell-sub fh-mono">{{ s.share_id.slice(0, 8) }}</span>
                   </td>
                   <td class="num fh-mono">{{ s.downloads }}</td>
                 </tr>
@@ -287,8 +287,8 @@
             <tbody>
               <tr v-for="q in data.quota_warnings" :key="q.user_id">
                 <td>
-                  <span class="cell-name">{{ q.display_name }}</span
-                  ><span class="cell-sub fh-mono">{{ q.email }}</span>
+                  <span class="cell-name">{{ q.display_name }}</span>
+                  <span class="cell-sub fh-mono">{{ q.email }}</span>
                 </td>
                 <td class="num fh-mono warn">
                   {{ q.pct }}% · {{ formatBytes(q.used_bytes) }} / {{ formatBytes(q.quota_bytes) }}

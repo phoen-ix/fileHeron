@@ -216,8 +216,9 @@
                   }}</span>
                   <span v-else class="muted">-</span>
                   <span class="counts fh-mono">
-                    <span class="ok">{{ it.last_24h.success }}</span
-                    >/<span class="bad">{{ it.last_24h.failure }}</span>
+                    <span class="ok">{{ it.last_24h.success }}</span>
+                    <span>/</span>
+                    <span class="bad">{{ it.last_24h.failure }}</span>
                   </span>
                   <span v-if="it.last_run_at" class="last fh-mono">{{
                     formatDate(it.last_run_at)
@@ -361,6 +362,10 @@
     white-space: nowrap;
   }
   .counts {
+    /* inline-flex: the whitespace between "ok", "/" and "bad" in the markup
+       renders as nothing, so the counter reads "5/2" and the template carries
+       no `</span\n>` joins - which prettier 3.9 and 3.10 format differently. */
+    display: inline-flex;
     margin-left: var(--fh-space-2);
     font-size: var(--fh-text-mono-sm);
   }

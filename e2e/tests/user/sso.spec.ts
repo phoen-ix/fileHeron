@@ -5,8 +5,9 @@ import { admin, expect, newUser, ok, signIn, test, uid } from './lib'
 
 /* Single sign-on against the stand-in OIDC provider the e2e stack runs
  * (e2e/oidc/idp.py): the sign-in button and the round trip, the first SSO
- * sign-in linking the account with the same verified email, an identity with
- * no account, the second-factor page an enrolled account stops at, and
+ * sign-in linking a client account with the same verified email, a staff
+ * account told to connect from its account page instead, an identity with no
+ * account, the second-factor page an enrolled account stops at, and
  * connecting and disconnecting SSO from the account page. */
 
 let provider = { id: '', name: '' }
@@ -71,6 +72,17 @@ test('the first SSO sign-in links the account with that verified email', async (
   await signedIn(page)
 })
 
+// Staff accounts never link on an anonymous callback (audit 2026-11-19): an IdP
+// email claim can be influenced, and an employee reads every client's uploads.
+test('a staff account is told to connect SSO from its account page', async ({ page }) => {
+  const p = await newUser('employee', 'ssostaff')
+  await ssoSignIn(page, p.email)
+  await expect(page).toHaveURL(/\/login/)
+  await expect(page.getByRole('alert')).toHaveText(
+    'Staff accounts connect single sign-on once from Account settings: sign in with your password, then connect it there.',
+  )
+})
+
 test('an identity with no account is sent back with the reason', async ({ page }) => {
   await ssoSignIn(page, `stranger-${uid()}@e2e.example`)
   await expect(page).toHaveURL(/\/login/)
@@ -80,7 +92,7 @@ test('an identity with no account is sent back with the reason', async ({ page }
 })
 
 test('an account with two-factor stops at the second-factor page after SSO', async ({ page }) => {
-  const p = await newUser('employee', 'sso2fa')
+  const p = await newUser('client', 'sso2fa')
   const secret = await enroll2FA(p.email, p.password)
   await ssoSignIn(page, p.email)
   await expect(page).toHaveURL(/\/login\/2fa$/)

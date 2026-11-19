@@ -101,7 +101,8 @@ Role gate on the admin console for non-admins: `user/sweep.spec.ts › client �
 | B9 | Passkey sign-in on its own (autofill and button); passkey step after a password | client | `passkey-signin.spec.ts › a passkey signs in on its own, and finishes a password sign-in` | ✅ |
 | B10 | SSO button → IdP → signed in; first sign-in links the verified email | client | `user/sso.spec.ts › the first SSO sign-in links the account with that verified email` | ✅ |
 | B11 | SSO identity with no account: sent back with the reason | guest | `user/sso.spec.ts › an identity with no account is sent back with the reason` | ✅ |
-| B12 | Second-factor page after SSO (wrong code, right code) | employee | `user/sso.spec.ts › an account with two-factor stops at the second-factor page after SSO` | ✅ |
+| B12 | Second-factor page after SSO (wrong code, right code) | client | `user/sso.spec.ts › an account with two-factor stops at the second-factor page after SSO` | ✅ |
+| B12a | A staff account's first SSO sign-in is refused with "connect from Account settings" (no auto-link for admins or employees) | employee | `user/sso.spec.ts › a staff account is told to connect SSO from its account page` | ✅ |
 | B13 | Second-factor page: recovery code / passkey variants, expired pending token | employee | ❌ (c) `frontend/tests/components/LoginSecondFactor.test.ts` ("can switch to a recovery code", "offers both when the account has both", "sends the user back to login when the pending token has expired"), `backend/tests/test_second_factor_after_sso_and_passkey.py` | ❌ |
 | B14 | Connect / disconnect SSO from the account page | client | `user/sso.spec.ts › SSO is connected and disconnected from the account page` | ✅ |
 

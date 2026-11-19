@@ -59,6 +59,9 @@ case "$(printf '%s' "${SHIM_REQUIRE_SIGNATURE:-true}" | tr '[:upper:]' '[:lower:
 esac
 SIGNER_IDENTITY_RE="${SHIM_SIGNER_IDENTITY_RE:-^https://github\\.com/${GHCR_OWNER}/fileHeron/\\.github/workflows/server-release\\.yml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+\$}"
 OIDC_ISSUER="https://token.actions.githubusercontent.com"
+# server-release.yml signs every image from this release on; older ones carry
+# no signature (see the rollback escape hatch in the poll loop).
+FIRST_SIGNED_RELEASE="v2.29.0"
 VERIFY_OUT="${TMPDIR:-/tmp}/cosign-verify.out"
 VERIFY_LOG="${TMPDIR:-/tmp}/cosign-verify.err"
 EXECUTOR_MEM_LIMIT="${UPDATER_EXECUTOR_MEM_LIMIT:-512m}"
@@ -325,12 +328,31 @@ while true; do
                     || log "WARN could not record the claim in $PRIVATE_DIR"
             fi
 
-            executor_image="ghcr.io/$GHCR_OWNER/fileheron-updater-executor:$target_tag"
+            # The NEWER of the two releases' executors runs the job: the target's
+            # for an update, the RUNNING release's for a rollback. A rollback
+            # used to run the target's - an older executor that predates the
+            # hand-over check below, so the backend could rewrite the job file
+            # while this shim blocked on cosign and turn the rollback into an
+            # unchecked downgrade (audit 2026-11-19). The running release's
+            # executor knows how to restore its predecessor: it is the one
+            # whose auto-rollback does exactly that after a failed update. Run
+            # by hand if it is broken: scripts/rollback.sh. Unknown running
+            # version (dev build): the target's, as before.
+            # A target older than image signing keeps its OWN executor: the
+            # newer one would refuse its unsigned app images, and the bound
+            # escape hatch below exists for exactly that case.
+            executor_tag="$target_tag"
+            if [ "$action" = "rollback" ] && [ -n "$running" ] && version_lt "$target_tag" "$running" \
+               && ! version_lt "$target_tag" "$FIRST_SIGNED_RELEASE"; then
+                executor_tag="$running"
+            fi
+            executor_image="ghcr.io/$GHCR_OWNER/fileheron-updater-executor:$executor_tag"
 
             # Verify the signature first and pull + run BY THE VERIFIED DIGEST,
             # so what runs is what was verified even if the tag moves in between.
             # A rollback to a release that predates signing is allowed unsigned
-            # only when its target is the one the shim recorded itself.
+            # only when its target is the one the shim recorded itself and its
+            # own executor runs it.
             if [ "$REQUIRE_SIGNATURE" != "true" ]; then
                 log "WARN image signature verification is off (SHIM_REQUIRE_SIGNATURE=$REQUIRE_SIGNATURE); running $executor_image by tag"
             else
@@ -339,7 +361,7 @@ while true; do
                 if verify_image "$executor_image"; then
                     executor_image="ghcr.io/$GHCR_OWNER/fileheron-updater-executor@$VERIFIED_DIGEST"
                     log "verified: $executor_image"
-                elif [ "$action" = "rollback" ] && [ "$bound" = 1 ]; then
+                elif [ "$action" = "rollback" ] && [ "$bound" = 1 ] && [ "$executor_tag" = "$target_tag" ]; then
                     log "WARN $target_tag predates image signing; rolling back to it unsigned because it is the version the shim recorded"
                 else
                     fail_job "no valid signature on $executor_image - it must be signed by the release workflow (SHIM_REQUIRE_SIGNATURE=false disables this check); nothing was changed"
@@ -360,7 +382,7 @@ while true; do
 
             # Spawn the executor. The shim BLOCKS on this - only one
             # job runs at a time, no concurrent updates.
-            log "spawning executor for $target_tag"
+            log "spawning the $executor_tag executor for $action to $target_tag"
             container_name="${COMPOSE_PROJECT}-executor-$(date +%s)"
             exit_code=0
             # COMPOSE_HOST_ROOT is the critical bit: compose substitutes
@@ -378,6 +400,13 @@ while true; do
             # (CHOWN) and to run git as that owner (SETUID, SETGID); no new
             # privileges, a pids ceiling and a memory limit. Defence in depth
             # against a bug in the executor, not a boundary.
+            #
+            # EXECUTOR_JOB_ID / _TARGET_TAG / _ACTION hand over the job exactly
+            # as validated above. The executor re-reads /state, which the
+            # backend can rewrite while this shim blocks on cosign and the pull:
+            # a swapped tag or action then ran an unchecked downgrade or an
+            # unbound rollback (audit 2026-11-19). It refuses a job file that
+            # no longer says what these say.
             heartbeat "$STUCK_THRESHOLD_SEC"
             docker run --rm \
                 --name "$container_name" \
@@ -398,6 +427,9 @@ while true; do
                 -e "GHCR_OWNER=$GHCR_OWNER" \
                 -e "EXECUTOR_REQUIRE_SIGNATURE=$REQUIRE_SIGNATURE" \
                 -e "EXECUTOR_SIGNER_IDENTITY_RE=$SIGNER_IDENTITY_RE" \
+                -e "EXECUTOR_JOB_ID=$job_id" \
+                -e "EXECUTOR_TARGET_TAG=$target_tag" \
+                -e "EXECUTOR_ACTION=$action" \
                 "$executor_image" &
             wait $! || exit_code=$?
 

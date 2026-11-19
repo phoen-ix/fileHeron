@@ -110,7 +110,7 @@ def _create_user_from_invite(
     db: Session,
     *,
     invite: InviteToken,
-    password: str,
+    password_hash: str,
     display_name: str,
     locale: Locale,
     via: str,
@@ -139,7 +139,9 @@ def _create_user_from_invite(
 
     user = User(
         email=invite.email,
-        password_hash=argon2_hash(password),
+        # Hashed by the caller: `register_from_invite` is an `async def`, and
+        # a 64 MiB Argon2id hash here ran on the event loop.
+        password_hash=password_hash,
         display_name=display_name,
         role=invite.target_role,
         locale=locale,
@@ -244,7 +246,7 @@ async def register_from_invite(
     return _create_user_from_invite(
         db,
         invite=invite,
-        password=password,
+        password_hash=await ahash(password),
         display_name=display_name,
         locale=locale,
         via="self_register",
@@ -455,6 +457,12 @@ async def _after_second_factor_failure(
 # still spend one verify (audit 2026-07-30).
 async def averify(hash_str: str, plaintext: str) -> bool:
     return await asyncio.to_thread(argon2_verify, hash_str, plaintext)
+
+
+async def ahash(plaintext: str) -> str:
+    """`argon2_hash` off the event loop - the same cost as a verify, and every
+    `async def` that sets a password used to pay it on the loop."""
+    return await asyncio.to_thread(argon2_hash, plaintext)
 
 async def authenticate_first_factor(
     db: Session,
@@ -869,6 +877,10 @@ async def consume_password_reset(
         raise AppError(410, "RESET_TOKEN_EXPIRED", "Reset link has expired.")
 
     await assert_password_not_breached(db, new_password)
+    # Hashed in a thread (64 MiB Argon2id froze the single-process backend on
+    # the event loop) and BEFORE the claim below, so no row lock is held across
+    # the await - a concurrent request blocking on it would block the loop.
+    new_hash = await ahash(new_password)
 
     # Atomically CLAIM the token: the conditional UPDATE + rowcount check
     # is the single-use gate. Two concurrent requests with the same token
@@ -886,7 +898,7 @@ async def consume_password_reset(
         raise AppError(410, "RESET_TOKEN_USED", "Reset link has already been used.")
 
     user = db.query(User).filter(User.id == record.user_id).one()
-    user.password_hash = argon2_hash(new_password)
+    user.password_hash = new_hash
     # Completing a reset is proof of control, so clear any prior lockout - else
     # a locked-out user who resets still hits ACCOUNT_LOCKED on next login until
     # the window elapses (reset is not lockout-gated, so this is the only place).
@@ -964,13 +976,24 @@ def consume_email_verification(db: Session, *, plaintext_token: str, request: Re
 async def change_password(
     db: Session, *, user: User, current_password: str, new_password: str, request: Request | None
 ) -> None:
+    # The current password is guessed here by someone who already holds the
+    # session, so it spends the same per-USER window as every step-up gate and a
+    # miss leaves the same `step_up_failed` row. It was throttled per IP only and
+    # recorded nowhere: a hijacked session on rotating egress had an unlogged
+    # oracle whose success is a takeover (audit 2026-11-19). The 401 stays - the
+    # SPA and the desktop client both read it, and isAuthCall lists the route.
+    from . import step_up
+
+    step_up.assert_attempt_allowed(db, user, request=request)
     # Off the loop, like every other verify in this module: 64 MiB of Argon2id
     # on the event loop freezes the whole process for ~0.2 s.
     if not await averify(user.password_hash, current_password):
+        step_up.audit_failure(db, user, reason="bad_password", request=request)
         raise AppError(401, "INVALID_CREDENTIALS", "Current password is incorrect.")
+    step_up.clear_window(user)
     await assert_password_not_breached(db, new_password)
 
-    user.password_hash = argon2_hash(new_password)
+    user.password_hash = await ahash(new_password)
     revoke_all_user_refresh_tokens(db, user.id)
     record_audit_event(
         db,

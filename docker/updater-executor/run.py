@@ -360,6 +360,51 @@ def _is_valid_tag(value: object) -> bool:
     return isinstance(value, str) and _TAG_RE.fullmatch(value) is not None
 
 
+# The shim's private record (`data/updater-private/`, root-only, mounted into
+# the shim as /private). The executor mounts the whole checkout, so it reads
+# what the shim wrote there; the backend mounts nothing of it.
+PRIVATE_ROLLBACK_RECORD = WORKSPACE / "data" / "updater-private" / "rollback_target.json"
+
+
+def _version_key(tag: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in tag[1:].split("."))
+
+
+def _daemon_backend_version() -> str | None:
+    """The running backend's version as the DOCKER DAEMON reports it - the
+    image's version label, the same reading the shim makes - never the job
+    file or the backend's own /api/health, both of which the backend writes."""
+    container = _container_id("backend")
+    if not container:
+        return None
+    version = _inspect(container, '{{index .Config.Labels "org.opencontainers.image.version"}}')
+    return version if _is_valid_tag(version) else None
+
+
+def _refused_by_the_shims_rules(action: str, target_tag: str) -> str | None:
+    """The shim's two rules, enforced by the executor too: an update never goes
+    below the running version, a rollback only to the version the shim
+    recorded. The shim checks them, but an older shim supervises the update
+    that installs this executor and passes no hand-over env, and the backend can
+    rewrite the job file after any shim's check (audit 2026-11-19). A version
+    that cannot be read skips its rule, as it does in the shim."""
+    if action == "update":
+        running = _daemon_backend_version()
+        if running and _version_key(target_tag) < _version_key(running):
+            return (f"downgrade refused: {target_tag} is older than the running {running}; "
+                    "use Rollback to go back")
+        return None
+    record = _read_json(PRIVATE_ROLLBACK_RECORD)
+    if record is None or not record.get("tag"):
+        return None
+    recorded = record["tag"]
+    if recorded == target_tag:
+        return None
+    if not _is_valid_tag(recorded):
+        return "rollback refused: the shim's rollback record is unreadable"
+    return f"rollback refused: {target_tag} is not the version the shim recorded before the last update ({recorded})"
+
+
 def _is_valid_head(value: object) -> bool:
     """An alembic revision id. `_parse_alembic_revision` already constrains what
     we WRITE to this shape; this constrains what we READ BACK, because the file
@@ -1620,10 +1665,58 @@ def prune_pre_update_backups(keep: int, max_age_days: int, protect: str | None =
             log_line(f"backup retention: removed an abandoned {path.name}")
 
 
+def _shim_validated_job() -> dict[str, str] | None:
+    """The job as the shim validated it, from the env it passes, or None when
+    an older shim passed nothing. Read with the shim's own defaults (`jq -r
+    '.id // ""'`, `'.action // "update"'`)."""
+    tag = os.environ.get("EXECUTOR_TARGET_TAG")
+    if tag is None:
+        return None
+    return {
+        "id": os.environ.get("EXECUTOR_JOB_ID", ""),
+        "target_tag": tag,
+        "action": os.environ.get("EXECUTOR_ACTION", "update"),
+    }
+
+
+def _job_as_the_shim_reads_it(job: dict) -> dict[str, str]:
+    def text(value: object, default: str) -> str:
+        # jq's `//` falls back on null and false alike; `-r` prints the rest as is.
+        if value is None or value is False:
+            return default
+        return value if isinstance(value, str) else json.dumps(value)
+
+    return {
+        "id": text(job.get("id"), ""),
+        "target_tag": text(job.get("target_tag"), ""),
+        "action": text(job.get("action"), "update"),
+    }
+
+
 def main() -> int:
     job = read_job()
-    target_tag = job.get("target_tag")
-    action = job.get("action", "update")
+    # The shim checks the job (no downgrade; a rollback only to the version it
+    # recorded) and then blocks on cosign and the pull while the BACKEND can
+    # still rewrite this file. Re-reading it afterwards acted on a value nobody
+    # had checked: a swapped tag or action got the verified NEW executor to
+    # deploy an older signed release (audit 2026-11-19). A shim from before
+    # this passes no env; the job file stands as before.
+    validated = _shim_validated_job()
+    target_tag: str | None
+    if validated is not None:
+        if _job_as_the_shim_reads_it(job) != validated:
+            log_line("ERROR the job file changed after the shim validated it")
+            write_job_field(
+                status="failed",
+                error="the update job changed after it was validated; nothing was changed",
+                finished_at=utcnow_iso(),
+            )
+            return 1
+        target_tag = validated["target_tag"]
+        action = validated["action"]
+    else:
+        target_tag = job.get("target_tag")
+        action = job.get("action", "update")
     if action not in _ACTIONS:
         # Anything else fell through to the update path with auto-rollback
         # switched off (every recovery branch below tests `== "update"`). The
@@ -1642,6 +1735,11 @@ def main() -> int:
         write_job_field(
             status="failed", error="invalid target_tag", finished_at=utcnow_iso()
         )
+        return 1
+    refusal = _refused_by_the_shims_rules(action, target_tag)
+    if refusal:
+        log_line(f"ERROR {refusal}")
+        write_job_field(status="failed", error=refusal, finished_at=utcnow_iso())
         return 1
 
     previous_tag = read_current_tag()
@@ -1677,8 +1775,8 @@ def main() -> int:
 
     # Which infra services this update brings to the release. Read-only, and
     # updates only: a rollback never touches git or infra (infra is
-    # roll-forward only, and a rollback runs the OLDER release's executor
-    # anyway).
+    # roll-forward only - and since 2026-11-19 a rollback runs the RUNNING
+    # release's executor, which must leave the newer infra alone).
     plan = InfraPlan(skip_reason="rollback")
     if action == "update":
         set_phase("planning")

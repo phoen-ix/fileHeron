@@ -12,6 +12,7 @@ import logging
 from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from ...dependencies import get_current_admin, get_db
 from ...middleware.errors import AppError
@@ -162,7 +163,10 @@ async def test_imap(
         # A blank password means "keep the stored one", which combined with a
         # freely chosen host would hand the stored mail credential to any server
         # the caller names. Only the saved server gets it without re-auth.
-        mail_test_gate.guard_and_audit(
+        # In the threadpool: the gate may verify a password (Argon2id, 64 MiB),
+        # and on the event loop that froze the single-process backend.
+        await run_in_threadpool(
+            mail_test_gate.guard_and_audit,
             db,
             admin=admin,
             request=request,

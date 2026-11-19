@@ -27,6 +27,9 @@ def executor(tmp_path, monkeypatch):
     monkeypatch.delenv("COMPOSE_HOST_ROOT", raising=False)
     monkeypatch.delenv("FH_GIT_SHA", raising=False)
     monkeypatch.delenv("EXECUTOR_PULL_MISSING_ONLY", raising=False)
+    # The shim's hand-over; a test that wants it sets all three itself.
+    for name in ("EXECUTOR_JOB_ID", "EXECUTOR_TARGET_TAG", "EXECUTOR_ACTION"):
+        monkeypatch.delenv(name, raising=False)
 
     spec = importlib.util.spec_from_file_location("fh_updater_run", EXECUTOR)
     assert spec and spec.loader

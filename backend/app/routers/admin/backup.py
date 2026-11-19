@@ -154,7 +154,11 @@ async def import_backup(
 ) -> BackupImportSummaryResponse:
     # `confirm` and `password` answer different questions - "did you mean this"
     # vs "are you still the person who signed in" - so both are required.
-    step_up.verify_password_or_403(db, admin, password, request=request)
+    # In the threadpool, like the work below: Argon2id on the event loop froze
+    # the single-process backend for every in-flight download.
+    from starlette.concurrency import run_in_threadpool
+
+    await run_in_threadpool(step_up.verify_password_or_403, db, admin, password, request=request)
     if not confirm:
         raise AppError(
             400, "BACKUP_CONFIRM_REQUIRED",
@@ -166,8 +170,6 @@ async def import_backup(
     # in-flight download and SSE stream and stops /api/health answering, so the
     # container healthcheck can flip the backend unhealthy and restart it with
     # the configuration half-applied.
-    from starlette.concurrency import run_in_threadpool
-
     raw = await _read_upload(file)
     parsed = await run_in_threadpool(cb.parse_backup, raw, passphrase=passphrase)
     summary = await run_in_threadpool(

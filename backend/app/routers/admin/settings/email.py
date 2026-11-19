@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from ....dependencies import get_current_admin, get_db
 from ....models.audit_log import AuditEventType
@@ -165,7 +166,10 @@ async def test_email_send(
         # re-authenticates. Compared on RESOLVED values, never the raw payload:
         # the SPA sends `port: undefined` while the number input is momentarily
         # empty, which means "keep persisted" and must not read as a mismatch.
-        mail_test_gate.guard_and_audit(
+        # In the threadpool: the gate may verify a password (Argon2id, 64 MiB),
+        # and on the event loop that froze the single-process backend.
+        await run_in_threadpool(
+            mail_test_gate.guard_and_audit,
             db,
             admin=admin,
             request=request,

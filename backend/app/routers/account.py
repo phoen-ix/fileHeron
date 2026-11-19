@@ -379,10 +379,17 @@ async def change_email(
         settings_registry.effective(db, settings_registry.K.RATE_LIMIT_REGISTER),
     ):
         raise AppError(429, "RATE_LIMITED", "Too many attempts; try again shortly.")
+    # The per-user step-up window, as change-password (services/auth.py) - the
+    # IP bucket above alone left a hijacked session an unlogged oracle.
+    from ..services import step_up
+
+    step_up.assert_attempt_allowed(db, user, request=request)
     # `averify`, not `argon2_verify`: this is an `async def`, so a bare verify
     # holds the event loop for the duration of a 64 MiB KDF.
     if not await auth_svc.averify(user.password_hash, payload.current_password):
+        step_up.audit_failure(db, user, reason="bad_password", request=request)
         raise AppError(401, "INVALID_CREDENTIALS", "Current password is incorrect.")
+    step_up.clear_window(user)
 
     outcome = email_change_svc.request_email_change(
         db,

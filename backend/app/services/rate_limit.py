@@ -1,7 +1,8 @@
 """Rate limiting + per-account lockout.
 
 Two layers:
-1. Per-IP fixed window on /api/auth/login (Redis INCR + EXPIRE-on-first-hit).
+1. Per-IP fixed window on /api/auth/login (Redis INCR + EXPIRE NX on every
+   hit - `_incr_window`).
    Returns 429 RATE_LIMITED when exceeded. Window: 15 minutes. (Fixed, not
    sliding - a burst can straddle two adjacent windows; the per-account
    lockout is the hard stop.)
@@ -23,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models.user import User
-from ..redis_client import get_redis, sync
+from ..redis_client import get_redis
 from ..utils.crypto import sha256_hex
 from ..utils.timeutil import utc_now
 
@@ -102,6 +103,22 @@ def check_login_ip_allowed(
 # (single-use invite token, single-use reset token) still hold.
 
 
+def _incr_window(redis, key: str, window_sec: int) -> int:
+    """Count one hit in a fixed window and return the new count.
+
+    `EXPIRE ... NX` on EVERY hit, not only the first. The window used to get
+    its TTL from a single EXPIRE sent when the count was 1: if that one call
+    failed (a 2 s socket timeout, Redis restarting between the two commands)
+    the key never expired, and that IP or user was refused for good once over
+    the limit (audit 2026-11-19). NX sets a TTL only where there is none, so
+    the window stays FIXED - a hit never extends it - and a key that lost its
+    TTL is repaired by the very next hit, which is also the only time it
+    matters."""
+    count = int(redis.incr(key))
+    redis.expire(key, window_sec, nx=True)
+    return count
+
+
 def _bucket_key(bucket: str, ip: str) -> str:
     return f"fh:rl:{bucket}:ip:{sha256_hex(ip)[:16]}"
 
@@ -112,12 +129,7 @@ def check_ip_allowed(bucket: str, ip: str, limit: int, window_sec: int = _LOGIN_
     if not ip or limit <= 0:
         return True
     try:
-        redis = get_redis()
-        key = _bucket_key(bucket, ip)
-        count = sync(redis.incr(key))
-        if count == 1:
-            redis.expire(key, window_sec)
-        return count <= limit
+        return _incr_window(get_redis(), _bucket_key(bucket, ip), window_sec) <= limit
     except Exception:
         logger.warning("%s IP rate-limit: Redis unavailable, using in-process fallback", bucket)
         return _local_allow(_bucket_key(bucket, ip), limit, window_sec)
@@ -155,12 +167,7 @@ def check_user_allowed(bucket: str, user_id: int, limit: int, window_sec: int = 
     if not user_id or limit <= 0:
         return True
     try:
-        redis = get_redis()
-        key = _user_key(bucket, user_id)
-        count = sync(redis.incr(key))
-        if count == 1:
-            redis.expire(key, window_sec)
-        return count <= limit
+        return _incr_window(get_redis(), _user_key(bucket, user_id), window_sec) <= limit
     except Exception:
         logger.warning("%s user rate-limit: Redis unavailable, using in-process fallback", bucket)
         return _local_allow(_user_key(bucket, user_id), limit, window_sec)

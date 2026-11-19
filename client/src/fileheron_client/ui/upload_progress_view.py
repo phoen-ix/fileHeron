@@ -13,7 +13,6 @@ buttons - the form is restored only when the user picks "New share"
 (``on_new_share``)."""
 from __future__ import annotations
 
-import webbrowser
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional
@@ -23,6 +22,7 @@ import customtkinter as ctk
 from ..api import ApiClient
 from ..i18n import t
 from ..models import ShareResponse
+from ..safe_url import open_web_url
 from .upload_worker import start_upload
 from .widgets import alive, copy_to_clipboard_with_feedback, human_size
 
@@ -183,13 +183,9 @@ class UploadProgressView(ctk.CTkFrame):
         )
 
     def _open_url(self) -> None:
-        url = self._pl_url_var.get()
-        if not url:
-            return
-        try:
-            webbrowser.open(url)
-        except Exception:
-            pass
+        # Server-supplied: only an http(s) URL reaches the browser - on Windows
+        # webbrowser.open would EXECUTE a path (safe_url, audit 2026-11-19).
+        open_web_url(self._pl_url_var.get())
 
     # ---- log ------------------------------------------------------------
 

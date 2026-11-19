@@ -44,11 +44,11 @@ def test_verify_rejects_garbage():
 
 def test_verify_rejects_tampered_signature():
     token = download_token_svc.issue("file-abc", user_id=42, ttl_sec=60)
-    user_part, exp_part, sig = token.split(".")
+    user_part, iat_part, exp_part, sig = token.split(".")
     # Flip a bit in the signature (still valid base64url).
     tampered = sig[:-1] + ("A" if sig[-1] != "A" else "B")
     with pytest.raises(AppError) as exc:
-        download_token_svc.verify("file-abc", f"{user_part}.{exp_part}.{tampered}")
+        download_token_svc.verify("file-abc", f"{user_part}.{iat_part}.{exp_part}.{tampered}")
     assert exc.value.code == "INVALID_DOWNLOAD_TOKEN"
 
 
@@ -131,6 +131,43 @@ async def test_get_download_url_then_download(
 
 
 @pytest.mark.asyncio
+async def test_a_signed_url_dies_with_the_session_that_minted_it(
+    make_user, db, client, login_as, monkeypatch
+):
+    """Audit 2026-11-19: the `?dt=` URL is a bearer credential standing in for
+    a session, and it carried no issue time - so after "sign out everywhere"
+    or a password reset, URLs a hijacked session had minted kept serving bytes
+    for the whole TTL (900 s by default). It now honours the revocation mark
+    like the access token and the SSE token."""
+    from app.models.user import User
+    from app.utils.timeutil import utc_now
+
+    _sender, _recipient, _share, file_row, _ = _setup_share_with_clean_file(
+        make_user, db, monkeypatch
+    )
+    token, _ = await login_as("hr@test.local", "Pass12345678!")
+    urls = []
+    for _ in range(2):
+        r = await client.get(
+            f"/api/files/{file_row.id}/download-url",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 200, r.text
+        urls.append(r.json()["url"])
+    assert (await client.get(urls[0])).status_code == 200  # live before the revoke
+
+    # The revoke lands AFTER the mint (marked a little ahead so second
+    # granularity cannot make this pass for the wrong reason).
+    sender = db.query(User).filter(User.email == "hr@test.local").one()
+    sender.sessions_invalidated_at = utc_now() + timedelta(seconds=2)
+    db.commit()
+
+    resp = await client.get(urls[1])
+    assert resp.status_code == 401, resp.text
+    assert resp.json()["code"] == "SESSION_REVOKED"
+
+
+@pytest.mark.asyncio
 async def test_download_with_token_for_wrong_file_rejected(
     make_user, db, client, login_as, monkeypatch
 ):
@@ -189,7 +226,7 @@ async def test_download_url_ttl_honors_setting_and_clamps(
 
     def _ttl_of(url: str, at: int) -> int:
         dt = url.split("dt=", 1)[1]
-        return int(dt.split(".")[1]) - at
+        return int(dt.split(".")[2]) - at  # <user>.<iat>.<exp>.<sig>
 
     # Default (env 900s).
     now = int(time.time())

@@ -92,8 +92,9 @@ mounted. Two inputs reach that privileged side, and both are treated as hostile:
 
 **The shim is the enforcement point**, because it alone decides which executor
 image runs - the executor's own re-validation cannot protect against a job that
-selects an OLDER executor. For a pending job, in order, each failing the job
-with the hand fix in the message:
+selects an OLDER executor, which is why it never does (a rollback runs the
+running release's executor, below). For a pending job, in order, each failing
+the job with the hand fix in the message:
 
 1. tag shape (`case` by character set, then `grep -Eqx`); `action` ∈
    {update, rollback};
@@ -113,6 +114,40 @@ with the hand fix in the message:
    allowed in exactly one case:** a rollback whose target is the recorded one
    (releases before v2.29.0 are unsigned). `SHIM_REQUIRE_SIGNATURE=false` skips
    the check with a WARN on startup and on every job.
+
+**The executor acts on the job the shim validated, and enforces the shim's
+rules itself** (audit 2026-11-19). The shim blocks on cosign and the pull after
+its checks, while the backend can still rewrite `/state/current_job.json`, and
+the executor used to re-read it and check only the tag's SHAPE: a swapped tag
+or `action` got a verified executor to deploy an older signed release - the
+downgrade refusal and the rollback binding both bypassed. Three layers now:
+
+1. **Hand-over.** The shim passes `EXECUTOR_JOB_ID` / `EXECUTOR_TARGET_TAG` /
+   `EXECUTOR_ACTION`; `run.py::main` refuses a job file that reads differently
+   under the shim's own jq defaults (`_job_as_the_shim_reads_it`) and acts on
+   the env values. No env = an older shim.
+2. **The executor's own copy of the rules** (`_refused_by_the_shims_rules`):
+   an update below the running version is refused (the version from the
+   daemon's image label via `_daemon_backend_version`, never the job file or
+   `/api/health`), and a rollback must match the shim's private record, which
+   the executor reads at `WORKSPACE/data/updater-private/rollback_target.json`
+   (it mounts the whole checkout; the backend mounts none of it). This is what
+   covers the update that INSTALLS this executor: the previous shim supervises
+   it and passes no env.
+3. **The newer executor runs the job.** A rollback runs the RUNNING release's
+   executor, not the target's (`executor_tag` in shim.sh): the target's is
+   older and may predate 1 and 2. The running release's executor knows how to
+   restore its predecessor - its auto-rollback does exactly that after every
+   failed update. If it is itself broken, `scripts/rollback.sh` is the way
+   back by hand. Two exceptions keep the target's executor, as before: an
+   unknown running version (dev build), and a target older than image signing
+   (`FIRST_SIGNED_RELEASE`, v2.29.0) - the newer executor would refuse its
+   unsigned app images, and the bound unsigned escape hatch exists for exactly
+   that target.
+
+Pinned by `tests/infra/test_updater_job_handover.py`. What remains is an
+instance still on a shim from before this release: its rollbacks run the old
+executor - install this release and the window is gone from then on.
 
 **The private record** (`/private` = `data/updater-private/`, a bind mount on
 the shim only; the daemon creates it root:root when absent, which is the one

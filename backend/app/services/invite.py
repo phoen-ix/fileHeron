@@ -328,11 +328,13 @@ def activate_invite_as_admin(
         display_name = local.replace("_", " ").replace(".", " ").title()
     if locale is None:
         locale = actor.locale
+    from ..utils.crypto import argon2_hash
+
     placeholder_password = random_token(32)
     return _create_user_from_invite(
         db,
         invite=invite,
-        password=placeholder_password,
+        password_hash=argon2_hash(placeholder_password),
         display_name=display_name,
         locale=locale,
         via="admin_direct",

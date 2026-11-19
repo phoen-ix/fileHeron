@@ -26,7 +26,16 @@ regenerating recovery codes (`services/totp.py`) check the password through
 `verify_password_or_403(final=False)` and the code through `refuse` /
 `clear_window`, so a wrong code spends the same per-user window and leaves the
 same `step_up_failed` row as a wrong password; adding or removing a passkey
-(`routers/webauthn.py`) uses the plain password gate.
+(`routers/webauthn.py`) uses the plain password gate. Changing your password or
+your email (`auth.change_password`, `routers/account.py::change_email`) spends
+the window through `assert_attempt_allowed` / `audit_failure` / `clear_window`
+but keeps its 401 `INVALID_CREDENTIALS`, which both clients already handle.
+
+`verify_password_or_403` hashes on the calling thread, so an `async def` route
+runs it - and anything that wraps it - through `run_in_threadpool`: the backend
+is one uvicorn process, and a 64 MiB Argon2id verify on the event loop freezes
+every download and stream for ~0.2 s. Pinned by
+`tests/test_step_up_off_the_event_loop.py` (audit 2026-11-19).
 """
 from __future__ import annotations
 
@@ -60,7 +69,7 @@ def assert_attempt_allowed(db: Session, user: User, *, request: Request | None =
     limit = int(settings_registry.effective(db, settings_registry.K.LOCKOUT_THRESHOLD))
     if rate_limit_svc.check_user_allowed(_BUCKET, user.id, limit, _WINDOW_SEC):
         return
-    _audit_failure(db, user, reason="rate_limited", request=request)
+    audit_failure(db, user, reason="rate_limited", request=request)
     raise AppError(429, "RATE_LIMITED", "Too many attempts; try again shortly.")
 
 
@@ -82,7 +91,7 @@ def refuse(
     error (the user saw "nothing happened"). A distinct code lets the UI show a
     precise message; the 2FA gates keep ``INVALID_TOTP`` for a wrong code.
     """
-    _audit_failure(db, user, reason=reason, request=request)
+    audit_failure(db, user, reason=reason, request=request)
     raise AppError(403, code, message)
 
 
@@ -147,7 +156,9 @@ def verify_password_or_403(
         clear_window(user)
 
 
-def _audit_failure(db: Session, user: User, *, reason: str, request: Request | None) -> None:
+def audit_failure(db: Session, user: User, *, reason: str, request: Request | None) -> None:
+    """Write and COMMIT the `step_up_failed` row for a failed attempt. Public
+    for the gates that answer with their own status (change password / email)."""
     from .audit import record_audit_event
 
     record_audit_event(

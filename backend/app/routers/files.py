@@ -112,7 +112,7 @@ def _resolve_download_user(
       gate requires bearer.
     """
     if dt:
-        user_id = download_token_svc.verify(file_id, dt)
+        user_id, issued_at = download_token_svc.verify_full(file_id, dt)
         user = (
             db.query(User)
             .filter(User.id == user_id, User.is_disabled.is_(False))
@@ -122,6 +122,13 @@ def _resolve_download_user(
             raise AppError(
                 401, "INVALID_DOWNLOAD_TOKEN", "Bad download token."
             )
+        # The URL stands in for the session that minted it, so a revoke (sign
+        # out everywhere, password reset or change, admin revoke-all) ends it
+        # too, as it does the access token and the SSE token (audit 2026-11-19).
+        from ..services.jwt_session import was_issued_before_revocation
+
+        if was_issued_before_revocation(user, issued_at):
+            raise AppError(401, "SESSION_REVOKED", "This session was revoked.")
         request.state.user_id = user.id
         request.state.auth_via = "download_token"
         return user

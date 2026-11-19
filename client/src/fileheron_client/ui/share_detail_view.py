@@ -15,7 +15,6 @@ native ``filedialog`` calls stay as pop-ups."""
 from __future__ import annotations
 
 import threading
-import webbrowser
 from pathlib import Path
 from tkinter import filedialog
 from typing import Callable, Optional
@@ -36,6 +35,7 @@ from ..formatters import (
 from ..i18n import t
 from ..models import FileInShareResponse, MeResponse, ShareResponse
 from ..safe_path import safe_download_leaf, safe_join
+from ..safe_url import open_web_url
 from . import _messagebox as mb
 from ._async import run_in_background, run_with_progress
 from .add_files_dialog import AddFilesDialog
@@ -311,13 +311,9 @@ class ShareDetailView(ctk.CTkFrame):
         )
 
     def _open_pl_url(self) -> None:
-        url = self._pl_url_var.get()
-        if not url:
-            return
-        try:
-            webbrowser.open(url)
-        except Exception:
-            pass
+        # Server-supplied: only an http(s) URL reaches the browser - on Windows
+        # webbrowser.open would EXECUTE a path (safe_url, audit 2026-11-19).
+        open_web_url(self._pl_url_var.get())
 
     def _load(self) -> None:
         def _fetch():

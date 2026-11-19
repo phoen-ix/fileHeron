@@ -5,7 +5,8 @@
   previously ran a bare password check with none of those, making it an
   unthrottled password + enumeration oracle.
 - M17: the last enabled admin cannot be demoted/disabled (org lockout).
-- L30: a pre-minted API token stops working while its owner is locked out.
+- L30 (reversed 2026-11-19): an API token is NOT refused while its owner's
+  password login is locked - only while the account is disabled.
 """
 from __future__ import annotations
 
@@ -105,15 +106,16 @@ def test_update_user_allows_demotion_with_another_admin(make_user, db):
 
 
 @pytest.mark.asyncio
-async def test_api_token_rejected_when_account_locked(make_user, db, client):
+async def test_api_token_keeps_working_while_the_password_login_is_locked(make_user, db, client):
+    """L30 reversed (audit 2026-11-19, owner decision). The lockout is set only
+    by wrong PASSWORDS at the sign-in page, which anyone who knows an address
+    can type - so refusing tokens while it held let a stranger keep a user's CI
+    tokens dead indefinitely, while that user's browser sessions kept working
+    (refresh and access tokens never consulted it). A token involves no
+    password; disabling the account or revoking the token is the control."""
     user = make_user(email="tok@test.local", role=UserRole.employee)
     _rec, plaintext = api_token_svc.create_token(db, owner=user, name="ci")
     db.commit()
-
-    ok = await client.get(
-        "/api/account/me", headers={"Authorization": f"Bearer {plaintext}"}
-    )
-    assert ok.status_code == 200, ok.text
 
     user.locked_until = utc_now() + timedelta(minutes=15)
     db.commit()
@@ -121,5 +123,12 @@ async def test_api_token_rejected_when_account_locked(make_user, db, client):
     resp = await client.get(
         "/api/account/me", headers={"Authorization": f"Bearer {plaintext}"}
     )
-    assert resp.status_code == 423
-    assert resp.json()["code"] == "ACCOUNT_LOCKED"
+    assert resp.status_code == 200, resp.text
+
+    user.is_disabled = True
+    db.commit()
+    refused = await client.get(
+        "/api/account/me", headers={"Authorization": f"Bearer {plaintext}"}
+    )
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "ACCOUNT_DISABLED"

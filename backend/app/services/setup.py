@@ -11,6 +11,7 @@ is_setup_complete check inside the transaction).
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from sqlalchemy.orm import Session
@@ -124,9 +125,12 @@ async def complete_setup(
 
     await assert_password_not_breached(db, password)
 
+    # Off the event loop: this is an `async def`, and a 64 MiB Argon2id hash
+    # on the loop froze the single-process backend (audit 2026-11-19).
+    password_hash = await asyncio.to_thread(argon2_hash, password)
     user = User(
         email=em,
-        password_hash=argon2_hash(password),
+        password_hash=password_hash,
         display_name=display_name.strip()[:_DISPLAY_NAME_MAX],
         role=UserRole.admin,
         locale=Locale(locale) if locale else Locale.en,

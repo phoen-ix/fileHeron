@@ -50,17 +50,20 @@ async def test_callback_auto_links_existing_user_with_verified_email(
 
 
 @pytest.mark.asyncio
-async def test_callback_refuses_to_auto_link_an_admin(
-    make_provider, make_user, db, monkeypatch
+@pytest.mark.parametrize("role", [UserRole.admin, UserRole.employee])
+async def test_callback_refuses_to_auto_link_a_staff_account(
+    role, make_provider, make_user, db, monkeypatch
 ):
-    """M1: an UNauthenticated callback must never auto-link a privileged
-    (admin) account by verified-email match - that would be account takeover if
-    the IdP's email claim can be influenced. The admin must link explicitly via
-    the authed connect flow instead."""
+    """M1 (admins) and 2026-11-19 (employees, who read every client's inbound
+    share): an UNauthenticated callback must never auto-link a staff account by
+    verified-email match - that is account takeover wherever the IdP's email
+    claim can be influenced. Staff link explicitly via the authed connect flow,
+    and the refusal says so instead of the "ask an admin to invite you" that
+    OIDC_NO_ACCOUNT tells someone who has no account at all."""
     from app.middleware.errors import AppError
 
     p = make_provider()
-    boss = make_user(email="boss@example.com", role=UserRole.admin)
+    boss = make_user(email="boss@example.com", role=role)
     claims = make_claims(
         p, sub="idp-boss", email="boss@example.com", name="Boss", groups=[],
     )
@@ -71,7 +74,7 @@ async def test_callback_refuses_to_auto_link_an_admin(
             db, provider=p, code="x", state_cookie="s", state_param="s",
             expected_nonce=None,
         )
-    assert exc.value.code == "OIDC_NO_ACCOUNT"
+    assert exc.value.code == "OIDC_LINK_FROM_ACCOUNT"
     db.refresh(boss)
     assert boss.oidc_provider_id is None  # not linked
 

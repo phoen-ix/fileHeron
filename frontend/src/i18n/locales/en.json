@@ -196,6 +196,7 @@
     "OIDC_JWKS_TOO_LARGE": "The identity provider's key response was too large.",
     "OIDC_JWKS_UNAVAILABLE": "The identity provider's keys could not be fetched.",
     "OIDC_KEY_NOT_FOUND": "The identity provider's signing key is unknown.",
+    "OIDC_LINK_FROM_ACCOUNT": "Staff accounts connect single sign-on once from Account settings: sign in with your password, then connect it there.",
     "OIDC_NO_ACCOUNT": "No fileHeron account exists for this identity. Ask an admin to invite you first.",
     "OIDC_NO_ID_TOKEN": "The identity provider did not return an identity token.",
     "OIDC_PROVIDER_DISABLED": "This SSO provider is disabled.",

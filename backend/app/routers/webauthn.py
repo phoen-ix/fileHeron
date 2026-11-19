@@ -103,9 +103,13 @@ async def register_begin(
     # Step-up BEFORE the browser prompt: a wrong password must not cost the
     # user a platform-authenticator dialog. Same gate as /2fa/disable and
     # API-token minting - it throttles per user and audits a failure.
+    from starlette.concurrency import run_in_threadpool
+
     from ..services.step_up import verify_password_or_403
 
-    verify_password_or_403(db, user, payload.password, request=request)
+    # In the threadpool: Argon2id on the event loop froze the single-process
+    # backend for every in-flight download and stream (audit 2026-11-19).
+    await run_in_threadpool(verify_password_or_403, db, user, payload.password, request=request)
     options = await webauthn_svc.register_begin(db, user=user)
     db.commit()
     return WebAuthnRegisterBeginResponse(options=options)

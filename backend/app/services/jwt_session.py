@@ -392,8 +392,54 @@ def clear_refresh_cookie(response: Response) -> None:
     response.delete_cookie(REFRESH_COOKIE, path=REFRESH_COOKIE_PATH)
 
 
+def _carry_session_start(db: Session, new: RefreshToken, previous: RefreshToken) -> None:
+    """Make `new` CONTINUE the session `previous` belongs to: same sign-in time
+    (`created_at` means "session start"), activity now, and never past the
+    absolute session lifetime counted from that sign-in."""
+    from . import settings_registry
+
+    new.created_at = previous.created_at
+    new.last_used_at = utc_now()
+    max_age_days = settings_registry.effective(db, settings_registry.K.SESSION_MAX_AGE_DAYS)
+    if max_age_days:
+        new.expires_at = min(new.expires_at, previous.created_at + timedelta(days=max_age_days))
+
+
+def current_session(
+    db: Session, *, user: User, refresh_token_plain: str | None
+) -> RefreshToken | None:
+    """The caller's own live session, from the refresh cookie they presented:
+    an unrevoked, unexpired row of THIS user, still inside the absolute session
+    lifetime. None when there is no such row - a missing or foreign cookie, or
+    a session that rotate_refresh would retire on its next refresh anyway."""
+    if not refresh_token_plain:
+        return None
+    from . import settings_registry
+
+    now = utc_now()
+    row = (
+        db.query(RefreshToken)
+        .filter(
+            RefreshToken.token_hash == refresh_token_hash(refresh_token_plain),
+            RefreshToken.user_id == user.id,
+            RefreshToken.revoked_at.is_(None),
+            RefreshToken.expires_at > now,
+        )
+        .one_or_none()
+    )
+    max_age_days = settings_registry.effective(db, settings_registry.K.SESSION_MAX_AGE_DAYS)
+    if row is not None and max_age_days and row.created_at <= now - timedelta(days=max_age_days):
+        return None
+    return row
+
+
 def remint_session(
-    db: Session, *, user: User, request: Request | None, settings
+    db: Session,
+    *,
+    user: User,
+    request: Request | None,
+    settings,
+    continues: RefreshToken | None = None,
 ) -> tuple[str, int, str]:
     """A fresh access + refresh pair for a user who is ALREADY signed in and
     whose refresh chain this request just revoked (change-password,
@@ -405,9 +451,19 @@ def remint_session(
     row, a `login_success` audit event and a known-device upsert - so the
     admin Sign-in page listed a password change as a sign-in, and the anomaly
     job's "this source also logged in successfully" exemption counted it. The
-    action's own audit (`password_changed`, the revoked rows) is the caller's."""
+    action's own audit (`password_changed`, the revoked rows) is the caller's.
+
+    `continues` is the session this re-mint stands in for. Pass it whenever the
+    request proved nothing new: the new row then keeps that session's sign-in
+    time and its absolute end, exactly as rotate_refresh does. Sign-out-others
+    minted a row stamped "signed in just now", so pressing it before day 30
+    restarted the session lifetime indefinitely (audit 2026-11-19). Only
+    change-password, which re-proves the password, starts a new session."""
     access, expires_in = create_access_token(user.id, settings, db)
-    _, refresh_plain = create_refresh_token(db, user, request)
+    record, refresh_plain = create_refresh_token(db, user, request)
+    if continues is not None:
+        _carry_session_start(db, record, continues)
+        db.flush()
     return access, expires_in, refresh_plain
 
 
@@ -536,15 +592,10 @@ def rotate_refresh(
     new_record, new_plain = create_refresh_token(db, user, request)
     # Carry the original sign-in time forward across the rotation chain so
     # `created_at` keeps meaning "session start"; `last_used_at` tracks this
-    # latest activity (admins sort by it to spot stale/hanging sessions).
-    new_record.created_at = record.created_at
-    new_record.last_used_at = now
-    if max_age_days:
-        # Never outlive the session it continues: the sessions page shows the
-        # real end, and the cookie's last refresh is refused on time.
-        new_record.expires_at = min(
-            new_record.expires_at, record.created_at + timedelta(days=max_age_days)
-        )
+    # latest activity (admins sort by it to spot stale/hanging sessions). Never
+    # outlive the session it continues: the sessions page shows the real end,
+    # and the cookie's last refresh is refused on time.
+    _carry_session_start(db, new_record, record)
     record.replaced_by_id = new_record.id
     db.flush()
 

@@ -142,7 +142,7 @@ class _FakeRedis:
         self.store[key] = int(self.store.get(key, 0)) + 1
         return self.store[key]
 
-    def expire(self, key, _sec):
+    def expire(self, key, _sec, nx=False):
         return key in self.store
 
     def delete(self, key):

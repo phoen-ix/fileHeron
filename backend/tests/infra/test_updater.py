@@ -982,6 +982,31 @@ def test_a_recorded_rollback_may_run_an_executor_that_predates_signing(tmp_path)
     assert json.loads((r.private / "rollback_target.json").read_text()) == {"tag": "v2.0.0"}
 
 
+def test_a_rollback_runs_the_running_releases_executor(tmp_path):
+    """Audit 2026-11-19: the target's executor is OLDER and may predate the
+    hand-over check, so the backend could rewrite the job while the shim
+    blocked on cosign. A rollback to a signed release runs the running one's."""
+    r = _shim_job(tmp_path, {"action": "rollback", "target_tag": "v2.30.0"}, running="v2.31.0",
+                  recorded="v2.30.0")
+    assert r.state["status"] == "healthy", r.log
+    verified = [c for c in r.cosign if "fileheron-updater-executor" in c]
+    assert verified and all(c.endswith("fileheron-updater-executor:v2.31.0") for c in verified), r.cosign
+    run = _ran(r)[0]
+    for env in ("EXECUTOR_JOB_ID=job-1", "EXECUTOR_TARGET_TAG=v2.30.0", "EXECUTOR_ACTION=rollback"):
+        assert env in run, run
+    assert json.loads((r.private / "rollback_target.json").read_text()) == {"tag": "v2.31.0"}
+
+
+def test_an_update_runs_the_targets_executor_and_hands_the_job_over(tmp_path):
+    r = _shim_job(tmp_path, {"action": "update", "target_tag": "v2.31.0"}, running="v2.30.0")
+    assert r.state["status"] == "healthy", r.log
+    verified = [c for c in r.cosign if "fileheron-updater-executor" in c]
+    assert verified and all(c.endswith("fileheron-updater-executor:v2.31.0") for c in verified), r.cosign
+    run = _ran(r)[0]
+    for env in ("EXECUTOR_JOB_ID=job-1", "EXECUTOR_TARGET_TAG=v2.31.0", "EXECUTOR_ACTION=update"):
+        assert env in run, run
+
+
 def test_an_unrecorded_rollback_is_warned_not_refused(tmp_path):
     """The first rollback after the shim that records versions is installed has
     no record yet (the installing job was claimed by the previous shim)."""

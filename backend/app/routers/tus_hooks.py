@@ -14,7 +14,9 @@ Auth (defense in depth):
 **Critical operator note**: ``/api/internal/*`` MUST never be exposed
 by the reverse proxy. Traefik should not have a route that matches
 this prefix. The path is internal-only by convention, not by network
-isolation alone - review your proxy config.
+isolation alone - review your proxy config. The hook itself answers only its
+literal, unencoded path (`_reached_by_its_literal_path`), so an encoded slash
+that slips past a proxy's PathPrefix deny is refused here.
 
 Behaviour by hook event:
 - pre-create   → return 200 to allow, 4xx to reject.
@@ -32,6 +34,7 @@ import logging
 
 from fastapi import APIRouter, Body, Depends, Header, Request
 from sqlalchemy.orm import Session
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ..config import settings
 from ..dependencies import get_db
@@ -70,7 +73,27 @@ def _ip_allowed(client_ip: str | None) -> bool:
     return ip_in_allowlist(client_ip, raw)
 
 
-@router.post("/api/internal/tus-hooks", response_model=TusHookResponse, status_code=200)
+HOOK_PATH = "/api/internal/tus-hooks"
+
+
+def _reached_by_its_literal_path(request: Request) -> bool:
+    """Whether the request line named the hook path byte for byte.
+
+    uvicorn percent-DECODES the path before routing, so `/api/internal%2Ftus-hooks`
+    lands here too, while a proxy deny rule written as PathPrefix(`/api/internal/`)
+    does not match it whenever the entrypoint permits encoded slashes (Traefik's
+    `allowEncodedSlash`) - measured on the reference host on 2026-11-19, where it
+    left TUS_HOOK_ALLOWED_IPS as the only thing in the way. tusd always sends
+    the literal path, so anything else is refused like an unknown route, and the
+    proxy's path handling stops mattering. A server that supplies no raw path
+    gives nothing to compare; the decoded route already matched."""
+    raw = request.scope.get("raw_path")
+    if raw is None:
+        return True
+    return raw.split(b"?", 1)[0] == HOOK_PATH.encode()
+
+
+@router.post(HOOK_PATH, response_model=TusHookResponse, status_code=200)
 def tus_hooks(
     request: Request,
     body: dict = Body(...),
@@ -82,6 +105,8 @@ def tus_hooks(
     - Hook-Name header (older tusd)
     We accept both.
     """
+    if not _reached_by_its_literal_path(request):
+        raise StarletteHTTPException(status_code=404)
     if _allowlist_configured():
         client_ip = get_client_ip(request) or ""
         if not _ip_allowed(client_ip):

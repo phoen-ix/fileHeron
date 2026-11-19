@@ -28,6 +28,10 @@ _WIN_RESERVED = {
     # to the serial port rather than the filesystem.
     *(f"COM{d}" for d in "¹²³"),
     *(f"LPT{d}" for d in "¹²³"),
+    # The console input and output devices, which Microsoft lists as reserved
+    # names alongside CON (audit 2026-11-19).
+    "CONIN$",
+    "CONOUT$",
 }
 
 # Characters Windows forbids in a filename. Stripping them is not cosmetic:
@@ -75,7 +79,9 @@ def safe_download_leaf(name: str) -> str:
     ).strip().rstrip(". ")
     if not leaf or leaf in (".", ".."):
         return "file"
-    if leaf.split(".", 1)[0].upper() in _WIN_RESERVED:
+    # Trailing spaces before the extension do not make a name safe: Windows'
+    # legacy path rules still map `NUL .log` / `CON .txt` onto the device.
+    if leaf.split(".", 1)[0].rstrip(" ").upper() in _WIN_RESERVED:
         leaf = "_" + leaf
     return leaf[:255]
 

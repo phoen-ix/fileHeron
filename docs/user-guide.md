@@ -13,7 +13,7 @@ depending on what the admin configured:
 
 1. **Email + password** (default). With 2FA on, submitting your password reveals one **Authentication code** field that accepts either a 6-digit TOTP code **or** a one-time recovery code (`XXXX-XXXX`) - no toggle. **Use a passkey instead** there takes a passkey registered on `/account` in place of the code (only one that verifies you with a PIN or fingerprint).
 2. **Passkey** - only while an admin has switched **passkey sign-in** on (`/admin/settings/twofa`): **Sign in with a passkey** needs no email and no password, and browsers that can also offer your passkeys in the email field's autofill. A passkey then also counts as two-factor authentication: with a passkey and no authenticator app, the password step ends with **Use your passkey**.
-3. **SSO (OIDC)** - one **Sign in with {provider}** button per enabled provider. With two-factor authentication set up, SSO ends on a second-factor page: your code, or your passkey while passkey sign-in is on.
+3. **SSO (OIDC)** - one **Sign in with {provider}** button per enabled provider. With two-factor authentication set up, SSO ends on a second-factor page: your code, or your passkey while passkey sign-in is on. A client account is connected to the provider on its first SSO sign-in when the provider confirms the same email; **staff (employees and admins) connect SSO once under Account → SSO connections**, after signing in with their password.
 
 Five wrong passwords in a row **locks the account for 15 minutes** (you get one email,
 deduplicated to once per 6 h). After login you land on your **default landing page**

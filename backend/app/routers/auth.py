@@ -476,22 +476,35 @@ def revoke_other_sessions(
 
     The response body stays {revoked: n} - the new session rides the httpOnly
     cookie, so frontend/src/api/account.ts needs no change.
+
+    The re-mint CONTINUES the caller's session; it never starts one. It needs
+    the caller's own live refresh cookie and keeps that session's sign-in time
+    and absolute end. It used to mint a fresh session for any bearer of an
+    access token, cookie or not, stamped "signed in just now": a leaked
+    15-minute access token bought a refresh cookie, and pressing this before
+    day 30 restarted the session lifetime indefinitely (audit 2026-11-19).
+    Without a live session of its own the caller is signed out with the rest.
     """
-    current_hash = refresh_token_hash(fh_refresh) if fh_refresh else None
+    current = jwt_session.current_session(db, user=user, refresh_token_plain=fh_refresh)
     q = db.query(RefreshToken).filter(
         RefreshToken.user_id == user.id,
         RefreshToken.revoked_at.is_(None),
     )
-    if current_hash is not None:
-        q = q.filter(RefreshToken.token_hash != current_hash)
+    if current is not None:
+        q = q.filter(RefreshToken.id != current.id)
     revoked = int(q.count())
 
     # The chokepoint revokes ALL rows including the caller's and stamps the
     # per-user mark; the count above is what the caller actually asked about.
     jwt_session.revoke_all_user_refresh_tokens(db, user.id)
 
+    if current is None:
+        db.commit()
+        _clear_refresh_cookie(response)
+        return {"revoked": revoked}
+
     _access, _expires_in, refresh_plain = jwt_session.remint_session(
-        db, user=user, request=request, settings=settings
+        db, user=user, request=request, settings=settings, continues=current
     )
     db.commit()
     _set_refresh_cookie(response, refresh_plain, db)

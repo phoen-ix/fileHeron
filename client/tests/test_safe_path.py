@@ -25,6 +25,12 @@ from fileheron_client.safe_path import safe_download_leaf, safe_join, unique_lea
         ("archive.tar.gz", "archive.tar.gz"),
         ("CON", "_CON"),
         ("nul.txt", "_nul.txt"),
+        # audit 2026-11-19: spaces before the dot, and the console devices
+        ("NUL .log", "_NUL .log"),
+        ("con  .txt", "_con  .txt"),
+        ("CONIN$", "_CONIN$"),
+        ("conout$.log", "_conout$.log"),
+        ("CONSOLE.txt", "CONSOLE.txt"),
     ],
 )
 def test_safe_download_leaf(raw, expected):

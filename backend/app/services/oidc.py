@@ -8,8 +8,10 @@ binds to **one** provider via `users.oidc_provider_id`.
 Two callback paths:
 
 - ``handle_callback`` - anonymous login flow. Matches by
-  (provider_id, sub) → auto-link by verified email → otherwise refuses
-  with ``OIDC_NO_ACCOUNT`` (admin must invite first).
+  (provider_id, sub) → auto-link a CLIENT account by verified email (a
+  staff account answers ``OIDC_LINK_FROM_ACCOUNT``: it links from account
+  settings) → otherwise refuses with ``OIDC_NO_ACCOUNT`` (admin must invite
+  first).
 - ``handle_connect_callback`` - authed flow from /account. Refuses if
   the IdP-asserted email doesn't match the authed user's email
   (``OIDC_EMAIL_MISMATCH``), or if the (provider, sub) is already bound
@@ -522,18 +524,21 @@ async def handle_callback(
                 raise AppError(403, "ACCOUNT_DISABLED", "Account is disabled.")
             if rate_limit_svc.is_account_locked(local):
                 raise AppError(423, "ACCOUNT_LOCKED", "Account is temporarily locked.")
-            if local.role == UserRole.admin:
-                # Never auto-link a privileged account on an UNauthenticated
+            if local.role in (UserRole.admin, UserRole.employee):
+                # Never auto-link a STAFF account on an UNauthenticated
                 # callback: if the IdP's email claim can be influenced (a realm
                 # that allows self-service email change without re-verification,
-                # a tenant where preferred_username is settable, ...), this would
-                # be admin account takeover. An admin must link SSO explicitly
-                # from account settings (the authed connect flow re-checks email
-                # + subject) (audit M1).
+                # a tenant where preferred_username is settable - the Entra
+                # preset reads it as verified, and Microsoft calls it mutable),
+                # this is account takeover. Admins were excluded first (audit
+                # M1); employees followed in 2026-11-19 (owner decision), since
+                # an employee reads every client's inbound share. Staff link SSO
+                # once from account settings, where the authed connect flow
+                # re-checks email + subject. Clients still auto-link.
                 raise AppError(
                     403,
-                    "OIDC_NO_ACCOUNT",
-                    "Admin accounts must link single sign-on from account settings.",
+                    "OIDC_LINK_FROM_ACCOUNT",
+                    "Staff accounts must link single sign-on from account settings.",
                 )
             local.oidc_provider_id = provider.id
             local.oidc_subject = sub

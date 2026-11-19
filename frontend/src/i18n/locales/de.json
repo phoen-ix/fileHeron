@@ -196,6 +196,7 @@
     "OIDC_JWKS_TOO_LARGE": "Die Schlüsselantwort des Identitätsanbieters war zu groß.",
     "OIDC_JWKS_UNAVAILABLE": "Die Schlüssel des Identitätsanbieters konnten nicht abgerufen werden.",
     "OIDC_KEY_NOT_FOUND": "Der Signaturschlüssel des Identitätsanbieters ist unbekannt.",
+    "OIDC_LINK_FROM_ACCOUNT": "Mitarbeiterkonten verbinden Single Sign-on einmalig in den Kontoeinstellungen: melde dich mit deinem Passwort an und verbinde es dort.",
     "OIDC_NO_ACCOUNT": "Für diese Identität existiert kein fileHeron-Konto. Bitte einen Admin um eine Einladung.",
     "OIDC_NO_ID_TOKEN": "Der Identitätsanbieter hat kein Identitätstoken zurückgegeben.",
     "OIDC_PROVIDER_DISABLED": "Dieser SSO-Provider ist deaktiviert.",

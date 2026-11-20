@@ -8,6 +8,7 @@ section; the workflows publish that plus the download links.
 """
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -16,11 +17,12 @@ import yaml
 
 _ROOT = Path(__file__).resolve().parents[3]
 _SCRIPT = _ROOT / "scripts" / "release_section.sh"
+_BASH = shutil.which("bash") or "/bin/bash"
 
 
 def _section(path: Path) -> str:
     r = subprocess.run(  # noqa: S603 - this repo's own script
-        ["bash", str(_SCRIPT), str(path)], capture_output=True, text=True, check=True
+        [_BASH, str(_SCRIPT), str(path)], capture_output=True, text=True, check=True
     )
     return r.stdout
 

@@ -357,6 +357,28 @@ jobs:
       # The notes check lives in the `gate` job now, before anything is built
       # or pushed. Deliberately NOT repeated here: two copies of one rule is
       # two places for it to drift.
+      # Only THIS release's section, then a link to the desktop client. Publishing
+      # the whole cumulative file made every release page carry every release
+      # (v2.31.0's was 125 KB). The in-app Update banner reads this body and caps
+      # it at 8 KB (release_check._BODY_MAX_BYTES), so it showed no more than the
+      # newest section anyway.
+      - name: Write the release body
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          client_tag=$(git ls-remote --tags --refs --sort=-version:refname origin 'client-v*' \
+            | sed -n '1s#.*refs/tags/##p')
+          scripts/release_section.sh RELEASE_NOTES.md > release-body.md
+          if [ -n "$client_tag" ]; then
+            base="https://github.com/${REPO}/releases/download/${client_tag}"
+            {
+              printf '\n---\n\n'
+              printf '**Desktop client %s:** [fileheron-client.exe](%s/fileheron-client.exe)' \
+                "${client_tag#client-v}" "$base"
+              printf ' · [SHA-256 checksum](%s/fileheron-client.exe.sha256)\n' "$base"
+            } >> release-body.md
+          fi
+
       - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3
         with:
           tag_name: ${{ github.ref_name }}
@@ -364,4 +386,4 @@ jobs:
           # Hand-written changelog - admins read this from the in-app Update
           # banner (/admin/system), so it must NOT be auto-generated. Update
           # RELEASE_NOTES.md per release; it also lists the published images.
-          body_path: RELEASE_NOTES.md
+          body_path: release-body.md

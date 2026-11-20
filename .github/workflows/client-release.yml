@@ -192,6 +192,24 @@ jobs:
         working-directory: client/dist
         run: sha256sum -c fileheron-client.exe.sha256
 
+      # Only THIS release's section, with the download links right under its
+      # heading. Publishing the whole cumulative file listed every client release
+      # on every page and left the .exe under "Assets" at the very bottom.
+      - name: Write the release body
+        env:
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          base="https://github.com/${REPO}/releases/download/${TAG}"
+          scripts/release_section.sh client/RELEASE_NOTES.md > section.md
+          {
+            head -n 1 section.md
+            echo
+            printf '**Download:** [fileheron-client.exe](%s/fileheron-client.exe)' "$base"
+            printf ' · [SHA-256 checksum](%s/fileheron-client.exe.sha256)\n' "$base"
+            tail -n +2 section.md
+          } > release-body.md
+
       - name: Publish release with .exe attached
         uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3
         with:
@@ -200,7 +218,7 @@ jobs:
           # Ship the hand-written changelog, not auto-generated notes (the
           # auto "What's Changed" list mixes in backend commits since tags
           # share the repo). Update client/RELEASE_NOTES.md per release.
-          body_path: client/RELEASE_NOTES.md
+          body_path: release-body.md
           files: |
             client/dist/fileheron-client.exe
             client/dist/fileheron-client.exe.sha256

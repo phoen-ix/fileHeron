@@ -28,6 +28,7 @@ from app.services import file_encryption
 from app.services import storage_backend as sb
 from app.utils import file_crypto
 from tests._encryption_helpers import encrypt_row, store_plain
+from tests._public_link_helpers import public_download_url
 
 C = file_crypto.CHUNK_SIZE
 DATA = os.urandom(3 * C + 7)
@@ -280,9 +281,11 @@ def public_encrypted(db, make_user):
 
 
 @pytest.mark.asyncio
-async def test_the_public_route_serves_the_plaintext_and_the_client_probe(client, public_encrypted):
+async def test_the_public_route_serves_the_plaintext_and_the_client_probe(
+    client, db, public_encrypted
+):
     f, token = public_encrypted
-    url = f"/api/public/{token}/files/{f.id}/download"
+    url = public_download_url(db, token, f.id)
     r = await client.get(url, headers={"Range": "bytes=1-1"})
     assert (r.status_code, r.content, r.headers["content-range"]) == (206, DATA[1:2], f"bytes 1-1/{SIZE}")
     r = await client.get(url)

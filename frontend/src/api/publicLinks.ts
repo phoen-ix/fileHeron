@@ -2,8 +2,10 @@ import api, { createBareClient } from './client'
 import type {
   CreatePublicLinkRequest,
   CreatePublicLinkResponse,
+  PublicDownloadTicketResponse,
   PublicLinkResponse,
   PublicShareResponse,
+  UpdatePublicLinkRequest,
 } from '@/types/api'
 
 /* Authed: managed from ShareDetail. */
@@ -14,6 +16,15 @@ export function createPublicLink(shareId: string, payload: CreatePublicLinkReque
 
 export function getPublicLink(shareId: string) {
   return api.get<PublicLinkResponse>(`/shares/${shareId}/public-link`)
+}
+
+/** Change the download limit; the link keeps its address. `clear` = unlimited. */
+export function updatePublicLink(shareId: string, opts: { limit: number | null; clear: boolean }) {
+  const body: UpdatePublicLinkRequest = {
+    download_limit: opts.clear ? null : opts.limit,
+    download_limit_clear: opts.clear,
+  }
+  return api.patch<PublicLinkResponse>(`/shares/${shareId}/public-link`, body)
 }
 
 export function revokePublicLink(shareId: string) {
@@ -37,11 +48,15 @@ export function unlockPublicShare(token: string, password: string) {
   return publicClient.post<{ ok: boolean }>(`/api/public/${token}/unlock`, { password })
 }
 
-export function publicDownloadUrl(token: string, fileId: string): string {
-  // Browser-driven anchor. Cookies are auto-attached (path scoped to
-  // /api/public/{token}); the server's Content-Disposition forces the
-  // download UI.
-  return `/api/public/${token}/files/${fileId}/download`
+/** The URL a Download click navigates to. A download through a link is
+ * charged, and a mail link scanner renders the mailed page and fetches every
+ * URL it links to - so the page links to no download at all: a click POSTs for
+ * a short-lived URL (routers/public.py `download-ticket`). The unlock cookie
+ * rides on the POST. `fileId` null = every file as one ZIP. */
+export function getPublicDownloadUrl(token: string, fileId: string | null) {
+  return publicClient.post<PublicDownloadTicketResponse>(`/api/public/${token}/download-ticket`, {
+    file_id: fileId,
+  })
 }
 
 export function publicPreviewUrl(token: string, fileId: string): string {
@@ -50,10 +65,4 @@ export function publicPreviewUrl(token: string, fileId: string): string {
   // /api/public/{token}); the endpoint serves it inline without consuming
   // the link's download budget.
   return `/api/public/${token}/files/${fileId}/preview`
-}
-
-export function publicZipUrl(token: string): string {
-  // Bulk-ZIP of every downloadable file in the share. Same unlock-cookie
-  // gate as the single-file anchor above.
-  return `/api/public/${token}/download-zip`
 }

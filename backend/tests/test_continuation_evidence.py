@@ -37,6 +37,7 @@ import pytest
 from app.models.file import File, FileState
 from app.models.share import Share, ShareKind, ShareState
 from app.models.user import UserRole
+from tests._public_link_helpers import public_download_url
 
 
 class _FakeRedis:
@@ -104,7 +105,7 @@ async def test_an_uncorroborated_range_is_charged(client, db, public_file, monke
     monkeypatch.setattr(transfer_activity, "get_redis", lambda: _FakeRedis())
 
     r = await client.get(
-        f"/api/public/{token}/files/{f.id}/download", headers={"Range": "bytes=1-"}
+        public_download_url(db, token, f.id), headers={"Range": "bytes=1-"}
     )
     assert r.status_code in (200, 206), r.text
     db.refresh(link)
@@ -127,7 +128,7 @@ async def test_an_uncorroborated_range_cannot_drain_an_exhausted_link(
     db.commit()
 
     r = await client.get(
-        f"/api/public/{token}/files/{f.id}/download", headers={"Range": "bytes=1-"}
+        public_download_url(db, token, f.id), headers={"Range": "bytes=1-"}
     )
     assert r.status_code == 410, r.text
     assert r.json()["code"] == "PUBLIC_LINK_EXHAUSTED"
@@ -145,7 +146,7 @@ async def test_a_corroborated_continuation_is_free(
     fake = _FakeRedis()
     monkeypatch.setattr(transfer_activity, "get_redis", lambda: fake)
 
-    first = await client.get(f"/api/public/{token}/files/{f.id}/download")
+    first = await client.get(public_download_url(db, token, f.id))
     assert first.status_code == 200, first.text
     db.refresh(link)
     assert link.downloads_remaining == 0
@@ -153,7 +154,7 @@ async def test_a_corroborated_continuation_is_free(
     # The full request marked the file as being served; the continuation of it
     # must finish even though the counter is now spent.
     second = await client.get(
-        f"/api/public/{token}/files/{f.id}/download", headers={"Range": "bytes=1-"}
+        public_download_url(db, token, f.id), headers={"Range": "bytes=1-"}
     )
     assert second.status_code in (200, 206), second.text
     db.refresh(link)
@@ -189,7 +190,7 @@ async def test_redis_down_charges_rather_than_giving_the_file_away(
     db.commit()
 
     r = await client.get(
-        f"/api/public/{token}/files/{f.id}/download", headers={"Range": "bytes=1-"}
+        public_download_url(db, token, f.id), headers={"Range": "bytes=1-"}
     )
     assert r.status_code == 410, r.text
     assert r.json()["code"] == "PUBLIC_LINK_EXHAUSTED"
@@ -213,7 +214,7 @@ async def test_redis_down_still_serves_a_link_with_budget_left(
     db.commit()
 
     r = await client.get(
-        f"/api/public/{token}/files/{f.id}/download", headers={"Range": "bytes=1-"}
+        public_download_url(db, token, f.id), headers={"Range": "bytes=1-"}
     )
     assert r.status_code in (200, 206), r.text
     db.refresh(link)
@@ -228,7 +229,7 @@ async def test_a_full_request_still_pays(client, db, public_file, monkeypatch):
     f, sh, link, token = public_file
     monkeypatch.setattr(transfer_activity, "get_redis", lambda: _FakeRedis())
 
-    r = await client.get(f"/api/public/{token}/files/{f.id}/download")
+    r = await client.get(public_download_url(db, token, f.id))
     assert r.status_code == 200, r.text
     db.refresh(link)
     assert link.downloads_remaining == 0
@@ -245,9 +246,9 @@ async def test_the_download_is_still_logged_once(client, db, public_file, monkey
     fake = _FakeRedis()
     monkeypatch.setattr(transfer_activity, "get_redis", lambda: fake)
 
-    await client.get(f"/api/public/{token}/files/{f.id}/download")
+    await client.get(public_download_url(db, token, f.id))
     await client.get(
-        f"/api/public/{token}/files/{f.id}/download", headers={"Range": "bytes=1-"}
+        public_download_url(db, token, f.id), headers={"Range": "bytes=1-"}
     )
     assert db.query(DownloadLog).filter(DownloadLog.file_id == f.id).count() == 1
 

@@ -39,6 +39,7 @@ from app.models.download_log import DownloadLog
 from app.models.file import File, FileState
 from app.models.share import Share, ShareKind, ShareState
 from app.models.user import UserRole
+from tests._public_link_helpers import public_download_url
 
 PAYLOAD = b"payload-" * 500  # 4000 bytes
 
@@ -134,7 +135,7 @@ async def test_an_owner_preview_does_not_buy_free_public_downloads(
     assert preview.status_code == 200, preview.text
 
     r = await client.get(
-        f"/api/public/{token}/files/{f.id}/download", headers={"Range": "bytes=1-"}
+        public_download_url(db, token, f.id), headers={"Range": "bytes=1-"}
     )
     assert r.status_code in (200, 206, 410), r.text
 
@@ -156,7 +157,7 @@ async def test_an_owner_download_does_not_buy_free_public_downloads(
     assert got.status_code == 200, got.text
 
     r = await client.get(
-        f"/api/public/{token}/files/{f.id}/download", headers={"Range": "bytes=1-"}
+        public_download_url(db, token, f.id), headers={"Range": "bytes=1-"}
     )
     assert r.status_code in (200, 206, 410)
     db.refresh(link)
@@ -178,7 +179,7 @@ async def test_the_free_window_cannot_be_refreshed_indefinitely(
     One paid download plus one request per window is indefinite."""
     owner, sh, f, link, token = owned_public_share
 
-    paid = await client.get(f"/api/public/{token}/files/{f.id}/download")
+    paid = await client.get(public_download_url(db, token, f.id))
     assert paid.status_code == 200, paid.text
     db.refresh(link)
     assert link.downloads_remaining == 0
@@ -192,7 +193,7 @@ async def test_the_free_window_cannot_be_refreshed_indefinitely(
     # payment plus one request per window is indefinite.
     for _ in range(3):
         r = await client.get(
-            f"/api/public/{token}/files/{f.id}/download",
+            public_download_url(db, token, f.id),
             headers={"Range": "bytes=1-"},
         )
         assert r.status_code in (200, 206), r.text
@@ -216,13 +217,13 @@ async def test_a_genuine_resume_by_the_payer_is_still_free(
     finishes the transfer."""
     owner, sh, f, link, token = owned_public_share
 
-    first = await client.get(f"/api/public/{token}/files/{f.id}/download")
+    first = await client.get(public_download_url(db, token, f.id))
     assert first.status_code == 200
     db.refresh(link)
     assert link.downloads_remaining == 0
 
     resumed = await client.get(
-        f"/api/public/{token}/files/{f.id}/download", headers={"Range": "bytes=1-"}
+        public_download_url(db, token, f.id), headers={"Range": "bytes=1-"}
     )
     assert resumed.status_code in (200, 206), resumed.text
     db.refresh(link)
@@ -238,7 +239,7 @@ async def test_an_uncorroborated_range_is_still_charged(
     owner, sh, f, link, token = owned_public_share
 
     r = await client.get(
-        f"/api/public/{token}/files/{f.id}/download", headers={"Range": "bytes=1-"}
+        public_download_url(db, token, f.id), headers={"Range": "bytes=1-"}
     )
     assert r.status_code in (200, 206)
     db.refresh(link)
@@ -266,7 +267,7 @@ async def test_an_authenticated_zip_does_not_buy_free_public_zips(
     assert authed.status_code == 200, authed.text
 
     r = await client.get(
-        f"/api/public/{token}/download-zip", headers={"Range": "bytes=200-"}
+        public_download_url(db, token), headers={"Range": "bytes=200-"}
     )
     assert r.status_code in (200, 206, 410), r.text
     db.refresh(link)
@@ -283,13 +284,13 @@ async def test_a_public_zip_resume_by_the_payer_is_still_free(
     """What must not regress: the anonymous recipient pays once and resumes."""
     owner, sh, f, link, token = owned_public_share
 
-    first = await client.get(f"/api/public/{token}/download-zip")
+    first = await client.get(public_download_url(db, token))
     assert first.status_code == 200, first.text
     db.refresh(link)
     assert link.downloads_remaining == 0
 
     resumed = await client.get(
-        f"/api/public/{token}/download-zip", headers={"Range": "bytes=200-"}
+        public_download_url(db, token), headers={"Range": "bytes=200-"}
     )
     assert resumed.status_code in (200, 206), resumed.text
     db.refresh(link)

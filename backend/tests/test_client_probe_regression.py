@@ -33,6 +33,7 @@ from app.models.download_log import DownloadLog
 from app.models.file import File, FileState
 from app.models.share import Share, ShareKind, ShareState
 from app.models.user import UserRole
+from tests._public_link_helpers import public_download_url
 
 PAYLOAD = b"0123456789" * 400  # 4000 bytes
 
@@ -350,7 +351,7 @@ async def test_a_public_probe_does_not_spend_the_link(client, db, public_budgete
     hits the same wall the authenticated one just stopped hitting."""
     f, link, token = public_budgeted
     r = await client.get(
-        f"/api/public/{token}/files/{f.id}/download", headers={"Range": "bytes=1-1"}
+        public_download_url(db, token, f.id), headers={"Range": "bytes=1-1"}
     )
     assert r.status_code in (200, 206), r.text
     db.refresh(link)
@@ -362,7 +363,7 @@ async def test_a_public_range_download_is_still_charged(client, db, public_budge
     """And the bypass this all started from stays closed on the public path."""
     f, link, token = public_budgeted
     r = await client.get(
-        f"/api/public/{token}/files/{f.id}/download", headers={"Range": "bytes=1-"}
+        public_download_url(db, token, f.id), headers={"Range": "bytes=1-"}
     )
     assert r.status_code in (200, 206), r.text
     db.refresh(link)

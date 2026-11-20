@@ -254,3 +254,46 @@ def test_answering_a_secret_request_locks_the_request_row(mariadb, locked_user):
         conn.close()
         with mariadb.begin() as c:
             c.execute(sa.text("DELETE FROM secret_requests WHERE id = :i"), {"i": rid})
+
+
+@_SKIP
+def test_changing_a_link_limit_locks_the_link_row(mariadb, locked_user):
+    """v2.32.0: a limit change reads the counter and writes a new one, so a
+    download's decrement landing between the two would be handed back. Asserted
+    on the emitted SQL, like the sites above."""
+    import inspect
+
+    from app.models.share import Share, ShareKind, ShareState
+    from app.models.user import User
+    from app.services import public_link as public_link_svc
+
+    assert "with_for_update=True" in inspect.getsource(public_link_svc.update_limit)
+
+    statements: list[str] = []
+    conn = mariadb.connect()
+    outer = conn.begin()
+    try:
+        @sa.event.listens_for(conn, "before_cursor_execute")
+        def _capture(_c, _cur, stmt, _p, _ctx, _many):
+            statements.append(stmt)
+
+        with Session(bind=conn, join_transaction_mode="create_savepoint") as db:
+            owner = db.query(User).filter(User.email == _EMAIL).one()
+            sh = Share(created_by_id=owner.id, kind=ShareKind.outbound, state=ShareState.active)
+            db.add(sh)
+            db.flush()
+            link = public_link_svc.create_link(
+                db, share=sh, actor=owner, password=None, download_limit=2,
+                notify_on_download=False,
+            ).record
+            db.flush()
+            statements.clear()
+            public_link_svc.update_limit(
+                db, actor=owner, share=sh, link=link, new_limit=1, clear=False
+            )
+        assert any(
+            "FOR UPDATE" in s.upper() and "FROM public_links" in s for s in statements
+        ), statements
+    finally:
+        outer.rollback()
+        conn.close()

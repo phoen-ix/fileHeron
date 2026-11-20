@@ -40,10 +40,12 @@ from ..models.public_link_attempt import (
 )
 from ..models.share import Share, ShareState
 from ..models.user import User, UserRole
+from ..utils import signed_token
 from ..utils.columns import declared_width
 from ..utils.crypto import (
     argon2_hash,
     argon2_verify,
+    constant_time_equals,
     encrypt_setting,
     random_token,
     sha256_hex,
@@ -94,6 +96,53 @@ class CreatedLink(NamedTuple):
     plaintext_token: str  # shown to creator once
 
 
+def _assert_publishing_needs_no_review(
+    db: Session, share: Share, actor: User, *, widening: bool = False
+) -> None:
+    """A link - or a WIDER one - published past four-eyes review. Shared by
+    `create_link` and `update_limit` (raising or removing a limit hands the same
+    anonymous URL to more downloads than the approver saw)."""
+    # Bolting a link onto a share that ALREADY cleared four-eyes turns an
+    # approved named-recipient share into a world-readable URL with no second
+    # review - the same escalation attaching a link while pending was fixed for,
+    # one state later. An admin passes (they are the approver set's floor and can
+    # already approve anything); the owner cannot self-serve it.
+    if (
+        share.approval_was_required
+        and share.state == ShareState.active
+        and actor.role != UserRole.admin
+    ):
+        raise AppError(
+            409,
+            "APPROVAL_REQUIRED",
+            "Only an admin can raise or remove the download limit of an approved share's link."
+            if widening
+            else "This share was approved without a public link. Ask an approver to attach one.",
+        )
+    # A share that was never held can still be one the policy WOULD hold with
+    # a link on it (scope `outbound_to_clients`, internal recipients only, or a
+    # share older than the policy). Attaching the link is a new act of
+    # publishing, made today, so today's policy is asked - unlike a file added
+    # to an approved share, which is judged by the stored
+    # `approval_was_required`. Admins pass as above; an exempt approver's own
+    # share passes because `is_approval_required` already exempts it.
+    if (
+        share.state == ShareState.active
+        and not share.approval_was_required
+        and actor.role != UserRole.admin
+    ):
+        from . import share_approval as approval_svc
+
+        if approval_svc.is_approval_required(db, share, with_public_link=True):
+            raise AppError(
+                409,
+                "APPROVAL_REQUIRED",
+                "Only an admin can raise or remove this link's download limit."
+                if widening
+                else "A public link on this share needs approval first. Ask an admin to attach one.",
+            )
+
+
 def create_link(
     db: Session,
     *,
@@ -130,41 +179,7 @@ def create_link(
         )
     if share.created_by_id != actor.id and actor.role != UserRole.admin:
         raise AppError(403, "FORBIDDEN", "Only the share owner or an admin can do that.")
-    # Bolting a link onto a share that ALREADY cleared four-eyes turns an
-    # approved named-recipient share into a world-readable URL with no second
-    # review - the same escalation attaching a link while pending was fixed for,
-    # one state later. An admin passes (they are the approver set's floor and can
-    # already approve anything); the owner cannot self-serve it.
-    if (
-        share.approval_was_required
-        and share.state == ShareState.active
-        and actor.role != UserRole.admin
-    ):
-        raise AppError(
-            409,
-            "APPROVAL_REQUIRED",
-            "This share was approved without a public link. Ask an approver to attach one.",
-        )
-    # A share that was never held can still be one the policy WOULD hold with
-    # a link on it (scope `outbound_to_clients`, internal recipients only, or a
-    # share older than the policy). Attaching the link is a new act of
-    # publishing, made today, so today's policy is asked - unlike a file added
-    # to an approved share, which is judged by the stored
-    # `approval_was_required`. Admins pass as above; an exempt approver's own
-    # share passes because `is_approval_required` already exempts it.
-    if (
-        share.state == ShareState.active
-        and not share.approval_was_required
-        and actor.role != UserRole.admin
-    ):
-        from . import share_approval as approval_svc
-
-        if approval_svc.is_approval_required(db, share, with_public_link=True):
-            raise AppError(
-                409,
-                "APPROVAL_REQUIRED",
-                "A public link on this share needs approval first. Ask an admin to attach one.",
-            )
+    _assert_publishing_needs_no_review(db, share, actor)
 
     # `share_id` carries a plain UNIQUE constraint with no revoked-row
     # exclusion, so the table can hold exactly ONE row per share, revoked or
@@ -275,6 +290,54 @@ def assert_link_usable(
     # NULL expires_at = never-expire (v1.1.4) - skip the time check.
     if share.expires_at is not None and share.expires_at < utc_now():
         raise AppError(410, "SHARE_EXPIRED", "The underlying share has expired.")
+
+
+# --- Download tickets -------------------------------------------------------
+#
+# A download through a link is CHARGED, and every mail link scanner (Microsoft
+# Safe Links, Proofpoint, Mimecast) renders the page in a mailed link and fetches
+# what it points at - so a plain GET can never be what pays. On 2026-11-20 a
+# recipient's Microsoft 365 fetched both download buttons of a two-download link
+# 44 s after the mail went out: the budget was gone before she saw the mail, and
+# the owner was told she had downloaded. The page now POSTs for a ticket on a
+# click (`/download-ticket`) and only then navigates to the bytes; the charging
+# path refuses a request without a valid one. Secrets were built this way from
+# the start (`routers/public_secrets.py`).
+#
+# Bound to the LINK id (revoke + recreate kills every ticket) and to ONE target,
+# a file id or the archive. Lifetime: `downloads.signed_url_ttl_sec`, like `dt`.
+# Only a request that would be charged needs one: a corroborated resume and the
+# desktop client's `bytes=1-1` probe never pay, so a long download that drops
+# after the ticket expired still resumes.
+_TICKET_DOMAIN = b"fh:public-download:v1\x00"
+ZIP_TARGET = "zip"
+
+
+def _ticket_sig(link_id: str, target: str, exp: int) -> str:
+    return signed_token.sign(f"{link_id}|{target}|{exp}".encode(), domain=_TICKET_DOMAIN)
+
+
+def issue_download_ticket(link_id: str, target: str, ttl_sec: int) -> str:
+    exp = signed_token.now_epoch() + ttl_sec
+    return f"{exp}.{_ticket_sig(link_id, target, exp)}"
+
+
+def assert_download_ticket(ticket: str | None, *, link_id: str, target: str) -> None:
+    """403, never 401: nothing here is a wrong secret to retry, and the fix for
+    the holder is the page's own Download button."""
+    try:
+        exp_str, sig = (ticket or "").split(".", 1)
+        exp = int(exp_str)
+    except ValueError:
+        exp, sig = 0, ""
+    if exp < signed_token.now_epoch() or not constant_time_equals(
+        _ticket_sig(link_id, target, exp), sig
+    ):
+        raise AppError(
+            403,
+            "DOWNLOAD_TICKET_REQUIRED",
+            "Open the link and use its Download button.",
+        )
 
 
 def _record_attempt(
@@ -445,6 +508,90 @@ def decrement_counter(
         return False, link.downloads_remaining
     db.refresh(link)
     return True, link.downloads_remaining
+
+
+def update_limit(
+    db: Session,
+    *,
+    actor: User,
+    share: Share,
+    link: PublicLink,
+    new_limit: int | None,
+    clear: bool,
+    request=None,
+) -> PublicLink:
+    """Change a live link's download limit; the URL stays the same.
+
+    Before this the only way to give a link more downloads was revoke and
+    recreate - a NEW URL, which killed the one already mailed (2026-11-20: the
+    recipient's mail scanner had spent it). Same semantics as
+    `share.update_share_limit`: `clear` makes it unlimited; `new_limit=N` keeps
+    the used count (old limit - old remaining, 0 when it was unlimited) and
+    leaves max(0, N - used), so raising a spent link opens it again and lowering
+    below what was used leaves 0. Raising or removing the limit publishes the
+    link to more downloads, so it passes the checks creating one does; lowering
+    never needs them. Caller commits."""
+    if share.created_by_id != actor.id and actor.role != UserRole.admin:
+        raise AppError(403, "FORBIDDEN", "Only the share owner or an admin can do that.")
+    if new_limit is not None and new_limit <= 0:
+        raise AppError(
+            400, "INVALID_DOWNLOAD_LIMIT", "download_limit must be a positive integer."
+        )
+    if share.state not in (ShareState.active, ShareState.pending_approval):
+        raise AppError(409, "SHARE_NOT_ACTIVE", "Only an active share's link can be changed.")
+    # Locked: a download decrementing between this read and the write below
+    # would otherwise be handed back.
+    db.refresh(link, with_for_update=True)
+    old_limit, old_remaining = link.download_limit, link.downloads_remaining
+    if clear:
+        if old_limit is None and old_remaining is None:
+            return link
+        limit, remaining = None, None
+    elif new_limit is None:
+        return link
+    else:
+        used = (
+            old_limit - old_remaining
+            if old_limit is not None and old_remaining is not None
+            else 0
+        )
+        limit, remaining = new_limit, max(0, new_limit - used)
+
+    widening = old_remaining is not None and (remaining is None or remaining > old_remaining)
+    if widening and actor.role != UserRole.admin:
+        if share.state == ShareState.pending_approval:
+            raise AppError(
+                409,
+                "APPROVAL_REQUIRED",
+                "Only an admin can raise or remove the limit while the share awaits approval.",
+            )
+        _assert_publishing_needs_no_review(db, share, actor, widening=True)
+        if not is_allowed_to_create(db, actor):
+            raise AppError(
+                403,
+                "PUBLIC_LINK_NOT_ALLOWED",
+                "Your administrator has restricted public links.",
+            )
+
+    link.download_limit, link.downloads_remaining = limit, remaining
+    db.flush()
+    record_audit_event(
+        db,
+        event_type=AuditEventType.public_link_updated,
+        actor_user_id=actor.id,
+        target_type="public_link",
+        target_id=link.id,
+        metadata={
+            "share_id": share.id,
+            "old_limit": old_limit,
+            "old_remaining": old_remaining,
+            "new_limit": limit,
+            "new_remaining": remaining,
+            "cleared": clear,
+        },
+        request=request,
+    )
+    return link
 
 
 def revoke(

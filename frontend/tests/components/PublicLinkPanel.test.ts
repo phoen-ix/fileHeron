@@ -14,11 +14,13 @@ const api = vi.hoisted(() => ({
   getPublicLink: vi.fn(),
   createPublicLink: vi.fn(),
   revokePublicLink: vi.fn(),
+  updatePublicLink: vi.fn(),
 }))
 vi.mock('@/api/publicLinks', () => ({
   getPublicLink: (id: string) => api.getPublicLink(id),
   createPublicLink: (id: string, p: unknown) => api.createPublicLink(id, p),
   revokePublicLink: (id: string) => api.revokePublicLink(id),
+  updatePublicLink: (id: string, o: unknown) => api.updatePublicLink(id, o),
 }))
 
 import PublicLinkPanel from '@/components/PublicLinkPanel.vue'
@@ -53,6 +55,7 @@ beforeEach(() => {
   setActivePinia(createPinia())
   api.getPublicLink.mockReset()
   api.createPublicLink.mockReset()
+  api.updatePublicLink.mockReset()
 })
 
 describe('PublicLinkPanel', () => {
@@ -86,5 +89,47 @@ describe('PublicLinkPanel', () => {
 
     expect(w.find('.active-card .url').exists()).toBe(false)
     expect(w.text()).toContain(en.public_link.url_legacy_hint)
+  })
+
+  /* A used-up link could only be revoked and recreated - a NEW address, which
+   * killed the one already mailed (2026-11-20). */
+  it('raises the limit of a used-up link and keeps its address', async () => {
+    api.getPublicLink.mockResolvedValue({
+      data: stored({ download_limit: 2, downloads_remaining: 0 }),
+    })
+    api.updatePublicLink.mockResolvedValue({
+      data: stored({ download_limit: 5, downloads_remaining: 3 }),
+    })
+    const w = await mountPanel()
+    const toast = vi.spyOn(useUiStore(), 'pushToast')
+    expect(w.text()).toContain('2 of 2 used')
+
+    await w.find('[data-testid="public-link-edit-limit"]').trigger('click')
+    await w.find('.limit-editor input[type="number"]').setValue(5)
+    await w.find('.limit-editor .fh-btn').trigger('click')
+    await flushPromises()
+
+    expect(api.updatePublicLink).toHaveBeenCalledWith('s1', { limit: 5, clear: false })
+    expect(w.text()).toContain('2 of 5 used')
+    expect(w.find('.active-card .url').text()).toBe(URL_)
+    expect(w.find('.limit-editor').exists()).toBe(false)
+    expect(toast).toHaveBeenCalledWith(en.public_link.limit_saved_toast, 'success')
+  })
+
+  it('removes the limit', async () => {
+    api.getPublicLink.mockResolvedValue({
+      data: stored({ download_limit: 2, downloads_remaining: 1 }),
+    })
+    api.updatePublicLink.mockResolvedValue({ data: stored() })
+    const w = await mountPanel()
+
+    await w.find('[data-testid="public-link-edit-limit"]').trigger('click')
+    await w.find('.limit-editor input[type="checkbox"]').setValue(true)
+    expect(w.find('.limit-editor input[type="number"]').exists()).toBe(false)
+    await w.find('.limit-editor .fh-btn').trigger('click')
+    await flushPromises()
+
+    expect(api.updatePublicLink).toHaveBeenCalledWith('s1', { limit: 2, clear: true })
+    expect(w.text()).toContain(en.public_link.limit_none)
   })
 })

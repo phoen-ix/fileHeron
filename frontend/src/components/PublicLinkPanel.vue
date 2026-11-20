@@ -55,6 +55,15 @@
                 : t('public_link.limit_none')
             }}
           </span>
+          <button
+            v-if="!editingLimit"
+            type="button"
+            class="fh-btn-text"
+            data-testid="public-link-edit-limit"
+            @click="startEditLimit"
+          >
+            {{ t('public_link.edit_limit') }}
+          </button>
         </div>
         <div v-if="active.locked_until" class="kv">
           <span class="kv-label">{{ t('public_link.locked') }}</span>
@@ -67,6 +76,41 @@
           <span class="kv-value">
             {{ active.notify_on_download ? t('common.yes') : t('common.no') }}
           </span>
+        </div>
+      </div>
+      <div v-if="editingLimit" class="limit-editor">
+        <label class="checkbox">
+          <input v-model="limitClear" type="checkbox" />
+          <span class="cb-label">{{ t('public_link.limit_clear') }}</span>
+        </label>
+        <label v-if="!limitClear" class="fh-field">
+          <span class="fh-field-label">{{ t('public_link.limit_new_label') }}</span>
+          <input
+            v-model.number="limitValue"
+            class="fh-field-input fh-field-mono"
+            type="number"
+            min="1"
+            max="100000"
+          />
+          <span class="fh-field-help">{{ t('public_link.limit_edit_help') }}</span>
+        </label>
+        <div class="actions">
+          <button
+            type="button"
+            class="fh-btn"
+            :disabled="savingLimit || (!limitClear && !(limitValue && limitValue > 0))"
+            @click="saveLimit"
+          >
+            {{ savingLimit ? t('common.loading') : t('common.save') }}
+          </button>
+          <button
+            type="button"
+            class="fh-btn-text"
+            :disabled="savingLimit"
+            @click="editingLimit = false"
+          >
+            {{ t('common.cancel') }}
+          </button>
         </div>
       </div>
       <div class="actions">
@@ -124,7 +168,12 @@
   import { onMounted, ref } from 'vue'
   import { useI18n } from 'vue-i18n'
 
-  import { createPublicLink, getPublicLink, revokePublicLink } from '@/api/publicLinks'
+  import {
+    createPublicLink,
+    getPublicLink,
+    revokePublicLink,
+    updatePublicLink,
+  } from '@/api/publicLinks'
   import { useApiError } from '@/composables/useApiError'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
   import { useCopyToClipboard } from '@/composables/useCopyToClipboard'
@@ -193,6 +242,36 @@
       errorMsg.value = describe(err)
     } finally {
       creating.value = false
+    }
+  }
+
+  /* The link keeps its address: before v2.32.0 the only way to give it more
+   * downloads was revoke + recreate, which killed the URL already mailed. */
+  const editingLimit = ref(false)
+  const limitValue = ref<number | null>(null)
+  const limitClear = ref(false)
+  const savingLimit = ref(false)
+
+  function startEditLimit() {
+    limitValue.value = active.value?.download_limit ?? null
+    limitClear.value = false
+    editingLimit.value = true
+  }
+
+  async function saveLimit() {
+    savingLimit.value = true
+    try {
+      const { data } = await updatePublicLink(props.shareId, {
+        limit: limitValue.value,
+        clear: limitClear.value,
+      })
+      active.value = data
+      editingLimit.value = false
+      ui.pushToast(t('public_link.limit_saved_toast'), 'success')
+    } catch (err) {
+      ui.pushToast(describe(err), 'error')
+    } finally {
+      savingLimit.value = false
     }
   }
 
@@ -315,6 +394,20 @@
   .kv-value {
     font-size: var(--fh-text-body-md);
     color: var(--fh-ink);
+  }
+
+  .kv .fh-btn-text {
+    align-self: flex-start;
+  }
+
+  .limit-editor {
+    background: var(--fh-paper-raised);
+    border: var(--fh-border);
+    border-radius: var(--fh-radius-sm);
+    padding: var(--fh-space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--fh-space-2);
   }
 
   .token-note {

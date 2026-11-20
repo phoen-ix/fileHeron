@@ -186,7 +186,15 @@ test('a public ZIP download resumes through the edge and is charged once', async
     )
     .toBe(2)
 
-  const zipUrl = `${BASE}/api/public/${token}/download-zip`
+  // A download is a click on the page: it POSTs for the URL (a bare GET, as a
+  // mail link scanner sends, is refused). The resume below reuses that URL.
+  const mint = await fetch(`${BASE}/api/public/${token}/download-ticket`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ file_id: null }),
+  })
+  expect(mint.status, await mint.clone().text()).toBe(200)
+  const zipUrl = `${BASE}${(await mint.json()).url as string}`
 
   const full = await fetch(zipUrl)
   expect(full.status).toBe(200)

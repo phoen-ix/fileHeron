@@ -15,6 +15,7 @@ from ..schemas.public_link import (
     CreatePublicLinkRequest,
     CreatePublicLinkResponse,
     PublicLinkResponse,
+    UpdatePublicLinkRequest,
 )
 from ..services import public_link as public_link_svc
 from ..services import share as share_svc
@@ -100,6 +101,42 @@ def get_public_link(
     link = public_link_svc.get_active_link_for_share(db, share.id)
     if link is None:
         raise AppError(404, "PUBLIC_LINK_NOT_FOUND", "No active public link for this share.")
+    return _to_metadata(link, db)
+
+
+@router.patch("/{share_id}/public-link", response_model=PublicLinkResponse)
+def update_public_link(
+    share_id: str,
+    payload: UpdatePublicLinkRequest,
+    request: Request,
+    user: User = Depends(require_scope("public_links:write")),
+    db: Session = Depends(get_db),
+) -> PublicLinkResponse:
+    """Change the link's download limit and keep its URL - the one already
+    mailed keeps working."""
+    share = share_svc.get_share_or_404(db, share_id)
+    if share.created_by_id != user.id and user.role != UserRole.admin:
+        raise AppError(403, "FORBIDDEN", "Only the share owner or an admin can do that.")
+    if payload.download_limit_clear and payload.download_limit is not None:
+        raise AppError(
+            400,
+            "INVALID_INPUT",
+            "Cannot supply both download_limit and download_limit_clear; they are mutually exclusive.",
+        )
+    link = public_link_svc.get_active_link_for_share(db, share.id)
+    if link is None:
+        raise AppError(404, "PUBLIC_LINK_NOT_FOUND", "No active public link for this share.")
+    public_link_svc.update_limit(
+        db,
+        actor=user,
+        share=share,
+        link=link,
+        new_limit=payload.download_limit,
+        clear=payload.download_limit_clear,
+        request=request,
+    )
+    db.commit()
+    db.refresh(link)
     return _to_metadata(link, db)
 
 

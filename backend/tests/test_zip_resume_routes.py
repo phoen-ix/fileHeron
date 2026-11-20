@@ -22,6 +22,7 @@ import pytest
 from app.models.file import File, FileState
 from app.models.share import Share, ShareKind, ShareState
 from app.models.user import UserRole
+from tests._public_link_helpers import public_download_url
 
 
 class _FakeRedis:
@@ -112,14 +113,14 @@ def public_zip(db, make_user, tmp_path):
 @pytest.mark.asyncio
 async def test_a_range_gets_a_real_206(client, db, public_zip, redis_stub):
     sh, link, token = public_zip
-    full = await client.get(f"/api/public/{token}/download-zip")
+    full = await client.get(public_download_url(db, token))
     assert full.status_code == 200, full.text
     assert full.headers["accept-ranges"] == "bytes"
     total = int(full.headers["content-length"])
     assert len(full.content) == total
 
     part = await client.get(
-        f"/api/public/{token}/download-zip", headers={"Range": f"bytes=500-{total - 1}"}
+        public_download_url(db, token), headers={"Range": f"bytes=500-{total - 1}"}
     )
     assert part.status_code == 206, part.text
     assert part.headers["content-range"] == f"bytes 500-{total - 1}/{total}"
@@ -134,12 +135,12 @@ async def test_an_interrupted_download_reassembles_into_a_valid_archive(
     """The whole point: what the client already has, plus what it resumes, is a
     ZIP that opens and whose members are intact."""
     sh, link, token = public_zip
-    full = await client.get(f"/api/public/{token}/download-zip")
+    full = await client.get(public_download_url(db, token))
     total = len(full.content)
     cut = total - 200  # somewhere in the central directory
 
     resumed = await client.get(
-        f"/api/public/{token}/download-zip", headers={"Range": f"bytes={cut}-"}
+        public_download_url(db, token), headers={"Range": f"bytes={cut}-"}
     )
     assert resumed.status_code == 206
     blob = full.content[:cut] + resumed.content
@@ -155,10 +156,10 @@ async def test_a_range_past_the_end_is_416_with_the_length(
     client, db, public_zip, redis_stub
 ):
     sh, link, token = public_zip
-    full = await client.get(f"/api/public/{token}/download-zip")
+    full = await client.get(public_download_url(db, token))
     total = len(full.content)
     r = await client.get(
-        f"/api/public/{token}/download-zip", headers={"Range": f"bytes={total + 5}-"}
+        public_download_url(db, token), headers={"Range": f"bytes={total + 5}-"}
     )
     assert r.status_code == 416
     assert r.headers["content-range"] == f"bytes */{total}"
@@ -172,7 +173,7 @@ async def test_a_multi_range_request_falls_back_to_the_whole_archive(
     behaviour RFC 9110 allows and the only one that cannot mislead a client."""
     sh, link, token = public_zip
     r = await client.get(
-        f"/api/public/{token}/download-zip", headers={"Range": "bytes=0-10, 20-30"}
+        public_download_url(db, token), headers={"Range": "bytes=0-10, 20-30"}
     )
     assert r.status_code == 200
 
@@ -183,10 +184,10 @@ async def test_a_multi_range_request_falls_back_to_the_whole_archive(
 @pytest.mark.asyncio
 async def test_the_etag_is_stable_across_requests(client, db, public_zip, redis_stub):
     sh, link, token = public_zip
-    a = await client.get(f"/api/public/{token}/download-zip")
+    a = await client.get(public_download_url(db, token))
     link.downloads_remaining = 5
     db.commit()
-    b = await client.get(f"/api/public/{token}/download-zip")
+    b = await client.get(public_download_url(db, token))
     assert a.headers["etag"] == b.headers["etag"]
     assert a.content == b.content
 
@@ -201,7 +202,7 @@ async def test_a_quarantined_member_changes_the_etag_and_restarts_the_transfer(
     sh, link, token = public_zip
     link.downloads_remaining = 5
     db.commit()
-    first = await client.get(f"/api/public/{token}/download-zip")
+    first = await client.get(public_download_url(db, token))
     etag = first.headers["etag"]
     total = len(first.content)
 
@@ -210,7 +211,7 @@ async def test_a_quarantined_member_changes_the_etag_and_restarts_the_transfer(
     db.commit()
 
     resumed = await client.get(
-        f"/api/public/{token}/download-zip",
+        public_download_url(db, token),
         headers={"Range": f"bytes={total - 100}-", "If-Range": etag},
     )
     assert resumed.status_code == 200, "a stale If-Range must not be resumed"
@@ -222,10 +223,10 @@ async def test_a_matching_if_range_is_honoured(client, db, public_zip, redis_stu
     sh, link, token = public_zip
     link.downloads_remaining = 5
     db.commit()
-    first = await client.get(f"/api/public/{token}/download-zip")
+    first = await client.get(public_download_url(db, token))
     etag = first.headers["etag"]
     r = await client.get(
-        f"/api/public/{token}/download-zip",
+        public_download_url(db, token),
         headers={"Range": "bytes=100-", "If-Range": etag},
     )
     assert r.status_code == 206
@@ -239,13 +240,13 @@ async def test_a_matching_if_range_is_honoured(client, db, public_zip, redis_stu
 async def test_a_corroborated_resume_is_free(client, db, public_zip, redis_stub):
     """One download, one unit - even though it took two requests."""
     sh, link, token = public_zip
-    full = await client.get(f"/api/public/{token}/download-zip")
+    full = await client.get(public_download_url(db, token))
     assert full.status_code == 200
     db.refresh(link)
     assert link.downloads_remaining == 0
 
     resumed = await client.get(
-        f"/api/public/{token}/download-zip", headers={"Range": "bytes=800-"}
+        public_download_url(db, token), headers={"Range": "bytes=800-"}
     )
     assert resumed.status_code == 206, resumed.text
     db.refresh(link)
@@ -261,7 +262,7 @@ async def test_an_uncorroborated_range_pays_like_any_other_download(
     exactly the bypass the old always-charge rule existed to prevent."""
     sh, link, token = public_zip
     r = await client.get(
-        f"/api/public/{token}/download-zip", headers={"Range": "bytes=800-"}
+        public_download_url(db, token), headers={"Range": "bytes=800-"}
     )
     assert r.status_code == 206
     db.refresh(link)
@@ -276,7 +277,7 @@ async def test_an_uncorroborated_range_cannot_drain_a_spent_link(
     link.downloads_remaining = 0
     db.commit()
     r = await client.get(
-        f"/api/public/{token}/download-zip", headers={"Range": "bytes=800-"}
+        public_download_url(db, token), headers={"Range": "bytes=800-"}
     )
     assert r.status_code == 410, r.text
     assert r.json()["code"] == "PUBLIC_LINK_EXHAUSTED"
@@ -292,7 +293,7 @@ async def test_a_resume_of_a_different_archive_is_not_free(
     sh, link, token = public_zip
     link.downloads_remaining = 5
     db.commit()
-    await client.get(f"/api/public/{token}/download-zip")
+    await client.get(public_download_url(db, token))
     db.refresh(link)
     before = link.downloads_remaining
 
@@ -313,7 +314,7 @@ async def test_a_resume_of_a_different_archive_is_not_free(
     db.commit()
 
     r = await client.get(
-        f"/api/public/{token}/download-zip", headers={"Range": "bytes=800-"}
+        public_download_url(db, token), headers={"Range": "bytes=800-"}
     )
     assert r.status_code == 206
     db.refresh(link)
@@ -327,10 +328,10 @@ async def test_a_corroborated_resume_is_not_logged_again(
     from app.models.download_log import DownloadLog
 
     sh, link, token = public_zip
-    await client.get(f"/api/public/{token}/download-zip")
+    await client.get(public_download_url(db, token))
     n = db.query(DownloadLog).filter(DownloadLog.share_id == sh.id).count()
     await client.get(
-        f"/api/public/{token}/download-zip", headers={"Range": "bytes=800-"}
+        public_download_url(db, token), headers={"Range": "bytes=800-"}
     )
     assert db.query(DownloadLog).filter(DownloadLog.share_id == sh.id).count() == n
 
@@ -344,7 +345,7 @@ async def test_a_range_starting_at_zero_is_a_fresh_download_and_pays(
     link.downloads_remaining = 2
     db.commit()
     await client.get(
-        f"/api/public/{token}/download-zip", headers={"Range": "bytes=0-100"}
+        public_download_url(db, token), headers={"Range": "bytes=0-100"}
     )
     db.refresh(link)
     assert link.downloads_remaining == 1
@@ -363,8 +364,8 @@ async def test_two_downloads_of_one_share_are_byte_identical(
     sh, link, token = public_zip
     link.downloads_remaining = 5
     db.commit()
-    a = await client.get(f"/api/public/{token}/download-zip")
-    b = await client.get(f"/api/public/{token}/download-zip")
+    a = await client.get(public_download_url(db, token))
+    b = await client.get(public_download_url(db, token))
     assert a.content == b.content
 
 
@@ -529,11 +530,11 @@ async def test_an_expensive_resume_degrades_to_the_full_archive(
     sh, link, token = public_zip
     link.downloads_remaining = 5
     db.commit()
-    full = await client.get(f"/api/public/{token}/download-zip")
+    full = await client.get(public_download_url(db, token))
     redis_stub.store.clear()  # cold CRC cache
 
     r = await client.get(
-        f"/api/public/{token}/download-zip", headers={"Range": "bytes=2000-"}
+        public_download_url(db, token), headers={"Range": "bytes=2000-"}
     )
     assert r.status_code == 200
     assert "content-range" not in r.headers
@@ -552,7 +553,7 @@ async def test_a_dead_redis_still_serves_the_archive(client, db, public_zip, mon
     monkeypatch.setattr(redis_client, "get_redis", _boom)
 
     sh, link, token = public_zip
-    r = await client.get(f"/api/public/{token}/download-zip")
+    r = await client.get(public_download_url(db, token))
     assert r.status_code == 200
     with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
         assert zf.testzip() is None

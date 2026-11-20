@@ -59,6 +59,10 @@ _NOT_CLIENT_REACHABLE = {
         "raised only by POST /api/secrets/{id}/link, which the desktop client "
         "never calls (it only reads links back)"
     ),
+    "DOWNLOAD_TICKET_REQUIRED": (
+        "raised only on the anonymous /api/public/{token} download routes; the "
+        "desktop client creates and shows links but never downloads through one"
+    ),
 }
 
 # Admin-only service modules, mirroring test_error_code_i18n_coverage.py.

@@ -75,12 +75,21 @@ test('public link password unlock (UI) + download-limit exhaustion (API)', async
 
   const meta = await fetch(`${BASE}/api/public/${token}`, { headers: { cookie } })
   const fileId = (await meta.json()).files[0].id as string
-  const dl1 = await fetch(`${BASE}/api/public/${token}/files/${fileId}/download`, {
+  // What a mail link scanner sends: the bare URL. Refused, and charges nothing.
+  const scanner = await fetch(`${BASE}/api/public/${token}/files/${fileId}/download`, {
     headers: { cookie },
   })
+  expect(scanner.status).toBe(403)
+  // The page's Download click: POST for the URL, then fetch it.
+  const mint = await fetch(`${BASE}/api/public/${token}/download-ticket`, {
+    method: 'POST',
+    headers: { cookie, 'content-type': 'application/json' },
+    body: JSON.stringify({ file_id: fileId }),
+  })
+  expect(mint.status).toBe(200)
+  const url = `${BASE}${(await mint.json()).url as string}`
+  const dl1 = await fetch(url, { headers: { cookie } })
   expect(dl1.status).toBe(200)
-  const dl2 = await fetch(`${BASE}/api/public/${token}/files/${fileId}/download`, {
-    headers: { cookie },
-  })
+  const dl2 = await fetch(url, { headers: { cookie } })
   expect(dl2.status).toBe(410)
 })

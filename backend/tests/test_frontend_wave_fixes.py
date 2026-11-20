@@ -144,10 +144,14 @@ def test_the_mail_log_deep_link_filter_is_clearable():
 def test_the_public_share_page_refreshes_after_a_download():
     """A plain `<a href>` cannot report a failure. A link with download_limit=1
     over two files kept saying "1 download left" and kept offering the second
-    file after the first click spent the budget."""
+    file after the first click spent the budget. Since v2.32.0 every Download
+    (each file, the ZIP, the preview's) goes through `startDownload`, whose
+    navigation cannot report a failure either - so that is where it refreshes."""
     src = _read("views/PublicShare.vue")
-    assert "refreshAfterDownload" in src
-    assert src.count("@click=\"refreshAfterDownload\"") >= 2
+    assert src.count('@click="startDownload(') >= 2
+    assert "void startDownload(previewFile.value.id)" in src
+    start = src.index("async function startDownload")
+    assert "refreshAfterDownload()" in src[start : src.index("\n  }\n", start)]
 
 
 def test_a_password_change_keeps_this_device_signed_in():

@@ -38,6 +38,7 @@ from app.models.share import Share, ShareKind, ShareState
 from app.models.share_recipient import ShareRecipient
 from app.models.user import UserRole
 from app.services import settings as settings_svc
+from tests._public_link_helpers import public_download_url
 
 PW = "Pass12345678!"
 PAYLOAD = b"".join(bytes([i % 251]) for i in range(600))
@@ -123,7 +124,7 @@ async def test_byte_by_byte_ranges_cannot_extract_a_file_for_free(
     still sees a link with its one download intact. The walk must cost exactly
     what a download costs."""
     owner, sh, f, link, token = public_one_download
-    url = f"/api/public/{token}/files/{f.id}/download"
+    url = public_download_url(db, token, f.id)
 
     collected = bytearray()
     for i in range(len(PAYLOAD)):
@@ -151,7 +152,7 @@ async def test_the_desktop_client_size_probe_is_still_free(
     charging it made a download_limit=1 share undownloadable from the client
     while a browser still worked (v2.6.0)."""
     owner, sh, f, link, token = public_one_download
-    url = f"/api/public/{token}/files/{f.id}/download"
+    url = public_download_url(db, token, f.id)
 
     for _ in range(5):
         r = await client.get(url, headers={"Range": "bytes=1-1"})

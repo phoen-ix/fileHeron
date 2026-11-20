@@ -9,9 +9,8 @@
 
   import {
     fetchPublicShare,
-    publicDownloadUrl,
+    getPublicDownloadUrl,
     publicPreviewUrl,
-    publicZipUrl,
     unlockPublicShare,
   } from '@/api/publicLinks'
   import BrandLogo from '@/components/BrandLogo.vue'
@@ -117,16 +116,39 @@
   }
 
   function onPreviewDownload() {
-    if (previewFile.value) {
-      window.location.href = publicDownloadUrl(token.value, previewFile.value.id)
+    if (previewFile.value) void startDownload(previewFile.value.id)
+  }
+
+  /* A download is charged, so the page links to none: a mail link scanner
+   * fetches every URL a mailed page links to, and on 2026-11-20 one spent a
+   * two-download link before its recipient had seen the mail. A click asks the
+   * server for a short-lived URL and only then navigates to it. A refusal (a
+   * spent link, a file still being scanned) is said here on the page, where the
+   * old `<a href>` could only fail in the browser's download shelf. */
+  const downloading = ref<string | null>(null)
+  const downloadError = ref<string | null>(null)
+
+  async function startDownload(fileId: string | null) {
+    downloadError.value = null
+    downloading.value = fileId ?? 'zip'
+    try {
+      const { data } = await getPublicDownloadUrl(token.value, fileId)
+      window.location.href = data.url
       void refreshAfterDownload()
+    } catch (err: unknown) {
+      const env = asEnvelope(err)
+      const fallback = env?.error ?? t('public_share.errors.generic')
+      await load()
+      downloadError.value = env ? t(`public_share.errors.${env.code}`, fallback) : fallback
+    } finally {
+      downloading.value = null
     }
   }
 
   /** Re-read the link after a download starts.
    *
-   * A plain `<a href>` cannot report a failure: the browser shelf says "Failed"
-   * and the page is unchanged. So a link with `download_limit=1` over two files
+   * The navigation to the bytes cannot report a failure: the browser shelf says
+   * "Failed" and the page is unchanged. So a link with `download_limit=1` over two files
    * kept saying "1 download left" and kept offering the second file and the ZIP
    * after the first click spent the budget, and clicking again produced a silent
    * 410 with nothing on screen to explain it. Refreshing the metadata makes the
@@ -233,15 +255,17 @@
           }}
         </p>
 
-        <a
+        <p v-if="downloadError" class="fh-field-error" role="alert">{{ downloadError }}</p>
+
+        <button
           v-if="canDownloadZip"
-          :href="publicZipUrl(token)"
+          type="button"
           class="fh-btn-text zip-all"
-          :download="`share-${token.slice(0, 8)}.zip`"
-          @click="refreshAfterDownload"
+          :disabled="downloading !== null"
+          @click="startDownload(null)"
         >
           {{ t('public_share.download_all_zip') }} <span aria-hidden="true">↓</span>
-        </a>
+        </button>
 
         <ul class="files">
           <template v-for="group in fileGroups" :key="group.dir ?? ''">
@@ -282,15 +306,15 @@
                 >
                   {{ t('file_preview.open') }}
                 </button>
-                <a
+                <button
                   v-if="fileEnabled(f.state)"
-                  :href="publicDownloadUrl(token, f.id)"
+                  type="button"
                   class="fh-btn-text"
-                  :download="f.original_filename"
-                  @click="refreshAfterDownload"
+                  :disabled="downloading !== null"
+                  @click="startDownload(f.id)"
                 >
                   {{ t('public_share.download') }} <span aria-hidden="true">↓</span>
-                </a>
+                </button>
               </div>
             </li>
           </template>

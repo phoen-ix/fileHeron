@@ -88,6 +88,14 @@ be resumed without spending another unit, as long as the server can corroborate
 that it really was in flight; a bare `Range:` header from a fresh connection is
 charged like any other download.
 
+**Only a click on the page's Download button counts.** Many companies' mail
+systems (Microsoft 365, Proofpoint, Mimecast) open every link in an incoming
+email to check it, and used to spend a limited link before the recipient had
+seen the mail. Opening the link costs nothing; the Download button asks the
+server for a download address that works for a few minutes. A script that
+fetches the download address directly has to `POST /api/public/{token}/download-ticket`
+first, as the button does.
+
 ## In-browser preview
 
 Supported files get a **Preview** button (in the share view and on `/d/{token}`) that

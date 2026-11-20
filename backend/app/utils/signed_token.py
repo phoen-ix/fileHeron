@@ -6,7 +6,8 @@ payload under `JWT_SECRET`, base64url it without padding. One primitive now;
 each token keeps its OWN payload shape and domain prefix, so the formats on
 the wire are byte-identical to before and no outstanding token is invalidated
 (audit 2026-11-07). The OIDC connect cookie joined in 2026-11-08 under its own
-domain, after carrying a hex-encoded copy of the same HMAC twice.
+domain, after carrying a hex-encoded copy of the same HMAC twice, and the
+public-link download ticket (`services/public_link.py`) in 2026-11-20.
 """
 from __future__ import annotations
 

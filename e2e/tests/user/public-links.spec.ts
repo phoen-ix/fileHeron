@@ -72,7 +72,7 @@ test('the owner creates a protected link; a visitor unlocks, downloads, and lose
   await expect(visitor.getByText('3 downloads left')).toBeVisible()
 
   const plan = visitor.locator('.file-row', { hasText: 'plan.txt' })
-  expect(await download(visitor, plan.getByRole('link', { name: 'Download' }))).toEqual({
+  expect(await download(visitor, plan.getByRole('button', { name: 'Download' }))).toEqual({
     name: 'plan.txt',
     text: 'the plan',
   })
@@ -81,7 +81,7 @@ test('the owner creates a protected link; a visitor unlocks, downloads, and lose
   await expect(visitor.getByRole('dialog')).toContainText('notes')
   await visitor.keyboard.press('Escape')
   await expect(visitor.getByRole('dialog')).toHaveCount(0)
-  const zip = await download(visitor, visitor.getByRole('link', { name: /Download all as ZIP/ }))
+  const zip = await download(visitor, visitor.getByRole('button', { name: /Download all as ZIP/ }))
   expect(zip.text).toContain('notes.txt')
 
   // The owner was told, and sees the count; then revokes.
@@ -111,7 +111,7 @@ test('an exhausted link, an ended share and an unknown token each say so', async
 
   const once = new URL(exhausted.linkUrl!).pathname
   await page.goto(once)
-  await download(page, page.locator('.file-row').getByRole('link', { name: 'Download' }))
+  await download(page, page.locator('.file-row').getByRole('button', { name: 'Download' }))
   await page.reload()
   await expect(
     page.getByRole('heading', { level: 1, name: 'This link has reached its download limit.' }),
@@ -149,10 +149,7 @@ async function composeToOutsider(page: Page, browser: Browser): Promise<void> {
   const box = page.locator('.recipient-picker').getByRole('combobox')
   await box.fill(outsider)
   const opt = page.getByTestId('external-option')
-  await expect(async () => {
-    if (!(await opt.isVisible())) await box.press('ArrowDown')
-    await expect(opt).toBeVisible({ timeout: 1_000 })
-  }).toPass()
+  await expect(opt).toBeVisible()
   await opt.click()
   await expect(page.getByText('Required: recipients without an account receive this link by email.')).toBeVisible()
   await expect(page.getByLabel('Email the download link to these addresses')).toBeChecked()

@@ -18,6 +18,7 @@ from app.models.share import Share, ShareKind, ShareState
 from app.models.share_recipient import ShareRecipient
 from app.models.user import UserRole
 from app.services import public_link as public_link_svc
+from tests._public_link_helpers import public_download_url
 
 
 def _naive_future(days: int = 1) -> datetime:
@@ -155,7 +156,7 @@ async def test_public_zip_no_password(make_user, db, client, monkeypatch):
         files_spec=[("a.txt", b"a" * 100, FileState.clean), ("b.txt", b"b" * 100, FileState.clean)],
     )
     token = _make_link(db, sender, share)
-    resp = await client.get(f"/api/public/{token}/download-zip")
+    resp = await client.get(public_download_url(db, token))
     assert resp.status_code == 200, resp.text
     zf = zipfile.ZipFile(io.BytesIO(resp.content))
     assert sorted(zf.namelist()) == ["a.txt", "b.txt"]
@@ -168,7 +169,7 @@ async def test_public_zip_password_gate(make_user, db, client, monkeypatch):
         make_user, db, monkeypatch, files_spec=[("a.txt", b"a" * 10, FileState.clean)]
     )
     token = _make_link(db, sender, share, password="s3cret!")
-    resp = await client.get(f"/api/public/{token}/download-zip")
+    resp = await client.get(public_download_url(db, token))
     assert resp.status_code == 401
     assert resp.json()["code"] == "UNLOCK_REQUIRED"
 
@@ -179,9 +180,9 @@ async def test_public_zip_counter_exhaustion(make_user, db, client, monkeypatch)
         make_user, db, monkeypatch, files_spec=[("a.txt", b"a" * 10, FileState.clean)],
     )
     token = _make_link(db, sender, share, download_limit=1)
-    r1 = await client.get(f"/api/public/{token}/download-zip")
+    r1 = await client.get(public_download_url(db, token))
     assert r1.status_code == 200, r1.text
-    r2 = await client.get(f"/api/public/{token}/download-zip")
+    r2 = await client.get(public_download_url(db, token))
     assert r2.status_code == 410
     assert r2.json()["code"] == "PUBLIC_LINK_EXHAUSTED"
 

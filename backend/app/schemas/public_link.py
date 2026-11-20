@@ -19,6 +19,13 @@ class CreatePublicLinkRequest(APIBaseModel):
     notify_on_download: bool = False
 
 
+class UpdatePublicLinkRequest(APIBaseModel):
+    """PATCH: `download_limit` omitted = no change; `download_limit_clear` = unlimited."""
+
+    download_limit: int | None = Field(default=None, gt=0, le=100_000)
+    download_limit_clear: bool = False
+
+
 class CreatePublicLinkResponse(APIBaseModel):
     """Returned exactly once on creation. The plaintext token + the full
     URL are not retrievable later - owner must keep them."""
@@ -92,6 +99,16 @@ class UnlockPublicLinkRequest(APIBaseModel):
 
 class UnlockPublicLinkResponse(APIBaseModel):
     ok: bool
+
+
+class PublicDownloadTicketRequest(APIBaseModel):
+    """`file_id` None = the whole share as one ZIP."""
+
+    file_id: str | None = Field(default=None, max_length=36)
+
+
+class PublicDownloadTicketResponse(APIBaseModel):
+    url: str
 
 
 # ---------------------------------------------------------------------------

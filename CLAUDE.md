@@ -234,6 +234,7 @@ One doc per subsystem in `docs/engineering/`. They are not auto-loaded. **Before
 - `ShareCreate.vue`'s `canSubmit` is derived from its visible `blockers` list - add a condition to the list, never beside it.
 #### Public links and recipients without an account → [`public-links.md`](docs/engineering/public-links.md)
 - A link's URL is re-viewable by design (`token_encrypted`), never "shown once"; `public_link.public_url` is the one URL builder.
+- A GET never pays for a public download - mail link scanners fetch every URL a mailed page links to. The page's buttons POST `/download-ticket` and the charging path checks the ticket right before the decrement; resumes and the `bytes=1-1` probe stay ticket-free.
 - The link-wide brute-force lock needs failures from ≥3 distinct IPs (`MIN_DISTINCT_IPS_FOR_LOCK`); one source only gets a 429.
 - `/d`, `/s` and `/r` are code constants, pinned by `test_link_base_paths.py`.
 - Never look an outside address up; whether it is mailed is the sender's per-share choice, never gated on `notify_recipients`.

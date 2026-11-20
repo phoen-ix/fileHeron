@@ -462,6 +462,12 @@ export interface CreatePublicLinkResponse {
   created_at: string
 }
 
+/** PATCH /api/shares/{id}/public-link: `download_limit` null = no change. */
+export interface UpdatePublicLinkRequest {
+  download_limit: number | null
+  download_limit_clear: boolean
+}
+
 export interface CreatePublicLinkRequest {
   password?: string | null
   download_limit?: number | null
@@ -481,6 +487,11 @@ export interface PublicShareFile {
    * downloadable); this is what distinguishes "scanned and clean" from
    * "never scanned". Surface it, don't imply safety. */
   av_unscanned?: boolean
+}
+
+/** POST /api/public/{token}/download-ticket: the URL a Download click opens. */
+export interface PublicDownloadTicketResponse {
+  url: string
 }
 
 export interface PublicShareResponse {

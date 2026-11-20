@@ -1,20 +1,25 @@
-"""Anonymous public-share routes mounted at /d/{token}.
-
-Three endpoints, no auth:
-- GET  /d/{token}                              - landing metadata
-- POST /d/{token}/unlock                       - password unlock
-- GET  /d/{token}/files/{file_id}/download     - actual file fetch
+"""Anonymous public-share routes, mounted at /api/public/{token} (the SPA page
+is /d/{token}). No auth:
+- GET  /api/public/{token}                           - landing metadata
+- POST /api/public/{token}/unlock                    - password unlock
+- POST /api/public/{token}/download-ticket           - a click: mint the URL below
+- GET  /api/public/{token}/files/{file_id}/download  - one file
+- GET  /api/public/{token}/download-zip              - every file as one ZIP
+- GET  /api/public/{token}/files/{file_id}/preview   - inline, never charged
 
 Unlock flow:
 - If the link has a password, /unlock checks it and sets a short-lived
-  signed cookie scoped to /d/{token}. The cookie payload is an HMAC of
-  (link_id, exp) under JWT_SECRET - no DB lookup on subsequent download
+  signed cookie scoped to /api/public/{token}. The cookie payload is an HMAC
+  of (link_id, exp) under JWT_SECRET - no DB lookup on subsequent download
   requests (the cookie itself is the proof).
 - The cookie expires when the share expires or in 24h, whichever comes
   first.
-- If the link has no password, downloads are open immediately.
+- If the link has no password, the page is open immediately.
 
-Counter decrement happens on the actual download request, atomically.
+A download that would be CHARGED needs a ticket from /download-ticket (see
+`public_link.assert_download_ticket`): mail link scanners fetch every URL a
+mailed page links to, so a plain GET never pays. The counter decrement happens
+on the download request itself, atomically.
 """
 from __future__ import annotations
 
@@ -22,8 +27,9 @@ import binascii
 import json
 import logging
 from datetime import datetime, timedelta
+from urllib.parse import quote
 
-from fastapi import APIRouter, Cookie, Depends, Header, Request, Response
+from fastapi import APIRouter, Cookie, Depends, Header, Query, Request, Response
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -35,6 +41,8 @@ from ..models.file import File, FileApprovalState, FileState
 from ..models.public_link import PublicLink
 from ..models.share import Share
 from ..schemas.public_link import (
+    PublicDownloadTicketRequest,
+    PublicDownloadTicketResponse,
     PublicShareFile,
     PublicShareResponse,
     UnlockPublicLinkRequest,
@@ -178,6 +186,21 @@ def landing(
     )
 
 
+def _link_file_or_404(db: Session, link: PublicLink, file_id: str) -> File:
+    file = db.query(File).filter(File.id == file_id).one_or_none()
+    # A file still awaiting its own four-eyes decision is not part of this link.
+    # 404 rather than 409: an anonymous holder is neither the owner nor an
+    # approver, so the only thing a distinct code would tell them is that
+    # unreleased content exists.
+    if (
+        file is None
+        or file.share_id != link.share_id
+        or file.approval_state != FileApprovalState.approved
+    ):
+        raise AppError(404, "FILE_NOT_FOUND", "File not found in this public share.")
+    return file
+
+
 @router.post("/{token}/unlock", response_model=UnlockPublicLinkResponse)
 def unlock(
     token: str,
@@ -235,6 +258,37 @@ def unlock(
     return UnlockPublicLinkResponse(ok=True)
 
 
+@router.post("/{token}/download-ticket", response_model=PublicDownloadTicketResponse)
+def download_ticket(
+    token: str,
+    payload: PublicDownloadTicketRequest,
+    db: Session = Depends(get_db),
+    fh_dl_unlock: str | None = Cookie(default=None),
+) -> PublicDownloadTicketResponse:
+    """The page's Download button: a POST a link scanner does not make. Charges
+    nothing - the URL it returns pays when it is fetched. Runs the checks the
+    download would, so a spent link, a locked one or a file still being scanned
+    answers on the page instead of as a browser error page."""
+    from ..services import settings_registry
+
+    link = public_link_svc.get_link_by_token(db, token)
+    public_link_svc.assert_link_usable(db, link)
+    if not _is_unlocked(link, fh_dl_unlock):
+        raise AppError(401, "UNLOCK_REQUIRED", "Submit the password first.")
+    base = f"{COOKIE_PATH_PREFIX}/{quote(token, safe='')}"
+    if payload.file_id is None:
+        if not file_svc.downloadable_files(db, link.share_id):
+            raise AppError(400, "NO_DOWNLOADABLE_FILES", "This share has no downloadable files.")
+        target, path = public_link_svc.ZIP_TARGET, f"{base}/download-zip"
+    else:
+        file = _link_file_or_404(db, link, payload.file_id)
+        file_svc.assert_state_servable(file)
+        target, path = file.id, f"{base}/files/{quote(file.id, safe='')}/download"
+    ttl = settings_registry.effective(db, settings_registry.K.DOWNLOAD_SIGNED_URL_TTL_SEC)
+    ticket = public_link_svc.issue_download_ticket(link.id, target, ttl)
+    return PublicDownloadTicketResponse(url=f"{path}?t={ticket}")
+
+
 @router.get("/{token}/files/{file_id}/download")
 def public_download(
     token: str,
@@ -242,6 +296,7 @@ def public_download(
     request: Request,
     db: Session = Depends(get_db),
     fh_dl_unlock: str | None = Cookie(default=None),
+    t: str | None = Query(default=None),
 ) -> Response:
     link = public_link_svc.get_link_by_token(db, token)
 
@@ -294,17 +349,7 @@ def public_download(
         db, request=request, kind="download", file_id=file_id
     )
 
-    file = db.query(File).filter(File.id == file_id).one_or_none()
-    # A file still awaiting its own four-eyes decision is not part of this link.
-    # 404 rather than 409: an anonymous holder is neither the owner nor an
-    # approver, so the only thing a distinct code would tell them is that
-    # unreleased content exists.
-    if (
-        file is None
-        or file.share_id != link.share_id
-        or file.approval_state != FileApprovalState.approved
-    ):
-        raise AppError(404, "FILE_NOT_FOUND", "File not found in this public share.")
+    file = _link_file_or_404(db, link, file_id)
     file_svc.assert_state_servable(file)
 
     backend = get_storage_backend()
@@ -324,6 +369,8 @@ def public_download(
     # this uses the CORROBORATED `is_continuation` computed above, not the bare
     # header test.
     if not is_continuation and not is_probe:
+        # Only a click pays: a plain GET from a mail link scanner stops here.
+        public_link_svc.assert_download_ticket(t, link_id=link.id, target=file.id)
         # Counter (atomic). On success, `downloads_remaining` reflects the
         # post-decrement value used by the owner notification below.
         allowed, downloads_remaining = public_link_svc.decrement_counter(db, link=link)
@@ -412,17 +459,7 @@ def public_preview(
     ):
         raise AppError(403, "PREVIEW_DISABLED", "In-browser preview is disabled.")
 
-    file = db.query(File).filter(File.id == file_id).one_or_none()
-    # A file still awaiting its own four-eyes decision is not part of this link.
-    # 404 rather than 409: an anonymous holder is neither the owner nor an
-    # approver, so the only thing a distinct code would tell them is that
-    # unreleased content exists.
-    if (
-        file is None
-        or file.share_id != link.share_id
-        or file.approval_state != FileApprovalState.approved
-    ):
-        raise AppError(404, "FILE_NOT_FOUND", "File not found in this public share.")
+    file = _link_file_or_404(db, link, file_id)
     # The same gate as the authenticated preview, including the "no verdict is
     # not a clean verdict" refusal for files clamd never read.
     file_svc.assert_state_previewable(file)
@@ -509,6 +546,7 @@ def public_download_zip(
     fh_dl_unlock: str | None = Cookie(default=None),
     range_header: str | None = Header(default=None, alias="Range"),
     if_range: str | None = Header(default=None, alias="If-Range"),
+    t: str | None = Query(default=None),
 ) -> Response:
     """Stream a single ZIP of every downloadable file behind a public link.
     Same unlock gate as the single-file path; ONE ZIP counts as ONE download
@@ -584,6 +622,10 @@ def public_download_zip(
     # this copy was missed (audit #2 cross-check). A resume with no payment
     # behind it is still a new transfer and is still refused.
     if not corroborated:
+        # Only a click pays: a plain GET from a mail link scanner stops here.
+        public_link_svc.assert_download_ticket(
+            t, link_id=link.id, target=public_link_svc.ZIP_TARGET
+        )
         maintenance_svc.refuse_if_maintenance(db, kind="download")
 
     downloads_remaining = link.downloads_remaining

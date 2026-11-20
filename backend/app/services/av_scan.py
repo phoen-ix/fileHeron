@@ -5,8 +5,9 @@ Two scan paths:
   reads the file directly. Requires the file to be visible at the same
   absolute path inside the clamav container (we bind-mount ./data/files
   into both backend and clamav at /data/files, so this just works).
-- ``scan_stream(file_handle)`` - INSTREAM fallback if path-based scan
-  refuses (e.g. permissions). Used by tests + a fallback in production.
+- ``scan_stream(file_handle)`` - INSTREAM: the worker reads the bytes and
+  streams them. Used for object stores, encrypted files, and as the fallback
+  when clamd cannot open a local file itself (``scan_stored``).
 
 We deliberately do not pull in pyclamd / clamd. The protocol is small,
 the error surface is narrow, and a 70-line dependency-free client is
@@ -188,6 +189,23 @@ def scan_stream(fh) -> ScanResult:
         s.close()
 
 
+# clamd's replies when IT cannot reach a file the worker can (its own uid, a
+# path its container does not mount). All answer at once, so streaming after
+# one never doubles a scan against job_timeout - a timeout or engine error does
+# not match and is returned as is.
+_CLAMD_OPEN_FAILURES = (
+    "Access denied",
+    "Permission denied",
+    "lstat() failed",
+    "Can't open file",
+    "File path check failure",
+)
+
+
+def _clamd_could_not_open(result: ScanResult) -> bool:
+    return result.state == "error" and any(m in result.raw for m in _CLAMD_OPEN_FAILURES)
+
+
 def scan_stored(backend, locator: str, cipher=None) -> ScanResult:
     """Scan stored bytes the way their storage allows - the ONE entry point the
     scanners use.
@@ -200,7 +218,15 @@ def scan_stored(backend, locator: str, cipher=None) -> ScanResult:
     if cipher is None:
         local = backend.local_path(locator)
         if local is not None:
-            return scan_path(local)
+            result = scan_path(local)
+            if not _clamd_could_not_open(result):
+                return result
+            # clamd runs as its own user and reads the shared mount itself, so a
+            # file it may not open (direct uploads were stored 0600 from v1.21.0
+            # until v2.31.1) answered `error` on every retry - the file never left
+            # ready_unscanned and its recipient mail never went out. The worker
+            # owns the file and can stream it instead.
+            logger.warning("av_scan: clamd could not open %s, streaming it: %s", local, result.raw)
         with backend.open(locator) as fh:
             return scan_stream(fh)
     from .file_encryption import open_plaintext

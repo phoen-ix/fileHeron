@@ -224,6 +224,7 @@ One doc per subsystem in `docs/engineering/`. They are not auto-loaded. **Before
 - `WorkerSettings.job_timeout` must stay above `av_scan.SOCKET_TIMEOUT_SEC`.
 - The verdict flip is conditional (`av_release.apply_verdict`); the infected branch reads the state `with_for_update()`.
 - `file.hard_delete` refuses an `infected` row unless `allow_quarantined=True`.
+- clamd reads the store as its OWN user: `LocalFilesystemBackend.finalize` leaves every file `0644` (direct uploads stage at `0600` - broken v1.21.0 to v2.31.0), and `scan_stored`'s INSTREAM fallback fires only on clamd's open failures, never on every `error`.
 #### Shares and share approval → [`shares.md`](docs/engineering/shares.md)
 - Co-recipient visibility has ONE definition, `share.RosterVisibility`, and every `ShareRecipientRef` builder goes through it (AST-pinned in `test_share_recipient_privacy.py`).
 - No self-approval, ever; `content_fingerprint` is mandatory and content-bound.

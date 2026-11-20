@@ -76,6 +76,91 @@ async def test_av_scan_clean_marks_file_clean(make_user, db, tmp_path, monkeypat
 
 
 @pytest.mark.asyncio
+async def test_a_file_clamd_cannot_open_is_streamed_and_released(
+    make_user, db, tmp_path, monkeypatch
+):
+    """The exact reply a 0600 direct upload drew from clamd (2026-11-20). Before
+    the fallback the worker answered `error` and the file stayed ready_unscanned
+    on every hourly retry; files stored that way before v2.31.1 still exist."""
+    sender = make_user(email="hr@test.local", role=UserRole.admin)
+    recipient = make_user(email="cli@test.local", role=UserRole.client)
+    _, file, on_disk = _seed_file_for_scan(db, sender, recipient, tmp_path, content=b"payload")
+
+    monkeypatch.setattr(
+        av_scan_svc,
+        "scan_path",
+        lambda p: ScanResult(state="error", signature=None, raw=f"{p}: Access denied. ERROR"),
+    )
+    streamed: list[bytes] = []
+
+    def fake_stream(fh):
+        streamed.append(fh.read())
+        return ScanResult(state="clean", signature=None, raw="stream: OK")
+
+    monkeypatch.setattr(av_scan_svc, "scan_stream", fake_stream)
+    from app.workers import av_scan as worker_mod
+    monkeypatch.setattr(worker_mod, "SessionLocal", lambda: db)
+
+    result = await av_scan_file(None, file.id)
+    assert streamed == [b"payload"]
+    assert result["state"] == "clean"
+    db.expire_all()
+    assert db.query(File).filter(File.id == file.id).one().state == FileState.clean
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "/data/files/x.bin: Access denied. ERROR",
+        "/data/files/x.bin: lstat() failed: Permission denied. ERROR",
+        "/data/files/x.bin: lstat() failed: No such file or directory. ERROR",
+    ],
+)
+def test_an_open_failure_streams_and_keeps_the_streamed_verdict(tmp_path, monkeypatch, raw):
+    from app.services.storage_backend import LocalFilesystemBackend
+
+    stored = tmp_path / "x.bin"
+    stored.write_bytes(b"x")
+    monkeypatch.setattr(
+        av_scan_svc, "scan_path", lambda _p: ScanResult(state="error", signature=None, raw=raw)
+    )
+    monkeypatch.setattr(
+        av_scan_svc,
+        "scan_stream",
+        lambda _fh: ScanResult(state="infected", signature="Eicar", raw="stream: Eicar FOUND"),
+    )
+    result = av_scan_svc.scan_stored(LocalFilesystemBackend(), str(stored))
+    assert (result.state, result.signature) == ("infected", "Eicar")
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "/data/files/x.bin returned empty reply",  # a socket timeout reads as empty
+        "/data/files/x.bin: Can't allocate memory ERROR",
+        "/data/files/x.bin: Heuristics.Limits.Exceeded.MaxFileSize ERROR",
+    ],
+)
+def test_any_other_clamd_error_is_returned_without_a_second_scan(tmp_path, monkeypatch, raw):
+    """A second full scan after a TIMEOUT would put two SOCKET_TIMEOUT_SEC
+    ceilings inside one job_timeout - arq would cancel and retry it forever."""
+    from app.services.storage_backend import LocalFilesystemBackend
+
+    stored = tmp_path / "x.bin"
+    stored.write_bytes(b"x")
+    monkeypatch.setattr(
+        av_scan_svc, "scan_path", lambda _p: ScanResult(state="error", signature=None, raw=raw)
+    )
+
+    def must_not_stream(_fh):
+        raise AssertionError("streamed after an error that was not an open failure")
+
+    monkeypatch.setattr(av_scan_svc, "scan_stream", must_not_stream)
+    result = av_scan_svc.scan_stored(LocalFilesystemBackend(), str(stored))
+    assert (result.state, result.raw) == ("error", raw)
+
+
+@pytest.mark.asyncio
 async def test_av_scan_infected_quarantines_and_revokes(make_user, db, tmp_path, monkeypatch):
     sender = make_user(email="hr@test.local", role=UserRole.admin)
     recipient = make_user(email="cli@test.local", role=UserRole.client)

@@ -1,7 +1,25 @@
 """LocalFilesystemBackend round-trip (v1.21.0 storage abstraction)."""
 from __future__ import annotations
 
+import os
+import stat
+import tempfile
+
 from app.services.storage_backend import LocalFilesystemBackend
+
+
+def test_finalize_stores_a_mkstemp_file_readable_by_others(tmp_path, monkeypatch):
+    """Every finalize caller that stages with mkstemp/NamedTemporaryFile hands
+    over a 0600 file; clamd reads the stored path as its own user."""
+    monkeypatch.setattr("app.config.settings.STORAGE_ROOT", str(tmp_path / "files"))
+    fd, src = tempfile.mkstemp(dir=tmp_path, suffix=".part")
+    os.write(fd, b"x")
+    os.close(fd)
+    assert stat.S_IMODE(os.stat(src).st_mode) == 0o600  # the precondition of the bug
+    b = LocalFilesystemBackend()
+    loc = b.generate_locator("file-id-mode")
+    b.finalize(src, loc)
+    assert stat.S_IMODE(os.stat(loc).st_mode) == 0o644
 
 
 def test_local_backend_roundtrip(tmp_path, monkeypatch):

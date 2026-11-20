@@ -154,6 +154,10 @@ class LocalFilesystemBackend(StorageBackend):
         # TUS_UPLOAD_DIR requirement), else copy2 + unlink (bind mounts look
         # cross-device inside the container - Errno 18 EXDEV).
         shutil.move(str(src_temp_path), str(dest))
+        # Both keep the source's mode, and a direct upload is staged with
+        # mkstemp (0600). clamd scans this path as ITS OWN user, so a 0600 file
+        # answered "Access denied" forever. 0644 is what tusd's files get.
+        dest.chmod(0o644)
 
     def open(self, locator: str) -> BinaryIO:
         return open(locator, "rb")

@@ -55,6 +55,34 @@ async def test_direct_upload_persists_file(make_user, db, client, login_as):
 
 
 @pytest.mark.asyncio
+async def test_a_direct_upload_is_stored_readable_by_clamd(make_user, db, client, login_as):
+    """clamd path-scans the stored file as ITS OWN user. The upload is staged
+    with mkstemp (0600), and from v1.21.0 until v2.31.1 that mode reached the
+    store: every direct upload answered "Access denied", stayed ready_unscanned
+    and its recipient mail never went out."""
+    import os
+    import stat
+
+    from app.models.user import UserRole
+
+    sender = make_user(email="up@test.local", role=UserRole.admin, password="Pass12345678!")
+    recipient = make_user(email="cli@test.local", role=UserRole.client)
+    share = await _make_share(db, sender, recipient)
+    token, _ = await login_as("up@test.local", "Pass12345678!")
+
+    resp = await client.post(
+        "/api/uploads/direct",
+        data={"share_id": share.id},
+        files={"file": ("hello.txt", b"hello world", "text/plain")},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201, resp.text
+    f = db.query(File).filter(File.id == resp.json()["file_id"]).one()
+    mode = stat.S_IMODE(os.stat(f.storage_path).st_mode)
+    assert mode & stat.S_IROTH, f"stored as {oct(mode)}: clamd cannot open it"
+
+
+@pytest.mark.asyncio
 async def test_direct_upload_rejects_over_cap(make_user, db, client, login_as, monkeypatch):
     from app.models.user import UserRole
     from app.services import settings_registry as sr

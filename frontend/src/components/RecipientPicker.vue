@@ -431,6 +431,11 @@
 
   watch(query, (v) => {
     errorMsg.value = null
+    // A pick closes the list but keeps the focus, so `@focus` never fires for
+    // the NEXT recipient: typing must reopen it, or the second address sat in
+    // the box as "not added yet - pick it from the list" with no list to pick
+    // from, and the form would not submit.
+    if (v) showResults.value = true
     if (searchTimer) clearTimeout(searchTimer)
     searchTimer = setTimeout(() => {
       void doSearch(v)
@@ -520,6 +525,10 @@
   }
 
   function selectCursor() {
+    // Until the search for what is typed has answered, the options on hand are
+    // the previous query's (after a pick: the empty query's list of everyone),
+    // and Enter would add whoever sat at the cursor instead of the address.
+    if (!settled.value || !showResults.value) return
     const usersLen = filteredUsers.value.length
     const total = optionCount.value
     // Enter with no results (or a stale cursor past the shrunk list) must not

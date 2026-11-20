@@ -167,6 +167,67 @@ describe('RecipientPicker', () => {
   })
 })
 
+/* A pick closed the list while the field kept the focus, and only `@focus` (or
+ * an arrow key) opened it again: the second address sat in the box as "not
+ * added yet - pick it from the list" with no list, and the form would not
+ * submit (2026-11-20). These type the next recipient WITHOUT a fresh focus. */
+describe('RecipientPicker with several recipients', () => {
+  async function typeOn(w: ReturnType<typeof mountPicker>, text: string) {
+    await w.find('input').setValue(text)
+    vi.advanceTimersByTime(200)
+    await flushPromises()
+  }
+
+  it('adds a second and a third recipient without leaving the field', async () => {
+    const w = mountPicker({ allowExternal: true })
+    await type(w, 'first@elsewhere.test')
+    await w.find('[data-testid="external-option"]').trigger('mousedown')
+
+    await typeOn(w, 'second@elsewhere.test')
+    const row = w.find('[data-testid="external-option"]')
+    expect(row.exists()).toBe(true)
+    expect(w.find('[data-testid="recipient-pending"]').exists()).toBe(false)
+    await row.trigger('mousedown')
+
+    await typeOn(w, 'anna')
+    await w.find('input').trigger('keydown', { key: 'Enter' })
+
+    expect(w.emitted('update:modelValue')?.at(-1)).toEqual([
+      {
+        user_ids: [ANNA.user_id],
+        group_ids: [],
+        emails: ['first@elsewhere.test', 'second@elsewhere.test'],
+      },
+    ])
+  })
+
+  it('ignores Enter until the search for the typed text has answered', async () => {
+    // As for an admin: the empty query (run after every pick) lists everyone.
+    api.searchUsers.mockImplementation(async (q: string) => ({
+      data: { items: !q || ANNA.email.includes(q.toLowerCase()) ? [ANNA] : [] },
+    }))
+    const w = mountPicker({ allowExternal: true })
+    await type(w, 'first@elsewhere.test')
+    await w.find('[data-testid="external-option"]').trigger('mousedown')
+    vi.advanceTimersByTime(200)
+    await flushPromises()
+
+    const input = w.find('input')
+    await input.setValue('second@elsewhere.test')
+    await input.trigger('keydown', { key: 'Enter' })
+    expect(w.emitted('update:modelValue')?.at(-1)).toEqual([
+      { user_ids: [], group_ids: [], emails: ['first@elsewhere.test'] },
+    ])
+
+    vi.advanceTimersByTime(200)
+    await flushPromises()
+    await input.trigger('keydown', { key: 'Enter' })
+    expect(w.emitted('update:modelValue')?.at(-1)).toEqual([
+      { user_ids: [], group_ids: [], emails: ['first@elsewhere.test', 'second@elsewhere.test'] },
+    ])
+  })
+})
+
 describe('RecipientPicker groups', () => {
   const RIVERSIDE = {
     id: 3,

@@ -24,10 +24,7 @@ async function newShareForm(page: import('@playwright/test').Page, ceiling = 1) 
   const box = page.locator('.recipient-picker').getByRole('combobox')
   await box.fill(to.name)
   const opt = page.getByRole('option', { name: new RegExp(to.name) })
-  await expect(async () => {
-    if (!(await opt.isVisible())) await box.press('ArrowDown')
-    await expect(opt).toBeVisible({ timeout: 1_000 })
-  }).toPass()
+  await expect(opt).toBeVisible()
   await opt.click()
   return { sender }
 }

@@ -28,17 +28,14 @@ import {
 
 const confirmDialog = (page: Page) => page.getByRole('dialog').getByRole('button').last()
 
-/** Pick a recipient: type, open the list with the keyboard, take the option.
- * The list only opens on focus or arrow keys, so a second pick in a still
- * focused field needs the arrow. */
+/** Pick a recipient: type, take the option. Typing opens the list, also for a
+ * second pick in the still-focused field - that once needed an ArrowDown, and a
+ * mouse user could not add a second recipient at all (2026-11-20). */
 async function pick(page: Page, query: string, option: string | RegExp): Promise<void> {
   const box = page.locator('.recipient-picker').getByRole('combobox')
   await box.fill(query)
   const opt = page.getByRole('option', { name: option })
-  await expect(async () => {
-    if (!(await opt.isVisible())) await box.press('ArrowDown')
-    await expect(opt).toBeVisible({ timeout: 1_000 })
-  }).toPass()
+  await expect(opt).toBeVisible()
   await opt.click()
 }
 

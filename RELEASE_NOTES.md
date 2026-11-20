@@ -1,3 +1,29 @@
+# file:Heron v2.31.1
+
+**Files up to 100 MB are virus-scanned again, so their recipients are emailed
+again.** Since v1.21.0 a file uploaded in one piece - everything up to 100 MB,
+from the web app and from the desktop client, and attachments picked up from
+the mailbox - was stored readable by the server alone. ClamAV runs as its own
+user and could not open it: the scan failed, the file stayed "being scanned"
+on every retry, and the share's recipients were never emailed. Larger uploads
+(sent in resumable parts) were not affected.
+
+- New uploads are stored so ClamAV can read them.
+- A file that is already stuck is now scanned by sending its contents to
+  ClamAV directly. The hourly clean-up retries every file still waiting, so
+  stuck files are scanned, and their recipient emails go out, within about an
+  hour of the update - nothing to do by hand.
+- Each release page on GitHub now shows only that release's notes, with the
+  download links for the desktop client.
+- The frontend image runs nginx 1.31.9 (was 1.31.8), and the web app takes
+  patch and minor updates of its libraries (axios 1.21.1, vue-router 5.5.1,
+  vue-i18n 11.4.20, Vite 8.3.8).
+
+## On this update
+
+- A patch release: automatic updates install it. No migration, no default
+  change, nothing to do on the host.
+
 # file:Heron v2.31.0
 
 **Security fixes from an audit, and one change for staff who sign in with

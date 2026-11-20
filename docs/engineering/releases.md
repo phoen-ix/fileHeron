@@ -7,7 +7,13 @@ summary and points here. Read this before changing the code listed below.
 
 ## Current state
 
-Backend **`v2.31.0`** is the newest tag (2026-11-19): the round-3 audit - sign-out-others
+Backend **`v2.31.1`** is the newest tag (2026-11-20): direct uploads (≤100 MB, web and desktop) and IMAP attachments
+were staged `0600` by mkstemp and kept that mode through `finalize`, so clamd (its own uid) answered `Access denied`, the
+file stayed `ready_unscanned` and its recipient mail never went out - since v1.21.0. `finalize` now leaves `0644`, and
+`scan_stored` streams a file clamd cannot open, which the hourly sweep uses to clear files stuck before the update. The
+release workflows publish only the tag's own section (`scripts/release_section.sh`) plus the client download links. A
+patch: automatic updates install it. No migration, no host step, no default move; no client tag. **`v2.31.0`**
+(2026-11-19): the round-3 audit - sign-out-others
 continues the caller's session instead of minting one from a bare access token, the updater
 executor acts on the job the shim validated and enforces the shim's downgrade/rollback rules
 itself (a rollback runs the RUNNING release's executor), change password/email spend the
@@ -155,8 +161,10 @@ audit on three anyio CVEs; tags are immutable, so the same commits shipped as
 v2.17.1 plus the anyio bump). **v2.17.1 shipped a sidebar showing nothing but
 "Overview"** (a `v-if` on the Overview link captured the categories' `v-else`;
 no test mounted AdminLayout); v2.17.2 is that one-line fix plus
-`tests/components/AdminLayout.test.ts`. **The reference host runs v2.30.2**
-(`scripts/deploy.sh` on 2026-11-15, after the nightly backup unit run by hand, as for v2.30.1
+`tests/components/AdminLayout.test.ts`. **The reference host runs v2.31.0**
+(an automatic update on 2026-11-20 02:31 UTC - its `updates.auto_scope` is `minor` and
+`updates.auto_min_age_hours` 0, so minor releases install there too; v2.30.2 came by
+`scripts/deploy.sh` on 2026-11-15, after the nightly backup unit run by hand, as for v2.30.1
 the same morning; `CSP_ENFORCE=true` there since v2.30.1, so its SPA policy is enforced: no `csp` row in its error log from 2026-08-16 to
 2026-11-14). Its move to v2.29.0 was
 a manual Update from v2.28.0 (2026-10-30 22:55 UTC: the new executor verified
@@ -234,6 +242,7 @@ record.
 | v2.30.1 | - | - (a patch: automatic updates install it; `CSP_ENFORCE=true` in `.env` is optional and needs `docker compose up -d frontend`) | - (the SPA's CSP can be enforced; nginx sends no version; dnspython 2.9.2, opentelemetry-api 1.45.2) |
 | v2.30.2 | - | - (a patch: automatic updates install it) | - (prosemirror-model 1.25.13; node 26.13.1 builds the web app) |
 | v2.31.0 | - | - (minor, so patch-only automatic updates do not install it; no infra change. The update TO v2.31.0 is supervised by the v2.30.x shim, which passes no hand-over env - the v2.31.0 executor then enforces the downgrade and rollback rules itself. From v2.31.0 a Rollback runs the RUNNING release's executor, not the target's) | **Behaviour change: staff accounts (admins AND employees) no longer auto-link SSO by email** on their first SSO sign-in - `OIDC_LINK_FROM_ACCOUNT`, they connect once from Account settings; existing links and clients are unchanged. API tokens keep working while the owner's password sign-in is locked (`ACCOUNT_LOCKED` no longer refuses them; disabled still does). Sign-out-others continues the caller's session (sign-in time and absolute end) and mints nothing without a live refresh cookie. Change password/email spend the per-user step-up window (still 401 `INVALID_CREDENTIALS`, `step_up_failed` rows). `?dt=` URLs carry an issue time and honour the revocation mark (format `<user>.<iat>.<exp>.<sig>`, domain v2: a URL minted before the update is refused once). The tus hook answers only its literal path. Desktop `client-v1.6.4` beside it (the 2026-11-19 audit) |
+| v2.31.1 | - | - (a patch: automatic updates install it; no infra change) | - (direct uploads are stored `0644` so clamd can open them - broken since v1.21.0; a file clamd cannot open is streamed instead, so files stuck before the update clear on the next hourly sweep; release pages carry only their own section; frontend image on nginx 1.31.9) |
 
 Per-release admin-facing notes for v2.13.0 and newer are in `RELEASE_NOTES.md`,
 one `# file:Heron vX.Y.Z` section each, newest first; older releases live in

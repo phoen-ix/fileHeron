@@ -1,3 +1,53 @@
+# file:Heron v2.32.0
+
+**A company's mail scanner no longer uses up a public link, a link's download
+limit can be changed, and a share takes several recipients again.**
+
+**Change: only a click on a public link's page counts as a download.** Many
+companies' mail systems (Microsoft 365, Proofpoint, Mimecast) open every link in
+an incoming email to check it. On a public link that meant the check itself
+downloaded the files: a two-download link was used up seconds after the email
+arrived, before the recipient had seen it, and the sender was told it had been
+downloaded. The link's page now carries no download address. Its Download
+buttons ask the server for one that works for a few minutes, and only that
+counts. Opening the link, checking it or previewing a file costs nothing. An
+interrupted download still resumes as before.
+
+- If you fetch public-link downloads with a script (`curl`, `wget`), it now has
+  to `POST /api/public/{token}/download-ticket` (with `{"file_id": "<id>"}`, or
+  `null` for the whole share as one ZIP) and fetch the `url` it returns. The
+  bare download address answers 403 `DOWNLOAD_TICKET_REQUIRED`.
+
+**New: change a public link's download limit.** The share page's public-link
+panel has **Change limit**: raise it, lower it or remove it, and the link keeps
+its address, so the one already sent keeps working. Downloads already made
+still count; raising the limit of a used-up link opens it again. Before, the
+only way to allow more downloads was to revoke the link and create a new one,
+with a new address. On a share that needed approval, only an admin can raise or
+remove the limit; lowering it is always possible. The audit log records the
+change as `public_link_updated`.
+
+**Fixes.**
+
+- **Several recipients on one share.** After picking the first recipient, the
+  list of suggestions did not open again while typing the next one, so the
+  second address could not be picked and **Create** stayed disabled. Typing
+  opens the list again. Enter now waits until the search for what you typed has
+  answered, so a quick Enter can no longer add someone else from the previous
+  list.
+- The share page's **Downloads** limit is now labelled as the one for
+  recipients with an account. A public link has its own limit, in its panel.
+- The public-link form no longer says a link "auto-revokes" at its limit: it
+  stops working, and you can raise the limit.
+
+## On this update
+
+- A minor release: automatic updates install it only where the update scope is
+  `minor` or `any` (the default is `patch`). No migration, no default change,
+  nothing to do on the host.
+- Tell people who download public links with scripts about the extra step
+  above. Recipients in a browser notice nothing.
+
 # file:Heron v2.31.1
 
 **Files up to 100 MB are virus-scanned again, so their recipients are emailed

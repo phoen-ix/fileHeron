@@ -7,7 +7,15 @@ summary and points here. Read this before changing the code listed below.
 
 ## Current state
 
-Backend **`v2.31.1`** is the newest tag (2026-11-20): direct uploads (≤100 MB, web and desktop) and IMAP attachments
+Backend **`v2.32.0`** is the newest tag (2026-11-20): a public-link download is charged only with a ticket
+minted by `POST /api/public/{token}/download-ticket` on a click (`public_link.issue_download_ticket`, bound to the
+link id + one target, `downloads.signed_url_ttl_sec`), checked right before the decrement - a Microsoft 365 link
+scanner had spent a two-download link 44 s after the mail went out; resumes and the `bytes=1-1` probe stay
+ticket-free. `PATCH /api/shares/{id}/public-link` changes a link's download limit under the same URL
+(`public_link.update_limit`, row-locked; widening by a non-admin passes create's approval checks and is refused on a
+pending share; audit `public_link_updated`). `RecipientPicker` reopens its list on typing and ignores Enter until the
+search settled - a second recipient could not be picked. Minor; no migration, no host step, no default move; no
+client tag (the client calls no `/api/public/` route). **`v2.31.1`** (same day): direct uploads (≤100 MB, web and desktop) and IMAP attachments
 were staged `0600` by mkstemp and kept that mode through `finalize`, so clamd (its own uid) answered `Access denied`, the
 file stayed `ready_unscanned` and its recipient mail never went out - since v1.21.0. `finalize` now leaves `0644`, and
 `scan_stored` streams a file clamd cannot open, which the hourly sweep uses to clear files stuck before the update. The
@@ -243,6 +251,7 @@ record.
 | v2.30.2 | - | - (a patch: automatic updates install it) | - (prosemirror-model 1.25.13; node 26.13.1 builds the web app) |
 | v2.31.0 | - | - (minor, so patch-only automatic updates do not install it; no infra change. The update TO v2.31.0 is supervised by the v2.30.x shim, which passes no hand-over env - the v2.31.0 executor then enforces the downgrade and rollback rules itself. From v2.31.0 a Rollback runs the RUNNING release's executor, not the target's) | **Behaviour change: staff accounts (admins AND employees) no longer auto-link SSO by email** on their first SSO sign-in - `OIDC_LINK_FROM_ACCOUNT`, they connect once from Account settings; existing links and clients are unchanged. API tokens keep working while the owner's password sign-in is locked (`ACCOUNT_LOCKED` no longer refuses them; disabled still does). Sign-out-others continues the caller's session (sign-in time and absolute end) and mints nothing without a live refresh cookie. Change password/email spend the per-user step-up window (still 401 `INVALID_CREDENTIALS`, `step_up_failed` rows). `?dt=` URLs carry an issue time and honour the revocation mark (format `<user>.<iat>.<exp>.<sig>`, domain v2: a URL minted before the update is refused once). The tus hook answers only its literal path. Desktop `client-v1.6.4` beside it (the 2026-11-19 audit) |
 | v2.31.1 | - | - (a patch: automatic updates install it; no infra change) | - (direct uploads are stored `0644` so clamd can open them - broken since v1.21.0; a file clamd cannot open is streamed instead, so files stuck before the update clear on the next hourly sweep; release pages carry only their own section; frontend image on nginx 1.31.9) |
+| v2.32.0 | - | - (minor: installed automatically only with `updates.auto_scope` `minor`/`any`, as on the reference host; no infra change) | **Behaviour change: a public-link download needs a click ticket** - a bare GET of `/api/public/{token}/files/{id}/download` or `/download-zip` answers 403 `DOWNLOAD_TICKET_REQUIRED`; scripts POST `/download-ticket` first. A link's download limit is editable (`PATCH /api/shares/{id}/public-link`). The recipient picker reopens its list for the next recipient |
 
 Per-release admin-facing notes for v2.13.0 and newer are in `RELEASE_NOTES.md`,
 one `# file:Heron vX.Y.Z` section each, newest first; older releases live in

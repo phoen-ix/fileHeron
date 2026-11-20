@@ -20,6 +20,7 @@ from ..database import SessionLocal
 from ..models.file import File, FileState
 from ..services import av_release
 from ..services import av_scan as av_scan_svc
+from ..services import share as share_svc
 from ..services.quarantine import quarantine_file
 
 logger = logging.getLogger("fileheron.workers.av_scan")
@@ -93,7 +94,7 @@ async def _release_unscanned(db, *, file_id: str, file: File, reason: str) -> di
         file.size_bytes or 0,
         reason,
     )
-    av_release.notify_recipients_if_ready(db, share_id=share_id)
+    share_svc.notify_after_commit(db, share_id)
     return {
         "file_id": file_id,
         "state": "clean",
@@ -240,7 +241,7 @@ async def av_scan_file(_ctx, file_id: str) -> dict:
                 logger.info("av_scan: %s clean; held for encryption", file_id)
                 return {"file_id": file_id, "state": "awaiting_encryption"}
             logger.info("av_scan: %s clean", file_id)
-            av_release.notify_recipients_if_ready(db, share_id=share_id)
+            share_svc.notify_after_commit(db, share_id)
             return {"file_id": file_id, "state": "clean"}
 
         if result.state == "infected":

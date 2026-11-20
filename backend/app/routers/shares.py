@@ -597,6 +597,9 @@ def approve_share_route(
         expect_fingerprint=payload.content_fingerprint,
     )
     db.commit()
+    # A scan finishing during this request is invisible to approve_share's
+    # read view; decide again now that the approval is committed.
+    share_svc.notify_after_commit(db, share.id)
     db.refresh(share)
     return _to_share_response(db, share, viewer=user)
 
@@ -796,6 +799,10 @@ def files_added_route(
         request=request,
     )
     db.commit()
+    # register_files_added decided on a read view taken before a scan that may
+    # have finished since, and that scan's own decision may have run before
+    # this batch signal was committed. Decide again, after both.
+    share_svc.notify_after_commit(db, share.id)
     db.refresh(share)
     return _to_share_response(db, share, viewer=user)
 

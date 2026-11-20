@@ -297,3 +297,200 @@ def test_changing_a_link_limit_locks_the_link_row(mariadb, locked_user):
     finally:
         outer.rollback()
         conn.close()
+
+
+# ---- The share announcement: two writers, one decision ----------------------
+# A share's recipient mail waits for two writes from two transactions: the
+# owner's batch signal (`files-added`) and the scan flipping the last file to
+# `clean`. Each writer then decides. On 2026-11-20 both decided "not yet" - the
+# worker could not see the uncommitted batch signal, the request's REPEATABLE
+# READ view predated the scan - and the mail waited for the minute sweep. Only a
+# real MariaDB has read views, so only here can the interleaving be replayed.
+
+
+@pytest.fixture
+def owed_share(mariadb, locked_user):
+    """A live share whose announcement is owed, with one file still being
+    scanned. Committed, so a second connection sees it; removed afterwards."""
+    from app.models.file import FileState
+    from app.models.share import Share, ShareKind, ShareState
+    from app.models.user import User
+
+    from ._share_helpers import land_file
+
+    with Session(bind=mariadb) as db:
+        owner = db.query(User).filter(User.email == _EMAIL).one()
+        sh = Share(
+            created_by_id=owner.id,
+            kind=ShareKind.outbound,
+            state=ShareState.active,
+            notify_on_activation=True,
+        )
+        db.add(sh)
+        db.flush()
+        f = land_file(db, sh, owner, state=FileState.ready_unscanned)
+        db.commit()
+        ids = (sh.id, f.id)
+    yield ids
+    with mariadb.begin() as c:
+        c.execute(sa.text("DELETE FROM audit_log WHERE target_id IN (:s, :f)"),
+                  {"s": ids[0], "f": ids[1]})
+        c.execute(sa.text("DELETE FROM shares WHERE id = :s"), {"s": ids[0]})
+
+
+def _announced(mariadb, share_id) -> bool:
+    with mariadb.connect() as c:
+        owed = c.execute(
+            sa.text("SELECT notify_on_activation FROM shares WHERE id = :s"), {"s": share_id}
+        ).scalar_one()
+    return owed is None
+
+
+def _release(db, file_id) -> None:
+    """What the worker does when clamd answers clean: flip, commit, decide."""
+    from app.models.file import File
+    from app.services import av_release
+    from app.services import share as share_svc
+
+    f = db.get(File, file_id)
+    assert av_release.apply_verdict(db, f, av_release.VERDICT_CLEAN)
+    db.commit()
+    share_svc.notify_after_commit(db, f.share_id)
+
+
+@_SKIP
+def test_the_mail_goes_out_when_the_scan_and_the_batch_signal_cross(mariadb, owed_share):
+    """The incident, replayed. The files-added request reads first (its view is
+    fixed), the scan finishes and decides "not yet" (no batch signal), then the
+    request records the batch signal and its in-transaction check reads the old
+    view: "still scanning". Only the route's post-commit decision, in a fresh
+    transaction, sees both."""
+    from app.models.share import Share
+    from app.models.user import User
+    from app.routers.shares import files_added_route
+    from app.schemas.share import FilesAddedRequest
+
+    share_id, file_id = owed_share
+    with (
+        Session(bind=mariadb, expire_on_commit=False) as req,
+        Session(bind=mariadb, expire_on_commit=False) as worker,
+    ):
+        owner = req.query(User).filter(User.email == _EMAIL).one()
+        req.get(Share, share_id)
+
+        _release(worker, file_id)
+        assert not _announced(mariadb, share_id), "the worker must not see the batch yet"
+
+        files_added_route(
+            share_id=share_id,
+            payload=FilesAddedRequest(file_ids=[file_id], notify=True),
+            request=None,
+            user=owner,
+            db=req,
+        )
+    assert _announced(mariadb, share_id)
+
+
+_APPROVER = "approver@rowlock.test"
+
+
+@pytest.fixture
+def approver(mariadb):
+    with mariadb.begin() as conn:
+        conn.execute(sa.text("DELETE FROM users WHERE email = :e"), {"e": _APPROVER})
+        conn.execute(
+            sa.text(
+                "INSERT INTO users (email, password_hash, display_name, role, "
+                "is_disabled, email_verified, locale, failed_login_count, created_at) "
+                "VALUES (:e, 'x', 'Approver', 'admin', 0, 1, 'en', 0, NOW())"
+            ),
+            {"e": _APPROVER},
+        )
+    yield
+    with mariadb.begin() as conn:
+        conn.execute(sa.text("DELETE FROM users WHERE email = :e"), {"e": _APPROVER})
+
+
+@_SKIP
+def test_the_mail_goes_out_when_the_scan_finishes_during_the_approval(
+    mariadb, owed_share, approver
+):
+    """The same crossing against an approval: the scan decides while the share
+    is still pending, and approve_share's own check reads its older view."""
+    from app.models.share import Share
+    from app.models.user import User
+    from app.routers.shares import approve_share_route
+    from app.schemas.share import ApproveShareRequest
+    from app.services import share_approval as approval_svc
+
+    share_id, file_id = owed_share
+    with mariadb.begin() as c:
+        c.execute(
+            sa.text(
+                "UPDATE shares SET state = 'pending_approval', upload_batch_done = 1 "
+                "WHERE id = :s"
+            ),
+            {"s": share_id},
+        )
+    with (
+        Session(bind=mariadb, expire_on_commit=False) as req,
+        Session(bind=mariadb, expire_on_commit=False) as worker,
+    ):
+        admin = req.query(User).filter(User.email == _APPROVER).one()
+        fingerprint = approval_svc.content_fingerprint(req, req.get(Share, share_id))
+
+        _release(worker, file_id)
+        assert not _announced(mariadb, share_id), "a pending share is not announced"
+
+        approve_share_route(
+            share_id=share_id,
+            request=None,
+            payload=ApproveShareRequest(content_fingerprint=fingerprint),
+            user=admin,
+            db=req,
+        )
+    assert _announced(mariadb, share_id)
+
+
+@_SKIP
+def test_the_decision_never_reads_an_older_view_than_its_lock(mariadb, owed_share):
+    """A caller may hand over a session with a transaction already open - the
+    encryption lane's purge sweep reads between its commit and the notice. That
+    view predates whatever committed meanwhile, so the decision ends it first."""
+    from app.models.file import File
+    from app.services import share as share_svc
+
+    share_id, file_id = owed_share
+    with Session(bind=mariadb) as stale:
+        assert stale.get(File, file_id).state.value == "ready_unscanned"
+        with mariadb.begin() as c:
+            c.execute(sa.text("UPDATE files SET state = 'clean' WHERE id = :f"), {"f": file_id})
+            c.execute(
+                sa.text("UPDATE shares SET upload_batch_done = 1 WHERE id = :s"), {"s": share_id}
+            )
+        assert share_svc.notify_if_downloadable(stale, share_id) is True
+        stale.commit()
+    assert _announced(mariadb, share_id)
+
+
+@_SKIP
+def test_the_decision_locks_the_share_before_it_reads(mariadb, owed_share):
+    """The lock is what makes the two deciders take turns, and it must come
+    FIRST: the read view starts at the first plain SELECT after it."""
+    from app.services import share as share_svc
+
+    share_id, _ = owed_share
+    statements: list[str] = []
+    conn = mariadb.connect()
+    try:
+        @sa.event.listens_for(conn, "before_cursor_execute")
+        def _capture(_c, _cur, stmt, _p, _ctx, _many):
+            statements.append(stmt)
+
+        with Session(bind=conn) as db:
+            share_svc.notify_if_downloadable(db, share_id)
+            db.rollback()
+        first = statements[0]
+        assert "FROM shares" in first and "FOR UPDATE" in first.upper(), statements
+    finally:
+        conn.close()

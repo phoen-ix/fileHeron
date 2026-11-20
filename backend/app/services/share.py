@@ -1831,8 +1831,26 @@ def notify_if_downloadable(db: Session, share_id: str) -> bool:
 
     The announcement skips the quiet window when the owner's client already
     reported its batch complete; otherwise the window still guards against
-    announcing between two files of a sequential upload."""
-    share = db.query(Share).filter(Share.id == share_id).one_or_none()
+    announcing between two files of a sequential upload.
+
+    Decides in a transaction of its own whose FIRST statement locks the share.
+    Its two inputs are written by two transactions - the batch signal and the
+    scan's flip to `clean` - and each writer calls this after committing. The
+    lock makes the deciders take turns, so the second one sees both writes: the
+    share row through the locking read, the files through a read view that
+    REPEATABLE READ fixes only at the first plain SELECT, after the lock. A
+    caller's open transaction would carry an older view, so it is ended first.
+    Without this both missed each other and the mail waited for the sweep
+    (2026-11-20)."""
+    if db.in_transaction():
+        db.commit()
+    share = (
+        db.query(Share)
+        .filter(Share.id == share_id)
+        .with_for_update()
+        .populate_existing()
+        .one_or_none()
+    )
     if share is None:
         return False
     if share.notify_on_activation is not None:
@@ -1840,6 +1858,23 @@ def notify_if_downloadable(db: Session, share_id: str) -> bool:
             db, share_id, require_quiet=not share.upload_batch_done
         )
     return _deliver_pending_added_notice(db, share)
+
+
+def notify_after_commit(db: Session, share_id: str | None) -> None:
+    """Run `notify_if_downloadable` for a writer that just committed something
+    the announcement waits for: a scan's release, the batch signal, an approval.
+    Commits. Never raises - the writer's own change is already durable, and a
+    mail that fails here is sent by the minute sweep instead."""
+    if not share_id:
+        return
+    try:
+        notify_if_downloadable(db, share_id)
+        # Commit either way: a False return has written nothing, and a
+        # rollback would expire every object the session holds for no reason.
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("recipient notice for share %s failed", share_id)
 
 
 def _notify_recipients_files_added(

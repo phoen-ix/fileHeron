@@ -54,6 +54,7 @@ from ..utils import file_crypto
 from ..utils.dbresult import updated_rows
 from ..utils.timeutil import utc_now, utc_now_aware
 from . import av_release, file_encryption
+from . import share as share_svc
 from .audit import record_audit_event
 
 logger = logging.getLogger("fileheron.encryption_lanes")
@@ -211,7 +212,7 @@ def _release_without_encrypting(
             metadata={"reason": reason, "lane": "release"},
         )
     db.commit()
-    av_release.notify_recipients_if_ready(db, share_id=share_id)
+    share_svc.notify_after_commit(db, share_id)
     return "plaintext" if reason is not None else "released"
 
 
@@ -259,7 +260,7 @@ def release_one(db: Session, file_id: str, *, cancel: threading.Event | None = N
     file_encryption.sweep_purges(db)
     if not swapped:
         return "superseded"
-    av_release.notify_recipients_if_ready(db, share_id=share_id)
+    share_svc.notify_after_commit(db, share_id)
     return "encrypted"
 
 

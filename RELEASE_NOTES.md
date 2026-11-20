@@ -35,6 +35,12 @@ change as `public_link_updated`.
   opens the list again. Enter now waits until the search for what you typed has
   answered, so a quick Enter can no longer add someone else from the previous
   list.
+- **Recipients are emailed the moment a share is ready.** When the virus scan
+  finished at the same instant the upload completed, both checks could decide
+  "not yet", and the email waited for the once-a-minute check instead. The
+  share is now checked again after each of them, so whichever comes second
+  sends the email. The same applies when a share is approved while its last
+  file is being scanned.
 - The share page's **Downloads** limit is now labelled as the one for
   recipients with an account. A public link has its own limit, in its panel.
 - The public-link form no longer says a link "auto-revokes" at its limit: it

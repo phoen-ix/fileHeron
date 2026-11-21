@@ -262,6 +262,9 @@
   .field-label {
     color: var(--fh-ink);
     font-size: var(--fh-text-body-sm);
+    /* As wide as its words, not the column: a click beside it toggled the
+       switch (utils/fieldLabels.ts). */
+    width: fit-content;
   }
   .field-control {
     display: flex;

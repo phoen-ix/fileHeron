@@ -388,6 +388,11 @@
     width: 8rem;
   }
 
+  /* As wide as its words, not the column (utils/fieldLabels.ts). */
+  .num-field span {
+    width: fit-content;
+  }
+
   .cron-note {
     font-style: italic;
   }

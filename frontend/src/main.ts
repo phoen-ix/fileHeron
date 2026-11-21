@@ -8,6 +8,7 @@ import { useAuthStore } from './stores/auth'
 import { useSiteStore } from './stores/site'
 import { useUiStore } from './stores/ui'
 import './styles/global.css'
+import { installFieldLabelGuard } from './utils/fieldLabels'
 import { installStaleBundleRecovery } from './utils/staleBundle'
 
 const app = createApp(App)
@@ -23,6 +24,10 @@ app.use(router)
 installStaleBundleRecovery(router, () =>
   useUiStore().pushToast(i18n.global.t('common.new_version'), 'warn', 0),
 )
+
+// Only a field's label text and its control take a click; the help text and
+// the space around them no longer jump into the field (utils/fieldLabels.ts).
+installFieldLabelGuard()
 
 // Wire up auth bootstrap + auth-lost handler before mounting so the router's
 // first beforeEach can wait for the silent-refresh result.

@@ -222,6 +222,11 @@ hr {
   font-size: var(--fh-text-body-sm);
   color: var(--fh-subtle);
   letter-spacing: 0.02em;
+  /* As wide as its words. In a field's flex column it stretched across the
+     whole row, so a click anywhere beside the label focused the field - and
+     opened the recipient list. The rest of the rule is utils/fieldLabels.ts;
+     a page-local label pattern carries the same line. */
+  width: fit-content;
 }
 
 .fh-field-input {

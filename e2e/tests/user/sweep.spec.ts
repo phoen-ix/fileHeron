@@ -13,7 +13,7 @@ import {
   watch,
   type Persona,
 } from './lib'
-import { apiFetch, appName } from '../../helpers'
+import { apiFetch, appName, expectPreciseFieldLabels } from '../../helpers'
 
 /* Breadth: every route outside /admin, as every role. Each visit lands where
  * the router sends that role, shows a level-1 heading and a titled tab, and
@@ -125,6 +125,9 @@ test.afterAll(async () => {
   await restoreSettings('/api/admin/settings/secrets', secretsBefore)
 })
 
+const labelsProbed = new Set<string>()
+let fieldsProbed = 0
+
 /** One context per role, signed in once: a refresh token rotates on every
  * page load, so contexts are kept rather than re-created from saved state. */
 async function open(browser: Browser, p?: Persona): Promise<Page> {
@@ -155,8 +158,19 @@ for (const who of WHO) {
         const brand = (await appName()).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
         await expect(page).toHaveTitle(new RegExp(`${brand}$`))
         await expect(page.getByText('Loading…', { exact: true })).toHaveCount(0)
+        // The fields of the page this role ended on, once per page.
+        const shown = `${who} ${new URL(page.url()).pathname}`
+        if (!labelsProbed.has(shown)) {
+          labelsProbed.add(shown)
+          fieldsProbed += await expectPreciseFieldLabels(page)
+        }
       })
     }
+
+    test('the click-target check found fields to check', () => {
+      // Guards the check above against passing because it probed nothing.
+      expect(fieldsProbed).toBeGreaterThan(0)
+    })
 
     if (who === 'client' || who === 'employee') {
       test('/admin is bounced to the landing page', async () => {

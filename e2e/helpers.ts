@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { randomInt } from 'node:crypto'
 
-import type { Page } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 import { generateSync } from 'otplib'
 
 /* Shared helpers + the deterministic seeded accounts (docker-compose.e2e.yml). */
@@ -151,4 +151,86 @@ export async function forceResumableUploads(page: Page, ceiling = 1): Promise<vo
     const json = await response.json()
     await route.fulfill({ response, json: { ...json, max_direct_upload_bytes: ceiling } })
   })
+}
+
+/** A field takes a click only on its label's words and on its control (the
+ * SPA's utils/fieldLabels.ts, and `width: fit-content` on the label text). A
+ * wrapping <label> made the whole block one target, as wide as its column, so
+ * a click on the help text or beside the label jumped into the field
+ * (2026-11-21).
+ *
+ * With the real mouse, on up to `max` fields of the page as it stands,
+ * whatever class they are built with: beside the label and on the help text
+ * the field must NOT take the focus; on the label's words it must. Left out:
+ * checkbox and radio rows (the whole row is their target on purpose) and
+ * search fields that open a list on focus (their own journeys check them; the
+ * list would cover the next field). Returns how many fields were probed. */
+export async function expectPreciseFieldLabels(page: Page, max = 3): Promise<number> {
+  const labels = page.locator('label:visible')
+  const total = await labels.count()
+  let probed = 0
+  for (let i = 0; i < total && probed < max; i++) {
+    const label = labels.nth(i)
+    const spots = await label.evaluate((el: HTMLLabelElement) => {
+      const control = el.control as HTMLInputElement | null
+      if (!control || control.disabled || document.activeElement === control) return null
+      const tag = control.tagName
+      const textLike =
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        (tag === 'INPUT' && !['checkbox', 'radio', 'file', 'hidden', 'range', 'color'].includes(control.type))
+      if (!textLike || control.getAttribute('role') === 'combobox') return null
+      // The element holding the label's words: the label itself when it points
+      // at its field from outside, else its first child that is neither the
+      // control nor help text.
+      const wraps = el.contains(control)
+      const text = wraps
+        ? [...el.children].find(
+            (c) => c !== control && !c.contains(control) && !c.matches('.fh-field-help, .fh-field-error, ul, button'),
+          )
+        : el
+      if (!text || !(text.textContent ?? '').trim()) return null
+      el.scrollIntoView({ block: 'center' })
+      // The row the label sits in: the wrapping label, or the other label's parent.
+      const row = (wraps ? el : el.parentElement!).getBoundingClientRect()
+      // The WORDS, not the element's box: a label stretched across its row is
+      // the defect, and its box would then leave no "beside" to click.
+      const words = document.createRange()
+      words.selectNodeContents(text)
+      const t = words.getBoundingClientRect()
+      const help = el.querySelector<HTMLElement>(':scope > .fh-field-help')?.getBoundingClientRect()
+      const y = t.top + t.height / 2
+      const c = control.getBoundingClientRect()
+      // Beside the words, on their line - unless the control sits there (a
+      // one-line field).
+      const x = row.right - 6
+      const clear = row.right - t.right > 16 && !(x >= c.left && x <= c.right && y >= c.top && y <= c.bottom)
+      return {
+        name: (text.textContent ?? '').trim(),
+        beside: clear ? { x, y } : null,
+        help:
+          help && help.width > 12 && help.height > 4
+            ? { x: help.left + 6, y: help.top + help.height / 2 }
+            : null,
+        text: { x: t.left + Math.min(8, t.width / 2), y },
+      }
+    })
+    if (!spots) continue
+    probed++
+    const focused = () =>
+      label.evaluate((el: HTMLLabelElement) => document.activeElement === el.control)
+    for (const [where, spot, takes] of [
+      ['beside the label', spots.beside, false],
+      ['on the help text', spots.help, false],
+      ['on the label text', spots.text, true],
+    ] as const) {
+      if (!spot) continue
+      await page.mouse.click(spot.x, spot.y)
+      expect(
+        await focused(),
+        `"${spots.name}" on ${new URL(page.url()).pathname}: a click ${where} ${takes ? 'must' : 'must not'} focus the field`,
+      ).toBe(takes)
+    }
+  }
+  return probed
 }

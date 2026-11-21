@@ -1,6 +1,6 @@
 import { test, type BrowserContext } from '@playwright/test'
 
-import { USER } from '../../helpers'
+import { USER, expectPreciseFieldLabels } from '../../helpers'
 import {
   api,
   contextAs,
@@ -121,6 +121,7 @@ const ADMIN_GETS = [
 
 let ids: Ids
 let employee: Person
+let fieldsProbed = 0
 
 test.beforeAll(async () => {
   const s = uid()
@@ -184,10 +185,20 @@ test.describe('as the admin', () => {
       await expect(
         page.locator('.admin-sidebar [aria-current="page"]').filter({ visible: true }),
       ).not.toHaveCount(0)
+      // Once the page's own data is in: a settings form renders its fields
+      // only after it has loaded them.
+      await expect(page.getByText('Loading…', { exact: true })).toHaveCount(0)
+      fieldsProbed += await expectPreciseFieldLabels(page)
       await page.close()
       expectClean(w)
     })
   }
+
+  test('the click-target check found fields to check', () => {
+    // Guards the check above against passing because it probed nothing.
+    console.log(`[sweep] click target checked on ${fieldsProbed} admin fields`)
+    expect(fieldsProbed).toBeGreaterThan(20)
+  })
 
   test('the user menu leads to the admin console', async () => {
     const page = await ctx.newPage()

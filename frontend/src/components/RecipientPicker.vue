@@ -594,6 +594,12 @@
     position: relative;
   }
 
+  /* The column's width, like every other field: at the browser's default 20
+     characters an email address scrolled out of view while being typed. */
+  .search-wrap .fh-field-input {
+    width: 100%;
+  }
+
   .pending-clear {
     margin-left: var(--fh-space-2);
   }

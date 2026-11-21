@@ -703,6 +703,8 @@
   .field span {
     font-size: 0.85em;
     color: var(--fh-subtle);
+    /* As wide as its words, not the column (utils/fieldLabels.ts). */
+    width: fit-content;
   }
   .toggle {
     display: flex;

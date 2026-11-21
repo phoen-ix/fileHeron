@@ -86,6 +86,34 @@ test('an employee composes a share for a user and a group; the recipients downlo
   }
 })
 
+// A field's label is as wide as its column unless told otherwise, and a click
+// on a label focuses its field: clicking anywhere on the "Recipients" row
+// jumped into the search line and opened the list (2026-11-21). The route
+// sweeps check every other field (expectPreciseFieldLabels); this one opens a
+// list on focus, so it is checked here.
+test('only the Recipients label and the search line open the recipient list', async ({ page }) => {
+  const sender = await newUser('employee', 'clicktarget')
+  await signIn(page, sender)
+  await page.goto('/share/new')
+  const picker = page.locator('.recipient-picker')
+  const label = picker.locator('label')
+  const box = picker.getByRole('combobox')
+  const row = (await picker.boundingBox())!
+  const text = (await label.boundingBox())!
+  const line = (await box.boundingBox())!
+
+  // The label is as wide as its words; the search line spans the column.
+  expect(text.width).toBeLessThan(row.width / 2)
+  expect(line.width).toBeGreaterThan(row.width - 2)
+
+  await page.mouse.click(row.x + row.width - 6, text.y + text.height / 2)
+  await expect(box).not.toBeFocused()
+  await expect(box).toHaveAttribute('aria-expanded', 'false')
+
+  await label.click()
+  await expect(box).toBeFocused()
+})
+
 test('Send stays disabled while the blockers list says why', async ({ page }) => {
   const sender = await newUser('employee', 'blockers')
   await signIn(page, sender)

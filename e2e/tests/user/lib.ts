@@ -94,6 +94,22 @@ export async function connect(...people: Persona[]): Promise<void> {
   await group(`E2E team ${uid()}`, people.map((p) => p.id))
 }
 
+/** Pick a recipient the way a user does: type, take the option the list shows.
+ * Typing opens the list, also for the next pick in the still-focused field.
+ *
+ * Never add a key press, a blur or a wait here to make the option appear. When
+ * it does not, the picker is broken: it was, from the first release until
+ * 2026-11-20 (a second recipient could not be added), and two copies of this
+ * helper pressed ArrowDown or blurred around it instead of failing. */
+export async function pickRecipient(page: Page, query: string, option?: string | RegExp): Promise<void> {
+  const box = page.locator('.recipient-picker').getByRole('combobox')
+  await box.fill(query)
+  const name = option ?? new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  const opt = page.getByRole('option', { name })
+  await expect(opt).toBeVisible()
+  await opt.click()
+}
+
 /** Sign in through the form; ends off /login. */
 export async function signIn(page: Page, p: { email: string; password: string }): Promise<void> {
   await page.goto('/login')

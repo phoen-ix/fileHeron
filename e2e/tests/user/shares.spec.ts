@@ -9,6 +9,7 @@ import {
   group,
   newUser,
   ok,
+  pickRecipient,
   restoreSettings,
   scanned,
   session,
@@ -27,17 +28,6 @@ import {
  * round trip (held, rejected, resubmitted, approved, discarded). */
 
 const confirmDialog = (page: Page) => page.getByRole('dialog').getByRole('button').last()
-
-/** Pick a recipient: type, take the option. Typing opens the list, also for a
- * second pick in the still-focused field - that once needed an ArrowDown, and a
- * mouse user could not add a second recipient at all (2026-11-20). */
-async function pick(page: Page, query: string, option: string | RegExp): Promise<void> {
-  const box = page.locator('.recipient-picker').getByRole('combobox')
-  await box.fill(query)
-  const opt = page.getByRole('option', { name: option })
-  await expect(opt).toBeVisible()
-  await opt.click()
-}
 
 const file = (name: string, text: string) => ({ name, mimeType: 'text/plain', buffer: Buffer.from(text) })
 
@@ -66,8 +56,8 @@ test('an employee composes a share for a user and a group; the recipients downlo
   await page.locator('input.dropzone-input').setInputFiles(file('report.txt', 'quarterly numbers'))
   await page.getByLabel('Subject', { exact: true }).fill(subject)
   await page.getByLabel('Message', { exact: true }).fill('Here it is.')
-  await pick(page, direct.name, new RegExp(direct.name))
-  await pick(page, groupName, new RegExp(groupName))
+  await pickRecipient(page, direct.name)
+  await pickRecipient(page, groupName)
   await expect(page.locator('.recipient-picker .chip')).toHaveCount(2)
   await page.getByRole('button', { name: '1 day' }).click()
   await page.getByLabel('Download limit (optional)').fill('10')

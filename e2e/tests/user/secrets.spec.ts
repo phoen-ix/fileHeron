@@ -1,7 +1,20 @@
 import type { Page } from '@playwright/test'
 
 import { apiFetch } from '../../helpers'
-import { admin, connect, expect, newUser, ok, restoreSettings, session, setSettings, signIn, test, uid } from './lib'
+import {
+  admin,
+  connect,
+  expect,
+  newUser,
+  ok,
+  pickRecipient,
+  restoreSettings,
+  session,
+  setSettings,
+  signIn,
+  test,
+  uid,
+} from './lib'
 
 /* Secrets and secret requests composed in the UI (the reveal and answer
  * halves: tests/secrets.spec.ts and tests/secret-requests.spec.ts): the
@@ -11,17 +24,6 @@ import { admin, connect, expect, newUser, ok, restoreSettings, session, setSetti
  * off; on for this file only. */
 
 const confirmDialog = (page: Page) => page.getByRole('dialog').getByRole('button').last()
-
-async function pick(page: Page, name: string): Promise<void> {
-  const box = page.locator('.recipient-picker').getByRole('combobox')
-  await box.fill(name)
-  const opt = page.getByRole('option', { name: new RegExp(name) })
-  await expect(async () => {
-    if (!(await opt.isVisible())) await box.press('ArrowDown')
-    await expect(opt).toBeVisible({ timeout: 1_000 })
-  }).toPass()
-  await opt.click()
-}
 
 test.describe.serial('secrets composed in the UI', () => {
   let before: Record<string, unknown>
@@ -49,7 +51,7 @@ test.describe.serial('secrets composed in the UI', () => {
     await expect(page.getByTestId('submit-blockers')).toContainText('Enter the secret.')
     await page.getByTestId('secret-content-input').fill('hunter2-router')
     await page.getByRole('textbox', { name: /^Label/ }).fill(label)
-    await pick(page, to.name)
+    await pickRecipient(page, to.name)
     await page.getByTestId('passphrase').fill('a-long-passphrase')
     await page.getByTestId('passphrase-repeat').fill('a-different-one!')
     await expect(page.getByTestId('submit-blockers')).toContainText('The two passphrases differ.')
@@ -93,7 +95,7 @@ test.describe.serial('secrets composed in the UI', () => {
     await page.goto('/secrets/new')
     await page.getByTestId('secret-content-input').fill('to-be-burned')
     await page.getByRole('textbox', { name: /^Label/ }).fill(label)
-    await pick(page, to.name)
+    await pickRecipient(page, to.name)
     await page.getByTestId('create-link').check()
     await page.getByTestId('secret-submit').click()
     const first = (await page.getByTestId('secret-link').innerText()).trim()
@@ -139,7 +141,7 @@ test.describe.serial('secrets composed in the UI', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Request a secret' })).toBeVisible()
     await page.getByTestId('request-label').fill(label)
     await page.getByTestId('request-note').fill('The staging DB password, please.')
-    await pick(page, target.name)
+    await pickRecipient(page, target.name)
     await page.getByTestId('request-create-link').check()
     await page.getByTestId('request-submit').click()
     await expect(page.getByTestId('request-sent')).toBeVisible()

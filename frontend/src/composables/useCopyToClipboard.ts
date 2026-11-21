@@ -18,13 +18,16 @@ export function useCopyToClipboard() {
   let timer: number | null = null
 
   async function copy(text: string, key: string | number | true = true): Promise<boolean> {
+    if (timer !== null) window.clearTimeout(timer)
+    timer = null
     try {
       await navigator.clipboard.writeText(text)
     } catch {
+      // "Copied" from an earlier copy must not stand for this one.
+      copiedKey.value = null
       return false
     }
     copiedKey.value = key
-    if (timer !== null) window.clearTimeout(timer)
     timer = window.setTimeout(() => {
       copiedKey.value = null
       timer = null

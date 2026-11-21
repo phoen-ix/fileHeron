@@ -7,7 +7,7 @@ notifications. The admin console is part b (`COVERAGE.b.md`); the index is `COVE
   ```sh
   sed -n "1,/\/\* admin ---/p;/path: '\/account\/2fa\/forced'/,\$p" frontend/src/router/index.ts | grep -oE "path: '[^']+'"
   ```
-- **Features** (2026-10-30, 97 items): the forms, actions, dialogs and error states of the views and
+- **Features** (2026-10-30, 97 items; 7 repeated actions added 2026-11-21): the forms, actions, dialogs and error states of the views and
   components those routes render (`frontend/src/views/{Login,LoginSecondFactor,RegisterFromInvite,ForgotPassword,ResetPassword,EmailVerify,ConfirmEmailChange,CancelEmailChange,Setup,Account,TwoFactorSetup,ShareList,ShareCreate,ShareDetail,Approvals,Secret*,Public*,ManageNotifications,LegalPage,NotFound}.vue`
   and `frontend/src/components/{AppHeader,ApiTokenPanel,WebAuthnPanel,OIDCConnectPanel,NotificationBell,NotificationPreferences,RecipientPicker,FileUploadArea,FileRow,FilePreviewModal,PublicLinkPanel,SecretReveal,SecretAnswerForm}.vue`),
   listed by hand from their `@submit`/`@click` handlers and error branches (`grep -nE "@submit|@click" <file>`).
@@ -17,7 +17,7 @@ notifications. The admin console is part b (`COVERAGE.b.md`); the index is `COVE
   in `e2e/tests/user/` (this part) and the older journeys in `e2e/tests/`. Test ids below are
   `<file under e2e/tests/> › <title>`.
 
-Totals: 30 routes × 4 roles = 120 sweep cells, all ✅. Features: 97 - ✅ 90, ❌ 7 (a 0, b 0, c 7, d 0, e 0).
+Totals: 30 routes × 4 roles = 120 sweep cells, all ✅. Features: 104 - ✅ 97, ❌ 7 (a 0, b 0, c 7, d 0, e 0).
 
 ## Routes × roles (breadth)
 
@@ -200,3 +200,21 @@ Role gate on the admin console for non-admins: `user/sweep.spec.ts › client �
 | H3 | Legal page renders admin HTML safely | guest | `legal-page-xss.spec.ts › admin-authored HTML on the legal page cannot execute script` | ✅ |
 | H4 | Legal page keeps its markup | guest | `legal-page-xss.spec.ts › the sanitiser keeps the markup a legal page actually needs` | ✅ |
 | H5 | Edge: security headers, no-cache index, tus hook refused, CSP | guest | `edge-behaviour.spec.ts › the SPA shell carries its security headers` and the four tests after it | ✅ |
+
+### The same action twice in a row
+
+Added 2026-11-21. Every row above does its action once on a fresh page, which is how "a second
+recipient cannot be added" shipped (the recipient list would not open again after a pick; fixed
+2026-11-20). These repeat the action by mouse and typing alone: between the two uses there is no extra
+key press, blur, wait or click on a field that still has the focus. A step like that added to make one
+pass is the defect (`backend/tests/test_frontend_test_hygiene.py` scans every spec for them).
+
+| # | Feature / state | Roles | Test | |
+|---|---|---|---|---|
+| R1 | Share form: two people, a group and an address without an account, picked in a row in a field clicked once | employee | `user/repeat.spec.ts › the share form takes two people, a group and an outside address in a row` | ✅ |
+| R2 | Secret form and secret-request form: two people in a row | employee | `user/repeat.spec.ts › the secret forms › a secret and a secret request each take two people in a row` | ✅ |
+| R3 | "Create another": an empty form that sends a second share | employee | `user/repeat.spec.ts › "Create another" opens an empty form that sends a second share` | ✅ |
+| R4 | Outbox user filter: a second person picked after the first; the suggestions stay closed after a pick | employee | `user/repeat.spec.ts › the outbox filter follows a second person picked after the first` | ✅ |
+| R5 | Share page: public link created, revoked, created again from an empty form | employee | `user/repeat.spec.ts › a public link is created, revoked and created again on the share page` | ✅ |
+| R6 | Share page: files added twice | employee | `user/repeat.spec.ts › files are added to a share twice from its page` | ✅ |
+| R7 | Two API tokens in a row; the password dialog holds nothing from its last use | employee | `user/repeat.spec.ts › two API tokens in a row; the password dialog opens clean the second time` | ✅ |

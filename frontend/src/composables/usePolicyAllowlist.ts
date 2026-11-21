@@ -2,9 +2,10 @@
  * adding and removing users, toggling groups. Every policy page carried its own
  * copy of this (API tokens, public links, share approval, both Secrets gates);
  * components/admin/PolicyGate.vue and SecretPolicySide.vue now share it. */
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { searchUsers } from '@/api/users'
+import { useSuggestions } from '@/composables/useSuggestions'
 import type { UserSearchItem } from '@/types/api'
 
 export interface PolicyGateUser {
@@ -32,29 +33,17 @@ export function usePolicyAllowlist(opts: {
   exclude?: (u: UserSearchItem) => boolean
 }) {
   const query = ref('')
-  const suggestions = ref<UserSearchItem[]>([])
-  let timer: ReturnType<typeof setTimeout> | null = null
-
-  watch(query, (q) => {
-    if (timer) clearTimeout(timer)
-    if (!q || q.length < 2) {
-      suggestions.value = []
-      return
-    }
-    timer = setTimeout(async () => {
-      try {
-        const { data } = await searchUsers(q)
-        suggestions.value = data.items.filter(
-          (u) => !opts.users().some((x) => x.id === u.user_id) && !opts.exclude?.(u),
-        )
-      } catch {
-        suggestions.value = []
-      }
-    }, 200)
+  const found = useSuggestions((q: string) => searchUsers(q).then((r) => r.data.items), {
+    minLength: 2,
   })
-  onBeforeUnmount(() => {
-    if (timer) clearTimeout(timer)
-  })
+  watch(query, (q) => found.search(q))
+  // Filtered when read, not when the answer lands, so a user added since then
+  // is not offered a second time.
+  const suggestions = computed(() =>
+    found.results.value.filter(
+      (u) => !opts.users().some((x) => x.id === u.user_id) && !opts.exclude?.(u),
+    ),
+  )
 
   function addUser(u: UserSearchItem) {
     opts.setUsers([
@@ -62,7 +51,8 @@ export function usePolicyAllowlist(opts: {
       { id: u.user_id, display_name: u.display_name, email: u.email, role: u.role },
     ])
     query.value = ''
-    suggestions.value = []
+    // Also drops an answer still in flight, which refilled the list.
+    found.clear()
   }
 
   function removeUser(id: number) {

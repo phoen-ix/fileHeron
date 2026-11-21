@@ -83,6 +83,36 @@ describe('ApiTokenPanel create form', () => {
 })
 
 
+describe('ApiTokenPanel password dialog', () => {
+  // The dialog and the form shared one error: "Password incorrect." stayed
+  // under the form after the dialog that asked for the password was dismissed.
+  it('takes its error with it when dismissed', async () => {
+    createToken.mockRejectedValueOnce(
+      Object.assign(new Error('INVALID_PASSWORD'), {
+        isAxiosError: true,
+        response: { status: 403, data: { code: 'INVALID_PASSWORD', error: 'Password incorrect.' } },
+      }),
+    )
+    const w = makeWrapper()
+    await flushPromises()
+    await button(w, 'Create token').trigger('click')
+    await w.find('.create-form input[type="text"]').setValue('ci')
+    await w.find('.create-form').trigger('submit')
+    await w.find('[data-testid="step-up-password"]').setValue('nope')
+    await w.find('[data-testid="step-up-dialog"] form').trigger('submit')
+    await flushPromises()
+    expect(w.find('[data-testid="step-up-dialog"] [role="alert"]').exists()).toBe(true)
+
+    await w
+      .find('[data-testid="step-up-dialog"]')
+      .findAll('button')
+      .find((b) => b.text() === en.common.cancel)!
+      .trigger('click')
+    expect(w.find('[data-testid="step-up-dialog"]').exists()).toBe(false)
+    expect(w.find('.create-form .fh-field-error').exists()).toBe(false)
+  })
+})
+
 describe('ApiTokenPanel failures are shown, not swallowed', () => {
   const envelope = (code: string, status: number) =>
     Object.assign(new Error(code), { isAxiosError: true, response: { status, data: { code, error: code } } })

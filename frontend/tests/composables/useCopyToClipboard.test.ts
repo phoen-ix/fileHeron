@@ -52,6 +52,23 @@ describe('useCopyToClipboard', () => {
     expect(api.copied.value).toBe(false)
   })
 
+  // The failure returned before touching the flag, so "Copied" from the copy
+  // before it stayed on the button for the rest of its window.
+  it('a copy that fails takes "Copied" down, even inside an earlier window', async () => {
+    vi.useFakeTimers()
+    let blocked = false
+    stubClipboard(async () => {
+      if (blocked) throw new DOMException('denied', 'NotAllowedError')
+    })
+    const { api } = host()
+
+    expect(await api.copy('first')).toBe(true)
+    expect(api.copied.value).toBe(true)
+    blocked = true
+    expect(await api.copy('second')).toBe(false)
+    expect(api.copied.value).toBe(false)
+  })
+
   it('a second copy restarts the window rather than racing the first timer', async () => {
     vi.useFakeTimers()
     stubClipboard(async () => {})

@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import en from '@/i18n/locales/en.json'
 
+import { click, clickAway, press, type as typeInto } from '../helpers/user'
+
 const api = vi.hoisted(() => ({
   searchUsers: vi.fn(),
   listRecipientTargetGroups: vi.fn(),
@@ -27,30 +29,43 @@ const ANNA = {
   role: 'client',
 }
 
+const mounted: { unmount: () => void }[] = []
+
+// Attached to the document: only an element in it can take the focus, and the
+// focus is what these tests are about (tests/helpers/user.ts).
 function mountPicker(props: Record<string, unknown> = {}) {
   const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
-  return mount(RecipientPicker, {
+  const w = mount(RecipientPicker, {
+    attachTo: document.body,
     props: { modelValue: { user_ids: [], group_ids: [], emails: [] }, ...props },
     global: {
       plugins: [i18n],
       stubs: { RouterLink: { props: ['to'], template: '<a class="router-link"><slot /></a>' } },
     },
   })
+  mounted.push(w)
+  return w
 }
 
-/** Type, let the 180ms debounce and the search settle, then optionally blur
- *  (the list closes 120ms after blur). */
-async function type(w: ReturnType<typeof mountPicker>, text: string, { blur = false } = {}) {
-  const input = w.find('input')
-  await input.trigger('focus')
-  await input.setValue(text)
+/** Let the 180ms debounce and the search settle. */
+async function settle() {
   vi.advanceTimersByTime(200)
   await flushPromises()
-  if (blur) {
-    await input.trigger('blur')
-    vi.advanceTimersByTime(150)
-    await flushPromises()
-  }
+}
+
+/** Click away and outwait the list's 120ms close. */
+async function leave() {
+  await clickAway()
+  vi.advanceTimersByTime(150)
+  await flushPromises()
+}
+
+/** Type as a user does - the field takes the focus only if it lacks it - and
+ *  let the search settle; optionally click away afterwards. */
+async function type(w: ReturnType<typeof mountPicker>, text: string, { blur = false } = {}) {
+  await typeInto(w.find('input'), text)
+  await settle()
+  if (blur) await leave()
 }
 
 beforeEach(() => {
@@ -64,6 +79,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  mounted.splice(0).forEach((w) => w.unmount())
   vi.useRealTimers()
 })
 
@@ -91,9 +107,7 @@ describe('RecipientPicker', () => {
       { text: 'michael@elsewhere.test', noAccount: true },
     ])
 
-    await w.find('input').trigger('blur')
-    vi.advanceTimersByTime(150)
-    await flushPromises()
+    await leave()
     const pending = w.find('[data-testid="recipient-pending"]')
     expect(pending.text()).toContain('michael@elsewhere.test')
     expect(pending.text()).toContain(en.recipient.no_account_action)
@@ -116,7 +130,7 @@ describe('RecipientPicker', () => {
     const w = mountPicker({ canPublicLink: true })
     await type(w, 'michael@elsewhere.test', { blur: true })
 
-    await w.find('[data-testid="recipient-clear"]').trigger('click')
+    await click(w.find('[data-testid="recipient-clear"]'))
     await flushPromises()
 
     expect((w.find('input').element as HTMLInputElement).value).toBe('')
@@ -132,7 +146,7 @@ describe('RecipientPicker', () => {
     expect(row.exists()).toBe(true)
     expect(row.text()).toContain('michael@elsewhere.test')
 
-    await row.trigger('mousedown')
+    await click(row)
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual([
       { user_ids: [], group_ids: [], emails: ['michael@elsewhere.test'] },
     ])
@@ -150,9 +164,7 @@ describe('RecipientPicker', () => {
 
   it('does not offer a link before the search for that text has answered', async () => {
     const w = mountPicker({ allowExternal: true })
-    const input = w.find('input')
-    await input.trigger('focus')
-    await input.setValue('anna@client.test')
+    await typeInto(w.find('input'), 'anna@client.test')
     // Debounce not yet elapsed: the list still answers the previous query.
     vi.advanceTimersByTime(50)
     await flushPromises()
@@ -170,27 +182,44 @@ describe('RecipientPicker', () => {
 /* A pick closed the list while the field kept the focus, and only `@focus` (or
  * an arrow key) opened it again: the second address sat in the box as "not
  * added yet - pick it from the list" with no list, and the form would not
- * submit (2026-11-20). These type the next recipient WITHOUT a fresh focus. */
+ * submit (2026-11-20). Every step here is one a user takes: the field is
+ * clicked once, and nothing fires a focus the browser would not. */
 describe('RecipientPicker with several recipients', () => {
-  async function typeOn(w: ReturnType<typeof mountPicker>, text: string) {
-    await w.find('input').setValue(text)
-    vi.advanceTimersByTime(200)
-    await flushPromises()
+  const BEN = { user_id: 8, display_name: 'Ben Client', email: 'ben@client.test', role: 'client' }
+  const RIVERSIDE = {
+    id: 3,
+    name: 'Project Riverside',
+    description: null,
+    is_company_inbox: false,
+    member_count: 3,
   }
+
+  /** As for an admin: the empty query lists everyone. */
+  function everyoneListed() {
+    api.searchUsers.mockImplementation(async (q: string) => ({
+      data: {
+        items: [ANNA, BEN].filter((u) => !q || u.email.includes(q.toLowerCase())),
+      },
+    }))
+  }
+
+  const listOpen = (w: ReturnType<typeof mountPicker>) => w.find('.results').exists()
+  const option = (w: ReturnType<typeof mountPicker>, text: string) =>
+    w.findAll('.result-row').find((r) => r.text().includes(text))!
 
   it('adds a second and a third recipient without leaving the field', async () => {
     const w = mountPicker({ allowExternal: true })
     await type(w, 'first@elsewhere.test')
-    await w.find('[data-testid="external-option"]').trigger('mousedown')
+    await click(w.find('[data-testid="external-option"]'))
 
-    await typeOn(w, 'second@elsewhere.test')
+    await type(w, 'second@elsewhere.test')
     const row = w.find('[data-testid="external-option"]')
     expect(row.exists()).toBe(true)
     expect(w.find('[data-testid="recipient-pending"]').exists()).toBe(false)
-    await row.trigger('mousedown')
+    await click(row)
 
-    await typeOn(w, 'anna')
-    await w.find('input').trigger('keydown', { key: 'Enter' })
+    await type(w, 'anna')
+    await press('Enter')
 
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual([
       {
@@ -201,30 +230,90 @@ describe('RecipientPicker with several recipients', () => {
     ])
   })
 
+  it('adds two people and a group by mouse alone', async () => {
+    everyoneListed()
+    api.listRecipientTargetGroups.mockResolvedValue({ data: { items: [RIVERSIDE] } })
+    const w = mountPicker()
+    const input = w.find('input').element
+
+    await type(w, 'anna')
+    await click(option(w, 'Anna Client'))
+    expect(document.activeElement).toBe(input)
+
+    await type(w, 'ben')
+    await click(option(w, 'Ben Client'))
+
+    await type(w, 'River')
+    await click(option(w, 'Project Riverside'))
+
+    expect(w.emitted('update:modelValue')?.at(-1)).toEqual([
+      { user_ids: [ANNA.user_id, BEN.user_id], group_ids: [RIVERSIDE.id], emails: [] },
+    ])
+    expect(w.findAll('.chip')).toHaveLength(3)
+  })
+
   it('ignores Enter until the search for the typed text has answered', async () => {
-    // As for an admin: the empty query (run after every pick) lists everyone.
-    api.searchUsers.mockImplementation(async (q: string) => ({
-      data: { items: !q || ANNA.email.includes(q.toLowerCase()) ? [ANNA] : [] },
-    }))
+    everyoneListed()
     const w = mountPicker({ allowExternal: true })
     await type(w, 'first@elsewhere.test')
-    await w.find('[data-testid="external-option"]').trigger('mousedown')
-    vi.advanceTimersByTime(200)
-    await flushPromises()
+    await click(w.find('[data-testid="external-option"]'))
+    await settle()
 
-    const input = w.find('input')
-    await input.setValue('second@elsewhere.test')
-    await input.trigger('keydown', { key: 'Enter' })
+    await typeInto(w.find('input'), 'second@elsewhere.test')
+    await press('Enter')
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual([
       { user_ids: [], group_ids: [], emails: ['first@elsewhere.test'] },
     ])
 
-    vi.advanceTimersByTime(200)
-    await flushPromises()
-    await input.trigger('keydown', { key: 'Enter' })
+    await settle()
+    await press('Enter')
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual([
       { user_ids: [], group_ids: [], emails: ['first@elsewhere.test', 'second@elsewhere.test'] },
     ])
+  })
+
+  it('opens the list again when the user types after Escape', async () => {
+    everyoneListed()
+    const w = mountPicker()
+    await type(w, 'anna')
+    await press('Escape')
+    expect(listOpen(w)).toBe(false)
+
+    await type(w, 'ben')
+    expect(option(w, 'Ben Client').exists()).toBe(true)
+  })
+
+  // Pressing a label takes the focus off its field and releasing it gives the
+  // focus back: blur, then focus, usually less than 120ms apart. The blur's
+  // delayed close then ran under a focused field.
+  it('keeps the list open when the field is left and re-entered at once', async () => {
+    everyoneListed()
+    const w = mountPicker()
+    await settle()
+    await click(w.find('input'))
+    expect(listOpen(w)).toBe(true)
+
+    await click(w.find('label'))
+    expect(document.activeElement).toBe(w.find('input').element)
+    vi.advanceTimersByTime(150)
+    await flushPromises()
+    expect(listOpen(w)).toBe(true)
+
+    await clickAway()
+    vi.advanceTimersByTime(60)
+    await click(w.find('input'))
+    vi.advanceTimersByTime(150)
+    await flushPromises()
+    expect(listOpen(w)).toBe(true)
+  })
+
+  it('closes the list once the field is really left', async () => {
+    everyoneListed()
+    const w = mountPicker()
+    await settle()
+    await click(w.find('input'))
+    await leave()
+    expect(listOpen(w)).toBe(false)
   })
 })
 

@@ -8,6 +8,7 @@ import {
   mailedToken,
   newUser,
   ok,
+  pickRecipient,
   restoreSettings,
   session,
   setSettings,
@@ -146,11 +147,7 @@ async function composeToOutsider(page: Page, browser: Browser): Promise<void> {
     .locator('input.dropzone-input')
     .setInputFiles({ name: 'brief.txt', mimeType: 'text/plain', buffer: Buffer.from('brief') })
   await page.getByLabel('Subject', { exact: true }).fill(subject)
-  const box = page.locator('.recipient-picker').getByRole('combobox')
-  await box.fill(outsider)
-  const opt = page.getByTestId('external-option')
-  await expect(opt).toBeVisible()
-  await opt.click()
+  await pickRecipient(page, outsider)
   await expect(page.getByText('Required: recipients without an account receive this link by email.')).toBeVisible()
   await expect(page.getByLabel('Email the download link to these addresses')).toBeChecked()
   await page.getByRole('button', { name: 'Create + send' }).click()

@@ -95,7 +95,7 @@
       :busy="creatingBusy"
       :error="errorMsg"
       @confirm="onCreate"
-      @cancel="stepUpOpen = false"
+      @cancel="closeStepUp"
     />
 
     <div v-if="plaintext" class="plaintext-box fh-rise">
@@ -226,6 +226,13 @@
   function openStepUp() {
     errorMsg.value = null
     stepUpOpen.value = true
+  }
+
+  // The dialog's error leaves with it: the form below shows the same ref, and
+  // "Password incorrect." under a form with no password field explained nothing.
+  function closeStepUp() {
+    stepUpOpen.value = false
+    errorMsg.value = null
   }
 
   async function onCreate(password: string) {

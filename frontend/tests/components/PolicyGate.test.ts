@@ -5,17 +5,25 @@
  * only when the page passes a label for it. */
 import { flushPromises, mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import en from '@/i18n/locales/en.json'
 
-vi.mock('@/api/users', () => ({
-  searchUsers: async () => ({
-    data: { items: [{ user_id: 9, display_name: 'Cy', email: 'cy@test.local', role: 'employee' }] },
-  }),
-}))
+const CY = { user_id: 9, display_name: 'Cy', email: 'cy@test.local', role: 'employee' }
+const DEE = { user_id: 10, display_name: 'Dee', email: 'dee@test.local', role: 'employee' }
+const api = vi.hoisted(() => ({ searchUsers: vi.fn() }))
+vi.mock('@/api/users', () => ({ searchUsers: (q: string) => api.searchUsers(q) }))
 
 import PolicyGate from '@/components/admin/PolicyGate.vue'
+
+import { click, type } from '../helpers/user'
+
+beforeEach(() => {
+  api.searchUsers.mockReset()
+  api.searchUsers.mockImplementation(async (q: string) => ({
+    data: { items: [CY, DEE].filter((u) => u.email.startsWith(q.toLowerCase())) },
+  }))
+})
 
 const LABELS = {
   mode: 'Mode', heading: 'Allowlist', help: 'Always allowed', users: 'Users',
@@ -76,5 +84,65 @@ describe('PolicyGate', () => {
     expect(mountGate('admins_only').find('.group-check .fh-pill').exists()).toBe(false)
     const w = mountGate('admins_only', { ...LABELS, inbox: 'company inbox' })
     expect(w.find('.group-check .fh-pill').text()).toBe('company inbox')
+  })
+})
+
+/* The same "second time" shape as the recipient picker (2026-11-20): every
+ * test added one user. The gate is a controlled component, so the host feeds
+ * each emitted model back in. */
+describe('PolicyGate allowlist, several users', () => {
+  const pause = () => new Promise((r) => setTimeout(r, 250))
+
+  function mountControlled() {
+    const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
+    const w = mount(PolicyGate, {
+      attachTo: document.body,
+      props: {
+        modelValue: { mode: 'admins_only', users: [], groups: [] },
+        modes: MODES,
+        labels: LABELS,
+        groups: GROUPS,
+        'onUpdate:modelValue': (v: unknown) => w.setProps({ modelValue: v } as never),
+      } as never,
+      global: { plugins: [i18n] },
+    })
+    return w
+  }
+
+  it('adds two users in a row without leaving the field', async () => {
+    const w = mountControlled()
+    const input = w.find('input[type="search"]').element
+    await type(input, 'cy')
+    await pause()
+    await flushPromises()
+    await click(w.find('.user-suggest'))
+
+    await type(input, 'dee')
+    await pause()
+    await flushPromises()
+    await click(w.find('.user-suggest'))
+
+    const last = w.emitted('update:modelValue')?.at(-1)?.[0] as { users: { id: number }[] }
+    expect(last.users.map((u) => u.id)).toEqual([CY.user_id, DEE.user_id])
+    w.unmount()
+  })
+
+  it('drops a search answer that arrives after a user was added', async () => {
+    const w = mountControlled()
+    const input = w.find('input[type="search"]').element
+    await type(input, 'cy')
+    await pause()
+    await flushPromises()
+
+    let release!: (v: unknown) => void
+    api.searchUsers.mockImplementation(() => new Promise((res) => (release = res)))
+    await type(input, 'cy@')
+    await pause()
+    await click(w.find('.user-suggest'))
+    release({ data: { items: [CY, DEE] } })
+    await flushPromises()
+
+    expect(w.findAll('.user-suggest')).toHaveLength(0)
+    w.unmount()
   })
 })

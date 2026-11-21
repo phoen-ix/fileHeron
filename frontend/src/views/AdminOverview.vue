@@ -42,8 +42,8 @@
         :aria-activedescendant="showResults && results[active] ? optionId(active) : undefined"
         :placeholder="t('admin_overview.search_placeholder')"
         autocomplete="off"
-        @focus="open = true"
-        @blur="onBlur"
+        @focus="show"
+        @blur="closeSoon"
         @keydown="onKeydown"
       />
       <ul
@@ -177,6 +177,7 @@
   } from '@/api/admin'
   import { listPendingApprovals } from '@/api/shares'
   import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
+  import { usePopupList } from '@/composables/usePopupList'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
   import { ADMIN_NAV, findNavItem } from '@/config/adminNav'
   import { ADMIN_SEARCH_INDEX } from '@/config/adminSearchIndex'
@@ -358,12 +359,15 @@
   }
 
   const query = ref('')
-  const open = ref(false)
+  const { open, show, close, closeSoon } = usePopupList()
   const active = ref(0)
   // Refining the query shrinks the list; an index left past its end highlighted
   // nothing and made Enter do nothing. Every new query starts at the top hit.
-  watch(query, () => {
+  // Typing also reopens the list: after Escape the field still has the focus,
+  // so `@focus` alone left it shut (usePopupList).
+  watch(query, (q) => {
     active.value = 0
+    if (q) show()
   })
 
   function crumbFor(routeName: string): string {
@@ -420,12 +424,15 @@
   }
 
   function go(hit: Hit) {
-    open.value = false
+    close()
     void router.push(hit.to)
   }
 
   function onKeydown(e: KeyboardEvent) {
-    if (!showResults.value) return
+    if (!showResults.value) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') show()
+      return
+    }
     if (e.key === 'ArrowDown') {
       e.preventDefault()
       active.value = Math.min(results.value.length - 1, active.value + 1)
@@ -439,15 +446,8 @@
         go(hit)
       }
     } else if (e.key === 'Escape') {
-      open.value = false
+      close()
     }
-  }
-
-  function onBlur() {
-    // Let a mousedown on an option run first (it is prevented, so focus stays).
-    window.setTimeout(() => {
-      open.value = false
-    }, 120)
   }
 </script>
 

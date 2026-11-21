@@ -40,12 +40,12 @@
         :aria-expanded="showResults && optionCount > 0"
         :aria-controls="`${inputId}-listbox`"
         :aria-activedescendant="activeOptionId"
-        @focus="showResults = true"
-        @blur="onBlur"
+        @focus="show"
+        @blur="closeSoon"
         @keydown.down.prevent="moveCursor(1)"
         @keydown.up.prevent="moveCursor(-1)"
         @keydown.enter.prevent="selectCursor"
-        @keydown.escape="showResults = false"
+        @keydown.escape="close"
       />
       <!-- Open whenever there is something to say, INCLUDING "nothing matched":
            the list used to render only when it had rows, so its own
@@ -175,12 +175,14 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+  import { computed, onMounted, ref, watch } from 'vue'
   import { useI18n } from 'vue-i18n'
 
   import { listRecipientTargetGroups } from '@/api/groups'
   import { searchUsers } from '@/api/users'
   import { useApiError } from '@/composables/useApiError'
+  import { usePopupList } from '@/composables/usePopupList'
+  import { useSuggestions } from '@/composables/useSuggestions'
   import type { GroupResponse, ShareRecipientsRequest, UserSearchItem } from '@/types/api'
   import { EMAIL_RE } from '@/utils/email'
 
@@ -230,8 +232,9 @@
   )
 
   const query = ref('')
-  const showResults = ref(false)
-  const loading = ref(false)
+  // Open on focus AND on typing: a pick closes the list but keeps the focus,
+  // so `@focus` never fires for the next recipient (usePopupList).
+  const { open: showResults, show, close, closeSoon } = usePopupList()
   const errorMsg = ref<string | null>(null)
   const cursorIdx = ref(0)
 
@@ -242,7 +245,9 @@
   const selectedEmailsLocal = ref<string[]>([...(props.modelValue.emails ?? [])])
 
   // Search results.
-  const allUserResults = ref<UserSearchItem[]>([])
+  const userSearch = useSuggestions((q: string) => searchUsers(q).then((r) => r.data.items))
+  const allUserResults = userSearch.results
+  const loading = userSearch.loading
   const allGroupResults = ref<GroupResponse[]>([])
 
   watch(
@@ -315,11 +320,10 @@
     return EMAIL_RE.test(q) ? q : null
   })
 
-  /** The query the current results answer. Until the debounced search for the
-   *  text in the box has come back, the list is stale, and deciding "nobody has
-   *  this address" from it would offer a link to someone about to appear. */
-  const searchedQuery = ref<string | null>(null)
-  const settled = computed(() => !loading.value && searchedQuery.value === query.value)
+  /** Until the debounced search for the text in the box has come back, the
+   *  list is stale, and deciding "nobody has this address" from it would offer
+   *  a link to someone about to appear. */
+  const settled = computed(() => !loading.value && userSearch.answered.value === query.value)
 
   const queryMatchesSomeone = computed(() => {
     const email = queryEmail.value
@@ -427,39 +431,17 @@
     emit('update:pending', { text, noAccount: !!noAccount })
   })
 
-  let searchTimer: ReturnType<typeof setTimeout> | null = null
-
   watch(query, (v) => {
     errorMsg.value = null
-    // A pick closes the list but keeps the focus, so `@focus` never fires for
-    // the NEXT recipient: typing must reopen it, or the second address sat in
-    // the box as "not added yet - pick it from the list" with no list to pick
-    // from, and the form would not submit.
-    if (v) showResults.value = true
-    if (searchTimer) clearTimeout(searchTimer)
-    searchTimer = setTimeout(() => {
-      void doSearch(v)
-    }, 180)
+    if (v) show()
+    userSearch.search(v)
   })
-
-  // A slower answer for "ann" must not overwrite the one for "annabelle".
-  let searchSeq = 0
-
-  async function doSearch(q: string) {
-    const seq = ++searchSeq
-    loading.value = true
-    try {
-      const { data } = await searchUsers(q)
-      if (seq !== searchSeq) return
-      allUserResults.value = data.items
-      searchedQuery.value = q
-      cursorIdx.value = 0
-    } catch (err) {
-      if (seq === searchSeq) errorMsg.value = describe(err)
-    } finally {
-      if (seq === searchSeq) loading.value = false
-    }
-  }
+  watch(userSearch.results, () => {
+    cursorIdx.value = 0
+  })
+  watch(userSearch.error, (err) => {
+    if (err) errorMsg.value = describe(err)
+  })
 
   async function loadInitialGroups() {
     if (props.hideGroups) return
@@ -486,7 +468,7 @@
     if (selectedUsersLocal.value.some((s) => s.user_id === u.user_id)) return
     selectedUsersLocal.value.push(u)
     query.value = ''
-    showResults.value = false
+    close()
     emitModel()
   }
 
@@ -494,7 +476,7 @@
     if (selectedGroupsLocal.value.some((s) => s.id === g.id)) return
     selectedGroupsLocal.value.push(g)
     query.value = ''
-    showResults.value = false
+    close()
     emitModel()
   }
 
@@ -502,7 +484,7 @@
     if (!email || selectedEmailsLocal.value.includes(email)) return
     selectedEmailsLocal.value.push(email)
     query.value = ''
-    showResults.value = false
+    close()
     emitModel()
   }
 
@@ -521,7 +503,7 @@
     const total = optionCount.value
     if (!total) return
     cursorIdx.value = (cursorIdx.value + delta + total) % total
-    showResults.value = true
+    show()
   }
 
   function selectCursor() {
@@ -543,24 +525,9 @@
     }
   }
 
-  let blurTimer: ReturnType<typeof setTimeout> | null = null
-
-  function onBlur() {
-    // Delay so mousedown on a result row fires first.
-    if (blurTimer) clearTimeout(blurTimer)
-    blurTimer = setTimeout(() => {
-      showResults.value = false
-    }, 120)
-  }
-
   onMounted(() => {
     void loadInitialGroups()
-    void doSearch('')
-  })
-
-  onBeforeUnmount(() => {
-    if (searchTimer) clearTimeout(searchTimer)
-    if (blurTimer) clearTimeout(blurTimer)
+    userSearch.search('', { now: true })
   })
 </script>
 

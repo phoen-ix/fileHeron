@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+  import { onMounted, ref, watch } from 'vue'
   import { useI18n } from 'vue-i18n'
 
   import {
@@ -17,6 +17,7 @@
   import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
   import { usePaginatedList } from '@/composables/usePaginatedList'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
+  import { useSuggestions } from '@/composables/useSuggestions'
   import { useCopyToClipboard } from '@/composables/useCopyToClipboard'
   import { useUiStore } from '@/stores/ui'
   import { defaultTokenExpiryLocal, siteLocalIsoToUtcIso } from '@/utils/datetime'
@@ -94,7 +95,13 @@
 
   const showCreateForm = ref(false)
   const userQuery = ref('')
-  const userSuggestions = ref<UserSearchItem[]>([])
+  const userSearch = useSuggestions(
+    (query: string) => searchUsers(query).then((r) => r.data.items),
+    {
+      minLength: 2,
+    },
+  )
+  const userSuggestions = userSearch.results
   const selectedUser = ref<UserSearchItem | null>(null)
   const newName = ref('')
   // Re-auth, in a dialog: this route mints a token for ANY user, so it is the
@@ -118,10 +125,7 @@
   }
   const plaintextResult = ref<CreateApiTokenResponse | null>(null)
   const { copy, copied } = useCopyToClipboard()
-  let userSearchTimer: ReturnType<typeof setTimeout> | null = null
-
   watch(userQuery, () => {
-    if (userSearchTimer) clearTimeout(userSearchTimer)
     if (selectedUser.value && selectedUser.value.display_name === userQuery.value) {
       return
     }
@@ -132,34 +136,20 @@
     // acting as Alice - with every audit row attributing his actions to her, and
     // nothing on screen naming the owner (audit #2).
     selectedUser.value = null
-    if (!userQuery.value || userQuery.value.length < 2) {
-      userSuggestions.value = []
-      return
-    }
-    userSearchTimer = setTimeout(async () => {
-      try {
-        const { data } = await searchUsers(userQuery.value)
-        userSuggestions.value = data.items
-      } catch {
-        userSuggestions.value = []
-      }
-    }, 200)
+    userSearch.search(userQuery.value)
   })
 
   function pickUser(u: UserSearchItem) {
     selectedUser.value = u
     userQuery.value = u.display_name
-    userSuggestions.value = []
+    // Also drops an answer still in flight, which refilled the list.
+    userSearch.clear()
   }
-
-  onBeforeUnmount(() => {
-    if (userSearchTimer) clearTimeout(userSearchTimer)
-  })
 
   function resetCreateForm() {
     showCreateForm.value = false
     userQuery.value = ''
-    userSuggestions.value = []
+    userSearch.clear()
     selectedUser.value = null
     newName.value = ''
     tokenExpiresAt.value = defaultTokenExpiryLocal()

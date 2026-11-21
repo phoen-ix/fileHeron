@@ -4,9 +4,11 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import en from '@/i18n/locales/en.json'
+
+import { click, clickAway, press, type } from '../helpers/user'
 
 vi.mock('@/api/admin', () => ({
   adminListFiles: vi.fn(() => new Promise(() => {})),
@@ -22,32 +24,86 @@ vi.mock('vue-router', () => ({ useRouter: () => ({ push }), RouterLink: { templa
 import AdminOverview from '@/views/AdminOverview.vue'
 import { useAuthStore } from '@/stores/auth'
 
+const mounted: { unmount: () => void }[] = []
+afterEach(() => {
+  mounted.splice(0).forEach((w) => w.unmount())
+  vi.useRealTimers()
+  push.mockClear()
+})
+
+// In the document, so the field can really take the focus (tests/helpers/user.ts).
+async function mountOverview() {
+  setActivePinia(createPinia())
+  const auth = useAuthStore()
+  auth.user = { id: 1, role: 'admin', display_name: 'A' } as unknown as typeof auth.user
+  const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
+  const w = mount(AdminOverview, {
+    attachTo: document.body,
+    global: {
+      plugins: [i18n],
+      stubs: { RouterLink: true, AdminPageHeader: { template: '<header><slot /></header>' } },
+    },
+  })
+  mounted.push(w)
+  await flushPromises()
+  return w
+}
+
+const options = (w: Awaited<ReturnType<typeof mountOverview>>) => w.findAll('[role="option"]')
+const listShown = (w: Awaited<ReturnType<typeof mountOverview>>) =>
+  w.find('#ov-search-input').attributes('aria-expanded') === 'true'
+
 describe('AdminOverview setting search', () => {
   it('a refined query highlights its first hit again', async () => {
-    setActivePinia(createPinia())
-    const auth = useAuthStore()
-    auth.user = { id: 1, role: 'admin', display_name: 'A' } as unknown as typeof auth.user
-    const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
-    const w = mount(AdminOverview, {
-      global: {
-        plugins: [i18n],
-        stubs: { RouterLink: true, AdminPageHeader: { template: '<header><slot /></header>' } },
-      },
-    })
-    await flushPromises()
+    const w = await mountOverview()
     const input = w.find('#ov-search-input')
-    await input.trigger('focus')
-    await input.setValue('ma')
-    const broad = w.findAll('[role="option"]').length
+    await type(input, 'ma')
+    const broad = options(w).length
     expect(broad).toBeGreaterThan(3)
-    for (let i = 0; i < broad; i++) await input.trigger('keydown', { key: 'ArrowDown' })
+    for (let i = 0; i < broad; i++) await press('ArrowDown')
 
-    await input.setValue('mail log')
-    const options = w.findAll('[role="option"]')
-    expect(options.length).toBeGreaterThan(0)
-    expect(options.length).toBeLessThan(broad)
-    expect(options[0].attributes('aria-selected')).toBe('true')
-    await input.trigger('keydown', { key: 'Enter' })
+    await type(input, 'mail log')
+    expect(options(w).length).toBeGreaterThan(0)
+    expect(options(w).length).toBeLessThan(broad)
+    expect(options(w)[0].attributes('aria-selected')).toBe('true')
+    await press('Enter')
     expect(push).toHaveBeenCalledTimes(1)
+  })
+
+  // The recipient picker's defect (2026-11-20): the list opened only when the
+  // field GAINED the focus, and after Escape it still has it.
+  it('opens the list again when the user types, or arrows, after Escape', async () => {
+    const w = await mountOverview()
+    const input = w.find('#ov-search-input')
+    await type(input, 'mail')
+    expect(listShown(w)).toBe(true)
+
+    await press('Escape')
+    expect(listShown(w)).toBe(false)
+    await type(input, 'mail log')
+    expect(listShown(w)).toBe(true)
+
+    await press('Escape')
+    await press('ArrowDown')
+    expect(listShown(w)).toBe(true)
+  })
+
+  it('keeps the list open when the field is left and re-entered at once', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const w = await mountOverview()
+    const input = w.find('#ov-search-input')
+    await type(input, 'mail')
+
+    await clickAway()
+    vi.advanceTimersByTime(60)
+    await click(input)
+    vi.advanceTimersByTime(150)
+    await flushPromises()
+    expect(listShown(w)).toBe(true)
+
+    await clickAway()
+    vi.advanceTimersByTime(150)
+    await flushPromises()
+    expect(listShown(w)).toBe(false)
   })
 })

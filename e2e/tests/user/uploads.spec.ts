@@ -1,7 +1,7 @@
 import type { Request } from '@playwright/test'
 
 import { apiFetch, forceResumableUploads } from '../../helpers'
-import { admin, connect, expect, newUser, ok, signIn, test, tokenOf } from './lib'
+import { admin, connect, expect, newUser, ok, pickRecipient, signIn, test, tokenOf } from './lib'
 
 /* The resumable upload path (forced for these pages by
  * forceResumableUploads): a dropped connection mid-file resumes at the
@@ -21,11 +21,7 @@ async function newShareForm(page: import('@playwright/test').Page, ceiling = 1) 
   await forceResumableUploads(page, ceiling)
   await signIn(page, sender)
   await page.goto('/share/new')
-  const box = page.locator('.recipient-picker').getByRole('combobox')
-  await box.fill(to.name)
-  const opt = page.getByRole('option', { name: new RegExp(to.name) })
-  await expect(opt).toBeVisible()
-  await opt.click()
+  await pickRecipient(page, to.name)
   return { sender }
 }
 

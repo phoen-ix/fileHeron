@@ -142,6 +142,8 @@
 
   function cancelAdd() {
     adding.value = false
+    newName.value = ''
+    errorMsg.value = null
   }
 
   function openStepUp() {

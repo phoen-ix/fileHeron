@@ -8,23 +8,30 @@ import { createI18n } from 'vue-i18n'
 import { describe, expect, it } from 'vitest'
 
 import en from '@/i18n/locales/en.json'
+
+import { clickAway, type } from '../helpers/user'
 import ExpiryPicker from '@/components/ExpiryPicker.vue'
 
 function mountPicker(modelValue: string | null) {
   setActivePinia(createPinia())
   const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
-  return mount(ExpiryPicker, { props: { modelValue }, global: { plugins: [i18n] } })
+  return mount(ExpiryPicker, {
+    attachTo: document.body,
+    props: { modelValue },
+    global: { plugins: [i18n] },
+  })
 }
 
 describe('ExpiryPicker', () => {
   it('does not turn a cleared field into "never"', async () => {
     const w = mountPicker('2027-12-01T10:00:00')
     const input = w.find('input[type="datetime-local"]')
-    await input.setValue('')
+    await type(input, '')
     const emitted = (w.emitted('update:modelValue') ?? []).map((e) => e[0])
     expect(emitted).not.toContain(null)
-    await input.trigger('blur')
+    await clickAway()
     expect((input.element as HTMLInputElement).value).toBe('2027-12-01T10:00')
+    w.unmount()
   })
 
   it('still accepts a typed date', async () => {

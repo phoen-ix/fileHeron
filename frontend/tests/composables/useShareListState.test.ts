@@ -108,6 +108,25 @@ describe('useShareListState user filter', () => {
     expect(vi.mocked(searchUsers)).not.toHaveBeenCalledWith('Alice')
   })
 
+  // The watcher returned early for a picked name BEFORE bumping the sequence,
+  // so the guard never saw the pick and a search still in flight refilled the
+  // list the pick had just emptied.
+  it('drops a search answer that arrives after a pick', async () => {
+    const { searchUsers } = await import('@/api/users')
+    let release!: (v: unknown) => void
+    vi.mocked(searchUsers).mockImplementation(
+      () => new Promise((res) => (release = res)) as never,
+    )
+    const { state } = setup()
+    state.userQuery.value = 'ali'
+    await new Promise((r) => setTimeout(r, 250))
+    state.pickUser(alice as never)
+    await flushPromises()
+    release({ data: { items: [alice] } })
+    await flushPromises()
+    expect(state.userSuggestions.value).toEqual([])
+  })
+
   it('drops a stale pick when the text changes', async () => {
     const { searchUsers } = await import('@/api/users')
     vi.mocked(searchUsers).mockResolvedValue({ data: { items: [] } } as never)

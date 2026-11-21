@@ -6,6 +6,7 @@ import { listGroups } from '@/api/groups'
 import { listShares } from '@/api/shares'
 import { searchUsers } from '@/api/users'
 import { useApiError } from '@/composables/useApiError'
+import { useSuggestions } from '@/composables/useSuggestions'
 import { useTableSort } from '@/composables/useTableSort'
 import type { GroupResponse, ShareListItem, ShareState, UserSearchItem } from '@/types/api'
 
@@ -77,7 +78,10 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
   const partyUser = ref<UserSearchItem | null>(null)
   const partyGroup = ref<GroupResponse | null>(null)
   const userQuery = ref('')
-  const userSuggestions = ref<UserSearchItem[]>([])
+  const userSearch = useSuggestions((q: string) => searchUsers(q).then((r) => r.data.items), {
+    minLength: 2,
+  })
+  const userSuggestions = userSearch.results
   const myGroups = ref<GroupResponse[]>([])
 
   // Free-text subject search. The backend already filters
@@ -87,10 +91,7 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
   const groupBy = ref<GroupBy>('none')
   const sort = useTableSort({ defaultBy: 'created_at', defaultDir: 'desc' })
 
-  let userSearchTimer: ReturnType<typeof setTimeout> | null = null
-  let userSearchSeq = 0
   watch(userQuery, () => {
-    if (userSearchTimer) clearTimeout(userSearchTimer)
     // pickUser writes the picked name into the box; that must not search for
     // it again - it re-opened the suggestion list right after every pick.
     if (partyUser.value && partyUser.value.display_name === userQuery.value) return
@@ -104,20 +105,7 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
         void load()
       }
     }
-    if (!userQuery.value || userQuery.value.length < 2) {
-      userSuggestions.value = []
-      return
-    }
-    // A slower answer for "ann" must not overwrite the one for "annabelle".
-    const seq = ++userSearchSeq
-    userSearchTimer = setTimeout(async () => {
-      try {
-        const { data } = await searchUsers(userQuery.value)
-        if (seq === userSearchSeq) userSuggestions.value = data.items
-      } catch {
-        if (seq === userSearchSeq) userSuggestions.value = []
-      }
-    }, 200)
+    userSearch.search(userQuery.value)
   })
 
   let subjectSearchTimer: ReturnType<typeof setTimeout> | null = null
@@ -133,7 +121,6 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
   // A keystroke followed by leaving the page must not fire a search or a
   // reload against a list that no longer exists.
   onScopeDispose(() => {
-    if (userSearchTimer) clearTimeout(userSearchTimer)
     if (subjectSearchTimer) clearTimeout(subjectSearchTimer)
   })
 
@@ -141,7 +128,8 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
     partyUser.value = u
     partyGroup.value = null
     userQuery.value = u.display_name
-    userSuggestions.value = []
+    // Also drops an answer still in flight, which refilled the list.
+    userSearch.clear()
     page.value = 1
     void load()
   }
@@ -157,7 +145,7 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
     partyUser.value = null
     partyGroup.value = null
     userQuery.value = ''
-    userSuggestions.value = []
+    userSearch.clear()
     page.value = 1
     if (!resetting) void load()
   }

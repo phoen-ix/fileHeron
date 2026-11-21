@@ -1,6 +1,6 @@
 <script setup lang="ts">
   /* /admin/groups/:id - group detail with member management. */
-  import { onBeforeUnmount, onMounted, ref } from 'vue'
+  import { onMounted, ref } from 'vue'
   import { useI18n } from 'vue-i18n'
   import { useRoute, useRouter } from 'vue-router'
 
@@ -9,6 +9,7 @@
   import AdminPageHeader from '@/components/admin/AdminPageHeader.vue'
   import { useApiError } from '@/composables/useApiError'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
+  import { useSuggestions } from '@/composables/useSuggestions'
   import { useUiStore } from '@/stores/ui'
   import type { GroupDetailResponse, UserSearchItem } from '@/types/api'
 
@@ -31,13 +32,19 @@
 
   // member-add typeahead
   const userQuery = ref('')
-  const userResults = ref<UserSearchItem[]>([])
-  const userSearching = ref(false)
+  const userSearch = useSuggestions((q: string) => searchUsers(q).then((r) => r.data.items), {
+    delay: 180,
+  })
+  const userResults = userSearch.results
+  const userSearching = userSearch.loading
   const adding = ref(false)
 
+  // Only the FIRST load swaps the page for "Loading...". A reload after an
+  // add, a remove or a save keeps the page up: blanking it destroyed the
+  // search field, so the focus and the scroll position were lost each time.
   async function load() {
     const id = Number(route.params.id)
-    loading.value = true
+    loading.value = group.value === null
     errorMsg.value = null
     try {
       const { data } = await getGroup(id)
@@ -46,7 +53,9 @@
       editDescription.value = data.description || ''
       editIsInbox.value = data.is_company_inbox
     } catch (err) {
-      errorMsg.value = describe(err)
+      // A failed RELOAD keeps the page the admin is working on.
+      if (group.value) ui.pushToast(describe(err), 'error')
+      else errorMsg.value = describe(err)
     } finally {
       loading.value = false
     }
@@ -71,28 +80,9 @@
     }
   }
 
-  let searchTimer: ReturnType<typeof setTimeout> | null = null
-
   function onUserQuery() {
-    if (searchTimer) clearTimeout(searchTimer)
-    searchTimer = setTimeout(async () => {
-      userSearching.value = true
-      try {
-        const { data } = await searchUsers(userQuery.value)
-        userResults.value = data.items
-      } catch {
-        // It escaped as an unhandled rejection from inside the timer
-        // (audit 2026-11-08); an empty list is the honest result.
-        userResults.value = []
-      } finally {
-        userSearching.value = false
-      }
-    }, 180)
+    userSearch.search(userQuery.value)
   }
-
-  onBeforeUnmount(() => {
-    if (searchTimer) clearTimeout(searchTimer)
-  })
 
   async function onAdd(u: UserSearchItem) {
     if (!group.value) return
@@ -100,7 +90,8 @@
     try {
       await addMembers(group.value.id, [u.user_id])
       userQuery.value = ''
-      userResults.value = []
+      // Also drops an answer still in flight, which refilled the list.
+      userSearch.clear()
       await load()
     } catch (err) {
       ui.pushToast(describe(err), 'error')

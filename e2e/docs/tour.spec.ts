@@ -495,11 +495,6 @@ test('new share', async () => {
   const picker = page.locator('.recipient-picker input[role=combobox]')
   await picker.fill('Riverside')
   await page.locator('.result-row', { hasText: 'Project Riverside' }).click()
-  // The list closes on a pick and opens on focus, which fill() on the
-  // still-focused input never fires. Blur first - and outwait the picker's
-  // 120 ms delayed blur handler, or it shuts the list fill() just opened.
-  await picker.blur()
-  await page.waitForTimeout(300)
   await picker.fill('Martin')
   await page.locator('.result-row', { hasText: 'Martin Keller' }).click()
   await expect(page.locator('.recipient-picker .chip')).toHaveCount(2)

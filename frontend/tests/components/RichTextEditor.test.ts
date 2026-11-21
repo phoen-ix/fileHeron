@@ -7,6 +7,8 @@ import { createI18n } from 'vue-i18n'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import en from '@/i18n/locales/en.json'
+
+import { click, clickAway } from '../helpers/user'
 import RichTextEditor from '@/components/RichTextEditor.vue'
 
 afterEach(() => {
@@ -42,7 +44,9 @@ describe('RichTextEditor', () => {
     })
     ;(w.vm as unknown as { insertText: (s: string) => void }).insertText(' notice')
     expect(w.emitted('update:modelValue')).toBeUndefined()
-    w.find('[role="textbox"]').element.dispatchEvent(new FocusEvent('blur'))
+    await click(w.find('[role="textbox"]'))
+    expect(w.emitted('update:modelValue')).toBeUndefined()
+    await clickAway()
     const emitted = (w.emitted('update:modelValue') ?? []).map((e) => String(e[0]))
     expect(emitted.at(-1)).toContain('notice')
     vi.advanceTimersByTime(300)

@@ -74,6 +74,27 @@ describe('WebAuthnPanel registration errors', () => {
   })
 })
 
+describe('WebAuthnPanel add form', () => {
+  beforeEach(() => performRegistration.mockReset())
+
+  // Cancel only hid the form: the next "Add passkey" showed the previous name
+  // under the previous attempt's error.
+  it('opens clean after a failed attempt was cancelled', async () => {
+    performRegistration.mockRejectedValueOnce(new DOMException('dup', 'InvalidStateError'))
+    const w = makeWrapper()
+    await flushPromises()
+    await register(w)
+    expect(w.find('[role="alert"]').exists()).toBe(true)
+
+    const byText = (text: string) => w.findAll('button').find((b) => b.text() === text)!
+    await byText(en.common.cancel).trigger('click')
+    expect(w.find('[role="alert"]').exists()).toBe(false)
+
+    await byText(en.webauthn.add_cta).trigger('click')
+    expect((w.find('.add-form input').element as HTMLInputElement).value).toBe('')
+  })
+})
+
 describe('WebAuthnPanel asks for the password in a dialog', () => {
   beforeEach(() => performRegistration.mockReset())
 

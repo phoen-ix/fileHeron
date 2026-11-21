@@ -8,9 +8,10 @@ maps every admin route and every admin feature to a test in `e2e/tests/admin/`.
   redirect), and the unnamed redirect `settings/home-page`; the
   features per page are the controls of `frontend/src/views/Admin*.vue` and
   `frontend/src/components/admin/*.vue` (`grep -nE '@click|@submit|<input|<select|<textarea'`).
-- **Items:** 177 rows - 51 routes (each checked as admin, client, employee and guest:
-  204 route × role checks), 8 role-level checks, 118 features / actions / dialogs /
-  error states. ✅ 169 · ❌ 8 (b: 3, c: 5; no a, no d, no e).
+- **Items:** 184 rows - 51 routes (each checked as admin, client, employee and guest:
+  204 route × role checks), 8 role-level checks, 125 features / actions / dialogs /
+  error states (7 of them the repeated actions added 2026-11-21). ✅ 176 · ❌ 8 (b: 3, c: 5;
+  no a, no d, no e).
 - **Run:** `npx playwright test tests/admin` against a stack from `scripts/e2e.sh`
   (part a); `tests/admin/_admin.ts` holds the shared helpers.
 
@@ -256,3 +257,19 @@ Every route below is visited by the parameterised sweep (`sweep.spec.ts`):
 | Backup: export (categories, passphrase mismatch, step-up), preview, import | ✅ `system.spec.ts › backup & restore › export with a passphrase, preview the file, import it` |
 | Backup: not-a-backup file refused | ✅ `system.spec.ts › backup & restore › a file that is not a backup is refused in the preview` |
 | Data retention & storage tunables (save, reset, out-of-range stopped in the form) | ✅ `tunables.spec.ts › admin-settings-advanced: retention.invite_days is saved, kept and reset`, `tunables.spec.ts › a value outside its bounds is stopped in the form and nothing is saved` |
+
+### The same action twice in a row — `repeat.spec.ts`
+
+Added 2026-11-21, for the reason given under the same heading in `COVERAGE.a.md`: the other rows do each
+action once on a fresh page. Mouse and typing only, nothing between the two uses that a user would not
+do.
+
+| Feature | Test |
+|---|---|
+| Setting search: opens again on typing, and on an arrow key, after Escape | ✅ `repeat.spec.ts › the setting search opens again when the user types, or arrows, after Escape` |
+| Group members: two added in a row; the search field is the same element afterwards (the page is not rebuilt) | ✅ `repeat.spec.ts › group members: two added in a row, and the page is not rebuilt in between` |
+| Policy allowlist: two people in a row; the suggestions stay closed after a pick | ✅ `repeat.spec.ts › a policy allowlist takes two people in a row` |
+| Token owner picker: a second person replaces the first | ✅ `repeat.spec.ts › the token owner picker takes a second person over the first` |
+| Webhooks: two created in a row from a form that empties itself | ✅ `repeat.spec.ts › two webhooks are created in a row from a form that empties itself` |
+| Invites: two sent in a row; the form opens empty | ✅ `repeat.spec.ts › two invites are sent in a row; the form opens empty each time` |
+| Groups: the form opens empty after a refused name was cancelled; two created in a row | ✅ `repeat.spec.ts › the group form opens empty after a refused name was cancelled, and creates two in a row` |

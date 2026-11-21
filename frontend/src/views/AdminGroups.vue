@@ -30,6 +30,16 @@
     listGroups().then((r) => ({ items: r.data.items })),
   )
 
+  /** Close the form EMPTY - after a create and on Cancel alike, so reopening
+   *  never shows the last attempt's values under its error. */
+  function closeForm() {
+    showForm.value = false
+    newName.value = ''
+    newDescription.value = ''
+    newIsInbox.value = false
+    formError.value = null
+  }
+
   async function onCreate() {
     formError.value = null
     creating.value = true
@@ -39,10 +49,7 @@
         description: newDescription.value.trim() || null,
         is_company_inbox: newIsInbox.value,
       })
-      showForm.value = false
-      newName.value = ''
-      newDescription.value = ''
-      newIsInbox.value = false
+      closeForm()
       ui.pushToast(t('admin_groups.created_toast'), 'success')
       await load()
     } catch (err) {
@@ -105,7 +112,7 @@
         <button type="submit" class="fh-btn" :disabled="creating || !newName">
           {{ creating ? t('common.loading') : t('admin_groups.create_submit') }}
         </button>
-        <button type="button" class="fh-btn-text" @click="showForm = false">
+        <button type="button" class="fh-btn-text" @click="closeForm">
           {{ t('common.cancel') }}
         </button>
       </div>

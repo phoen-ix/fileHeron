@@ -1,0 +1,12 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}Eine Datei wurde aus der Quarantäne freigegeben{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("Antivirus") }}
+  {{ ui.headline("Eine Datei wurde aus der Quarantäne freigegeben") }}
+  {% call ui.specs() %}
+    {{ ui.spec("datei", filename) }}
+  {% endcall %}
+  {% call ui.para(gap=24) %}Ein Administrator hat diese Datei geprüft, die der Antivirus markiert hatte, und sie freigegeben.{% if share_restored %} Die zugehörige Freigabe steht ihren Empfängern wieder zur Verfügung.{% endif %}{% endcall %}
+  {% if share_url %}{{ ui.button(share_url, "Freigabe öffnen") }}{% endif %}
+{% endblock %}

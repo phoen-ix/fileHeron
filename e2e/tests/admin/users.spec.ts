@@ -240,13 +240,14 @@ test.describe('a user page', () => {
     expect(r.status).toBe(200)
   })
 
-  test('force password reset shows a one-time reset token', async ({ admin: page }) => {
+  // The person using the link is usecases/accounts.spec.ts (U4).
+  test('force password reset shows a one-time reset link', async ({ admin: page }) => {
     const u = await newUser('client', 'reset')
     await page.goto(`/admin/users/${u.id}`)
     await page.getByRole('button', { name: 'Force password reset' }).click()
     await confirm(page)
     await expect(page.getByText('Password reset link')).toBeVisible()
-    await expect(page.locator('.reset-box .token')).not.toBeEmpty()
+    await expect(page.locator('.reset-box .token')).toContainText(/\/reset-password\/[A-Za-z0-9._~-]+$/)
   })
 
   test('change email: applied at once, or as a confirmation link', async ({ admin: page }) => {

@@ -63,6 +63,9 @@ class CreateUserRequest(APIBaseModel):
 
 class ForcePasswordResetResponse(APIBaseModel):
     plaintext_token: str
+    # The link to hand over: the site's reset page with the token in it. The
+    # admin page showed the bare token under "Password reset link".
+    reset_url: str
     expires_at: datetime
 
 
@@ -299,6 +302,16 @@ class AdminInviteListResponse(APIBaseModel):
 class ActivateInviteRequest(APIBaseModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=120)
     locale: Locale | None = None
+
+
+class ActivatedInviteResponse(AdminUserItem):
+    """The account an admin activated directly, and the way into it. It has a
+    random password nobody knows, so the answer carries the site's reset page
+    with a one-time token for the admin to hand over - the same link "Force
+    password reset" gives. The dialog used to promise an immediate SSO sign-in
+    instead, which a staff account cannot do."""
+    set_password_url: str
+    set_password_expires_at: datetime
 
 
 class RegenerateInviteResponse(APIBaseModel):

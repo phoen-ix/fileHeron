@@ -280,3 +280,27 @@ async def test_an_unknown_status_filter_is_a_422_not_every_token(make_user, clie
     r = await client.get("/api/admin/api-tokens?status=actve", headers={"Authorization": f"Bearer {token}"})
 
     assert r.status_code == 422, r.text
+
+
+# An admin could switch a person's token off and the person's own list showed
+# it exactly as before: name, last four, "never used". Their script got a 401
+# and their account page gave no reason (found by the use-case journey for an
+# admin-minted token, 2026-11-21).
+@pytest.mark.asyncio
+async def test_the_owners_own_list_says_a_token_was_switched_off(make_user, db, client, login_as):
+    admin = make_user(email="a@test.local", role=UserRole.admin, password="Pass12345678!")
+    bob = make_user(email="b@test.local", role=UserRole.client, password="Pass12345678!")
+    off, _ = api_token_svc.create_token(db, owner=bob, name="off")
+    on, _ = api_token_svc.create_token(db, owner=bob, name="on")
+    api_token_svc.disable_token(db, actor=admin, token_id=off.id)
+    db.commit()
+
+    token, _ = await login_as("b@test.local", "Pass12345678!")
+    listed = await client.get("/api/account/api-tokens", headers={"Authorization": f"Bearer {token}"})
+    assert listed.status_code == 200
+    assert {i["name"]: i["disabled"] for i in listed.json()["items"]} == {"off": True, "on": False}
+
+    api_token_svc.reactivate_token(db, actor=admin, token_id=off.id)
+    db.commit()
+    listed = await client.get("/api/account/api-tokens", headers={"Authorization": f"Bearer {token}"})
+    assert {i["name"]: i["disabled"] for i in listed.json()["items"]} == {"off": False, "on": False}

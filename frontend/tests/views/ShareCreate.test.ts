@@ -42,6 +42,7 @@ vi.mock('@/composables/useUpload', async () => {
 
 import * as uploadModule from '@/composables/useUpload'
 import { useAuthStore } from '@/stores/auth'
+import { useSiteStore } from '@/stores/site'
 import type { MeResponse } from '@/types/api'
 import ShareCreate from '@/views/ShareCreate.vue'
 
@@ -130,6 +131,29 @@ describe('ShareCreate', () => {
 
     picker(w).vm.$emit('update:pending', { text: '', noAccount: false })
     picker(w).vm.$emit('update:modelValue', { user_ids: [5], group_ids: [], emails: [] })
+    await flushPromises()
+    expect(w.find('[data-testid="submit-blockers"]').exists()).toBe(false)
+    expect(submitBtn(w).attributes('disabled')).toBeUndefined()
+  })
+
+  // In maintenance mode the form still sent: the share was created EMPTY, and
+  // only then was the upload refused (found by the maintenance use case,
+  // 2026-11-21). The reason is a blocker like any other, and it goes when the
+  // banner does.
+  it('does not send while maintenance mode is on, and says why', async () => {
+    const site = useSiteStore()
+    site.maintenance = { enabled: true, message: '' }
+    const w = mountView()
+    queueOneFile()
+    picker(w).vm.$emit('update:modelValue', { user_ids: [5], group_ids: [], emails: [] })
+    await flushPromises()
+
+    expect(blockerText(w)).toContain(en.share_create.blockers.maintenance)
+    expect(submitBtn(w).attributes('disabled')).toBeDefined()
+    await w.find('form').trigger('submit')
+    expect(api.createShare).not.toHaveBeenCalled()
+
+    site.maintenance = { enabled: false, message: '' }
     await flushPromises()
     expect(w.find('[data-testid="submit-blockers"]').exists()).toBe(false)
     expect(submitBtn(w).attributes('disabled')).toBeUndefined()

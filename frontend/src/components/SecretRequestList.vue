@@ -93,6 +93,13 @@
       <Pager v-model:page="page" :total="total" :page-size="pageSize" />
     </template>
 
+    <div v-else-if="hiddenByFilter" class="empty-state">
+      <p class="fh-display-md empty-display">{{ t('secret_requests.empty.hidden') }}</p>
+      <button type="button" class="fh-btn-ghost" data-testid="requests-show-all" @click="showAll">
+        {{ t('secret_requests.empty.show_all') }}
+      </button>
+    </div>
+
     <div v-else class="empty-state">
       <p class="fh-display-md empty-display">{{ t(`secret_requests.empty.${box}`) }}</p>
       <RouterLink
@@ -114,6 +121,7 @@
   import { listSecretRequests } from '@/api/secretRequests'
   import Pager from '@/components/Pager.vue'
   import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+  import { useHiddenByFilter } from '@/composables/useHiddenByFilter'
   import { usePaginatedList } from '@/composables/usePaginatedList'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
   import type {
@@ -140,6 +148,8 @@
   const stateFilter = ref<StateFilter>('open')
   const q = ref('')
 
+  const { hiddenByFilter, check } = useHiddenByFilter()
+
   const { items, total, page, pageSize, loading, errorMsg, load, resetAndLoad } =
     usePaginatedList<SecretRequestListItem>(({ page, pageSize }) =>
       listSecretRequests({
@@ -148,11 +158,22 @@
         q: q.value || undefined,
         page,
         page_size: pageSize,
-      }).then((r) => r.data),
+      }).then((r) =>
+        check(r.data, stateFilter.value !== 'all' || q.value !== '', () =>
+          listSecretRequests({ box: box.value, page: 1, page_size: 1 }).then(
+            (all) => all.data.total ?? 0,
+          ),
+        ),
+      ),
     )
 
   watch([box, stateFilter], resetAndLoad)
   useDebouncedSearch(q, resetAndLoad)
+
+  function showAll() {
+    q.value = ''
+    stateFilter.value = 'all'
+  }
 
   function open(r: SecretRequestListItem) {
     router.push({ name: 'secret-request-detail', params: { id: r.id } })

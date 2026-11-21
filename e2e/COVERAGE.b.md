@@ -123,7 +123,7 @@ Every route below is visited by the parameterised sweep (`sweep.spec.ts`):
 | Search, role filter, empty state, row opens the user | ✅ `users.spec.ts › search and the role filter narrow the user list; a row opens the user` |
 | User page: name, role, quota, disable (and a disabled account cannot sign in) | ✅ `users.spec.ts › a user page › profile: name, role, quota and disabling are saved` |
 | User page: lockout pill + Unlock (the locking sign-in answers promptly and mails the owner) | ✅ `users.spec.ts › a user page › a locked-out account shows the lock and the admin lifts it` |
-| User page: Force password reset → token | ✅ `users.spec.ts › a user page › force password reset shows a one-time reset token` |
+| User page: Force password reset → link | ✅ `users.spec.ts › a user page › force password reset shows a one-time reset link` |
 | User page: Change email (immediate / confirmation link) | ✅ `users.spec.ts › a user page › change email: applied at once, or as a confirmation link` |
 | User page: sessions — revoke one, revoke all | ✅ `users.spec.ts › a user page › sessions: one device revoked, then all` |
 | User page: files — delete, "View in File History" | ✅ `users.spec.ts › a user page › files: listed, deleted, and linked to File history` |

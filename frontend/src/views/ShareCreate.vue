@@ -25,6 +25,7 @@
   import { createSettledRegistrar } from '@/composables/settledRegistrar'
   import { siteLocalIsoToUtcIso } from '@/utils/datetime'
   import { useAuthStore } from '@/stores/auth'
+  import { useSiteStore } from '@/stores/site'
   import { useUiStore } from '@/stores/ui'
   import type {
     InlinePublicLinkResult,
@@ -35,6 +36,7 @@
 
   const router = useRouter()
   const auth = useAuthStore()
+  const site = useSiteStore()
   const ui = useUiStore()
   const { t } = useI18n()
   const { describe } = useApiError()
@@ -124,6 +126,11 @@
    *  not show - the defect this replaced was exactly that. */
   const blockers = computed<string[]>(() => {
     const out: string[] = []
+    // The server refuses every new upload in maintenance mode, but only AFTER
+    // the share exists: sending left an empty share behind and a failed file.
+    // The flag is the one the banner shows (re-read on every navigation); the
+    // server's refusal still covers a form that was open when it was set.
+    if (site.maintenance?.enabled) out.push(t('share_create.blockers.maintenance'))
     if (upload.items.value.length === 0) out.push(t('share_create.blockers.no_files'))
     if (!isClient.value) {
       const hasRecipients =

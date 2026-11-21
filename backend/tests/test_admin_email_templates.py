@@ -28,9 +28,14 @@ async def test_list_returns_all_slugs_and_locales(make_user, client, login_as):
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert {loc["code"] for loc in body["locales"]} == {"en", "de"}
-    # 22 + the four secret and three secret-request templates (v2.24.0), in
-    # their own group.
-    assert len(body["items"]) == 29
+    # Every template in the registry, and nothing else. This was a hand-written
+    # count (29), which failed the day two templates were added without telling
+    # anyone whether the LIST was wrong or the number; the registry is the
+    # source both sides read. The secret templates (v2.24.0) are their own group.
+    from app.services import email_placeholders
+
+    assert {i["slug"] for i in body["items"]} == set(email_placeholders.REGISTRY)
+    assert len(body["items"]) == len(email_placeholders.REGISTRY) >= 31
     assert "secrets" in body["groups"]
     assert {i["slug"] for i in body["items"] if i["group"] == "secrets"} == {
         "secret_received", "secret_link_external", "secret_viewed", "secret_ended",

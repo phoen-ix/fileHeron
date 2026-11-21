@@ -10,16 +10,18 @@ from ...middleware.errors import AppError
 from ...models.invite_token import InviteToken
 from ...models.user import User
 from ...schemas.admin import (
+    ActivatedInviteResponse,
     ActivateInviteRequest,
     AdminInviteItem,
     AdminInviteListResponse,
-    AdminUserItem,
     InviteState,
     RegenerateInviteResponse,
     ResendInviteResponse,
 )
+from ...services import email as email_svc
 from ...services import invite as invite_svc
 from ...services import site as site_svc
+from ...services import user_management as um_svc
 from ...utils.timeutil import utc_now
 from .users import _to_user_item
 
@@ -134,7 +136,7 @@ async def resend_invite(
 
 @router.post(
     "/invites/{invite_id}/activate",
-    response_model=AdminUserItem,
+    response_model=ActivatedInviteResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def activate_invite(
@@ -143,7 +145,7 @@ def activate_invite(
     request: Request,
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin),
-) -> AdminUserItem:
+) -> ActivatedInviteResponse:
     invite = db.query(InviteToken).filter(InviteToken.id == invite_id).one_or_none()
     if invite is None:
         raise AppError(404, "INVITE_NOT_FOUND", "Invite not found.")
@@ -155,5 +157,12 @@ def activate_invite(
         locale=payload.locale,
         request=request,
     )
+    # The account's password is a random placeholder: without a way to set a
+    # real one the person cannot sign in at all.
+    link = um_svc.force_password_reset(db, actor=admin, target=user, request=request)
     db.commit()
-    return _to_user_item(db, user)
+    return ActivatedInviteResponse(
+        **_to_user_item(db, user).model_dump(),
+        set_password_url=email_svc.password_reset_url(site_svc.get_site_url(db), link.token),
+        set_password_expires_at=link.expires_at,
+    )

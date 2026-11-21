@@ -20,6 +20,15 @@ export function watch(page: Page): Page {
   return page
 }
 
+/** A refusal the journey itself is about (an upload during maintenance mode
+ * answers 503): take it off the list once the page has shown the person why.
+ * Anything else that failed still fails the test. */
+export function expectedRefusal(pattern: RegExp): void {
+  const hits = problems.filter((p) => pattern.test(p))
+  expect(hits, `a refusal matching ${pattern}`).not.toEqual([])
+  for (const hit of hits) problems.splice(problems.indexOf(hit), 1)
+}
+
 /** `test` with every watched page checked after each test. */
 export const test = base.extend<{ guard: void }>({
   guard: [
@@ -50,6 +59,12 @@ let adminToken: Promise<string> | null = null
 export function admin(): Promise<string> {
   adminToken ??= apiLogin(ADMIN.email, ADMIN.password)
   return adminToken
+}
+
+/** A config import with accounts ends EVERY session - the cached token above
+ * included. Call this after one, or the next helper is answered 401. */
+export function forgetAdmin(): void {
+  adminToken = null
 }
 
 export async function ok<T = unknown>(r: Response | Promise<Response>, what: string): Promise<T> {
@@ -236,11 +251,17 @@ export const ANNOUNCED_WITHIN = 75_000
  * another user). */
 const PRINTED_MAIL = /EMAIL DEV → (\S+)\n([\s\S]*?)\n={72}/g
 
-/** The newest one-time link `/<kind>/<token>` mailed to `email` (printed by the
- * backend or the worker with SMTP unset - the mail log masks these tokens).
- * Polls: the worker sends notification mails a moment after the request. */
-export async function mailedToken(kind: string, email: string, timeout = 20_000): Promise<string> {
-  let found = ''
+/** The newest printed mail to `email` in which `pattern` matches (its last
+ * match there): the Subject line and the text body are both in reach. Polls -
+ * the worker sends notification mails a moment after the request. */
+export async function mailed(
+  email: string,
+  pattern: RegExp,
+  timeout = 20_000,
+  what = String(pattern),
+): Promise<RegExpMatchArray> {
+  const every = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`)
+  let found: RegExpMatchArray | null = null
   await expect
     .poll(
       () => {
@@ -249,14 +270,21 @@ export async function mailedToken(kind: string, email: string, timeout = 20_000)
           if (r.status !== 0) throw new Error(`[e2e] docker logs ${c}: ${r.stderr}`)
           for (const [, to, body] of (r.stderr + r.stdout).matchAll(PRINTED_MAIL)) {
             if (to !== email) continue
-            const m = [...body.matchAll(new RegExp(`/${kind}/([A-Za-z0-9._~-]+)`, 'g'))]
-            if (m.length) found = m[m.length - 1][1]
+            const m = [...body.matchAll(every)]
+            if (m.length) found = m[m.length - 1]
           }
         }
-        return found
+        return found !== null
       },
-      { timeout, message: `a /${kind}/ link mailed to ${email}` },
+      { timeout, message: `a mail to ${email} with ${what}` },
     )
-    .not.toBe('')
-  return found
+    .toBe(true)
+  return found!
+}
+
+/** The newest one-time link `/<kind>/<token>` mailed to `email` (printed by the
+ * backend or the worker with SMTP unset - the mail log masks these tokens). */
+export async function mailedToken(kind: string, email: string, timeout = 20_000): Promise<string> {
+  const m = await mailed(email, new RegExp(`/${kind}/([A-Za-z0-9._~-]+)`), timeout, `a /${kind}/ link`)
+  return m[1]
 }

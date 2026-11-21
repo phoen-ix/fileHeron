@@ -1,0 +1,11 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}A quarantined file was removed{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("Antivirus", tone="danger") }}
+  {{ ui.headline("A quarantined file was removed") }}
+  {% call ui.specs() %}
+    {{ ui.spec("file", filename) }}
+  {% endcall %}
+  {% call ui.para(gap=0) %}This file, which the antivirus had flagged, was removed for good. Recipients never received it. If you still need to send it, upload a clean copy in a new share.{% endcall %}
+{% endblock %}

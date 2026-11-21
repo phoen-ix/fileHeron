@@ -1,0 +1,10 @@
+Hi {{ uploader_name|default("there") }},
+
+An administrator checked a file of yours that the antivirus had flagged, and released it from quarantine.
+
+File: {{ filename }}
+{% if share_restored %}The share it belongs to is available to its recipients again.
+{% endif %}{% if share_url %}
+Open the share: {{ share_url }}
+{% endif %}
+- {{ app_name }}

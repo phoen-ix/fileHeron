@@ -10,6 +10,7 @@
   import Pager from '@/components/Pager.vue'
   import SecretRequestList from '@/components/SecretRequestList.vue'
   import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+  import { useHiddenByFilter } from '@/composables/useHiddenByFilter'
   import { usePaginatedList } from '@/composables/usePaginatedList'
   import { useSiteDateFormat } from '@/composables/useSiteDateFormat'
   import { useAuthStore } from '@/stores/auth'
@@ -38,19 +39,33 @@
   const stateFilter = ref<StateFilter>('active')
   const q = ref('')
 
+  const { hiddenByFilter, check } = useHiddenByFilter()
+  const apiBox = () => (box.value === 'sent' ? 'sent' : 'received')
+
   const { items, total, page, pageSize, loading, errorMsg, load, resetAndLoad } =
     usePaginatedList<SecretListItem>(({ page, pageSize }) =>
       // The Requests tab is its own component with its own list.
       box.value === 'requests'
         ? Promise.resolve({ items: [], total: 0 })
         : listSecrets({
-            box: box.value === 'sent' ? 'sent' : 'received',
+            box: apiBox(),
             state: STATES[stateFilter.value],
             q: q.value || undefined,
             page,
             page_size: pageSize,
-          }).then((r) => r.data),
+          }).then((r) =>
+            check(r.data, stateFilter.value !== 'all' || q.value !== '', () =>
+              listSecrets({ box: apiBox(), page: 1, page_size: 1 }).then(
+                (all) => all.data.total ?? 0,
+              ),
+            ),
+          ),
     )
+
+  function showAll() {
+    q.value = ''
+    stateFilter.value = 'all'
+  }
 
   function setBox(next: Box) {
     if (next !== box.value) router.replace({ name: 'secrets', query: { box: next } })
@@ -213,6 +228,13 @@
       </div>
       <Pager v-model:page="page" :total="total" :page-size="pageSize" />
     </template>
+
+    <div v-else-if="hiddenByFilter" class="empty-state">
+      <p class="fh-display-md empty-display">{{ t('secrets.empty.hidden') }}</p>
+      <button type="button" class="fh-btn-ghost" data-testid="secrets-show-all" @click="showAll">
+        {{ t('secrets.empty.show_all') }}
+      </button>
+    </div>
 
     <div v-else class="empty-state">
       <p class="fh-display-md empty-display">{{ t(`secrets.empty.${box}`) }}</p>

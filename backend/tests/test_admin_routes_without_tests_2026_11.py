@@ -79,6 +79,46 @@ async def test_activate_invite_creates_the_user_and_consumes_the_invite(
 
 
 @pytest.mark.asyncio
+async def test_activating_an_invite_hands_the_admin_a_link_that_sets_the_password(
+    client, db, make_user, login_as
+):
+    """An activated account has a random password nobody knows, and the dialog
+    said "They can sign in via SSO immediately" - which a staff account cannot
+    (it is never linked to SSO by email). The person had no way in except
+    "Forgot password", which nothing told them (found by use case U3,
+    2026-11-21). The answer now carries the site's reset page with a one-time
+    token, the same link "Force password reset" hands over."""
+    from app.services import settings as settings_svc
+
+    headers = await _admin(make_user, login_as)
+    settings_svc.set_value(db, key="site.url", value="https://files.example.test", actor=None)
+    db.commit()
+    await _invite(client, headers, email="noway@test.local")
+    invite = db.query(InviteToken).filter(InviteToken.email == "noway@test.local").one()
+
+    r = await client.post(
+        f"/api/admin/invites/{invite.id}/activate", json={"display_name": "Nora"}, headers=headers
+    )
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["email"] == "noway@test.local" and body["display_name"] == "Nora"
+    prefix = "https://files.example.test/reset-password/"
+    assert body["set_password_url"].startswith(prefix)
+    assert body["set_password_expires_at"]
+
+    # What the admin was handed is what gets the person in.
+    done = await client.post(
+        "/api/auth/reset-password",
+        json={"token": body["set_password_url"][len(prefix):], "new_password": "BrandNew!Pass9word"},
+    )
+    assert done.status_code == 200, done.text
+    signed_in = await client.post(
+        "/api/auth/login", json={"email": "noway@test.local", "password": "BrandNew!Pass9word"}
+    )
+    assert signed_in.status_code == 200, signed_in.text
+
+
+@pytest.mark.asyncio
 async def test_invite_actions_need_an_admin(client, db, make_user, login_as):
     make_user(email="emp@test.local", role=UserRole.employee, password=ADMIN_PW)
     token, _ = await login_as("emp@test.local", ADMIN_PW)

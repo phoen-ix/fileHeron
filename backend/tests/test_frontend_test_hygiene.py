@@ -18,6 +18,15 @@ and its count; a use that goes away must leave the list too.
 Here rather than in the suites themselves for the reason
 test_frontend_table_layout.py gives for its own scan: one place that reads
 both trees, run by the gate every change already passes.
+
+The use cases (`e2e/tests/usecases/`) carry a rule of their own. They exist
+because the other specs set up through the API and often checked through it
+too, so a chain in which one person hands something to another stopped at the
+second person: an account the admin made in the UI was "signed in" with an API
+call, a forced password reset ended at "a token is shown" - and the admin was
+being handed a bare token with no link (2026-11-21). A use-case spec therefore
+reaches the server only through somebody's browser; the background facts it is
+not about come from `given` in its `lib.ts`, the one file that calls the API.
 """
 from __future__ import annotations
 
@@ -54,6 +63,20 @@ UNIT_RULES: dict[str, re.Pattern[str]] = {
     "focus-ctor": re.compile(r"new FocusEvent\("),
 }
 
+USECASES = E2E / "tests" / "usecases"
+USECASE_SPECS = sorted(USECASES.glob("*.spec.ts"))
+USECASE_RULES: dict[str, re.Pattern[str]] = {
+    # Every helper in e2e/ that talks to the API or the containers directly.
+    "api-call": re.compile(
+        r"(?<![.\w])(?:fetch|apiFetch|apiLogin|api|ok|tokenOf|admin|adminToken|py|tokenFromStdout"
+        r"|createShare|uploadFile|newUser|setSettings|restoreSettings|connect|group)\("
+    ),
+    "request-context": re.compile(r"\.request\b"),
+}
+# A use case is written against its own helpers and nothing else.
+USECASE_IMPORTS = {"./lib", "@playwright/test"}
+_IMPORT_FROM = re.compile(r"^import\b[^;]*?\bfrom\s+['\"]([^'\"]+)['\"]", re.M)
+
 # (file relative to the repo, rule) -> (count, why it is not a workaround).
 E2E_ALLOWED: dict[tuple[str, str], tuple[int, str]] = {
     ("e2e/tests/admin/webhooks.spec.ts", "retry-action"): (
@@ -80,6 +103,11 @@ def _unit_findings(src: str) -> dict[str, int]:
     return {k: v for k, v in found.items() if v}
 
 
+def _usecase_findings(src: str) -> dict[str, int]:
+    found = {name: len(rule.findall(src)) for name, rule in USECASE_RULES.items()}
+    return {k: v for k, v in found.items() if v}
+
+
 def _scan(files, findings) -> dict[tuple[str, str], int]:
     out: dict[tuple[str, str], int] = {}
     for p in files:
@@ -98,6 +126,14 @@ def test_no_vitest_file_fires_a_focus_the_browser_would_not():
     found = _scan([p for p in UNIT_FILES if p != USER_HELPER], _unit_findings)
     assert found == {k: n for k, (n, _why) in UNIT_ALLOWED.items()}
     assert len(UNIT_FILES) >= 100, f"scanned only {len(UNIT_FILES)} files - is the glob still right?"
+
+
+def test_a_use_case_reaches_the_server_only_through_a_browser():
+    assert len(USECASE_SPECS) >= 4, f"found only {len(USECASE_SPECS)} use-case specs - is the glob still right?"
+    assert _scan(USECASE_SPECS, _usecase_findings) == {}
+    for p in USECASE_SPECS:
+        imported = set(_IMPORT_FROM.findall(p.read_text()))
+        assert imported and imported <= USECASE_IMPORTS, (p.name, imported)
 
 
 def test_the_helper_moves_the_real_focus():
@@ -130,6 +166,25 @@ def test_the_scan_catches_what_it_is_for():
     }
     assert _unit_findings("el.dispatchEvent(new FocusEvent('blur'))") == {"focus-ctor": 1}
     assert _e2e_findings("await row.click({ force: true })") == {"force": 1}
+
+    # What the use cases replaced: the outcome read from the API, the account
+    # signed in through it, the newest token taken from the log.
+    assert _usecase_findings("const me = await fetch(`${BASE}/api/account/me`)") == {"api-call": 1}
+    assert _usecase_findings("const t = await apiLogin(email, password)") == {"api-call": 1}
+    assert _usecase_findings("const token = tokenFromStdout('reset')") == {"api-call": 1}
+    assert _usecase_findings("await page.request.get('/api/shares')") == {"request-context": 1}
+    assert _usecase_findings("const u = await newUser('client', 'x')") == {"api-call": 1}
+    # ... and what a use case is made of.
+    browser_only = """
+  const person = await given.user('client', 'x')
+  const adminPage = await browserOf(browser, THE_ADMIN)
+  await confirm(adminPage)
+  await given.connected(a, b)
+  expect(await asTokenHolder(token)).toEqual({ status: 200 })
+"""
+    assert _usecase_findings(browser_only) == {}
+    two_imports = "import {\n  a,\n  b,\n} from './lib'\nimport type { Page } from '@playwright/test'\n"
+    assert _IMPORT_FROM.findall(two_imports) == ["./lib", "@playwright/test"]
 
     # A retry loop that only LOOKS is polling, not a workaround.
     polling = """

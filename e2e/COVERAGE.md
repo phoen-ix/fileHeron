@@ -1,12 +1,14 @@
 # E2E coverage
 
 Every user-facing feature of file:Heron mapped to the Playwright test that exercises it, or to the
-reason it has none. Two parts, split along the router:
+reason it has none. Parts a and b split the features along the router; part c follows what one
+person hands to another:
 
 | Part | Scope | Specs | Map |
 |---|---|---|---|
 | a | Everything outside `/admin`: sign-in, registration, password reset, two-factor, passkeys, SSO, the account page, shares (compose, inbox/outbox, share page, approval), uploads, public links, secrets and secret requests, notifications, legal and 404 pages | `tests/user/`, plus the journeys in `tests/*.spec.ts` | [`COVERAGE.a.md`](COVERAGE.a.md) |
 | b | The admin console (`/admin/**`) | `tests/admin/` | [`COVERAGE.b.md`](COVERAGE.b.md) |
+| c | Use cases: a hand-over followed to the second person, every person in the browser | `tests/usecases/` | [`COVERAGE.c.md`](COVERAGE.c.md) |
 
 Run everything: `scripts/e2e.sh` (CONTRIBUTING §End-to-end). The docs tour (`docs/`, run last by the
 same script) is a render check of every screen in the gallery, not counted here.

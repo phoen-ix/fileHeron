@@ -48,6 +48,10 @@ class ApiTokenListItem(APIBaseModel):
     last_used_at: datetime | None
     expires_at: datetime | None = None
     scopes: list[str] | None = None  # null = unrestricted
+    # An admin switched it off (it answers 401 API_TOKEN_DISABLED until an
+    # admin reactivates it). Without this the owner's own list showed the token
+    # as usable while their script was refused.
+    disabled: bool = False
 
 
 class ApiTokenListResponse(APIBaseModel):

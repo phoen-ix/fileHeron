@@ -820,6 +820,13 @@ def _site_tz(explicit: str | None) -> str:
     return explicit if explicit is not None else DEFAULT_TIMEZONE
 
 
+def password_reset_url(base: str, token: str) -> str:
+    """The page a reset token is redeemed on - the one path, for the mail and
+    for the link an admin is handed (`/api/admin/users/{id}/force-password-reset`).
+    The canonical `/reset-password/<token>` form is also what `mail_log` masks."""
+    return f"{base}/reset-password/{token}"
+
+
 async def send_password_reset_email(
     *, to: str, locale: Locale | str, display_name: str, token: str,
     app_url: str | None = None, site_timezone: str | None = None,
@@ -827,7 +834,7 @@ async def send_password_reset_email(
 ) -> None:
     base = _app_url(app_url)
     tz = _site_tz(site_timezone)
-    ctx = {"display_name": display_name, "reset_url": f"{base}/reset-password/{token}"}
+    ctx = {"display_name": display_name, "reset_url": password_reset_url(base, token)}
     subject, body, html = render_email(
         locale, "reset_password", ctx, app_url=base, site_timezone=tz, db=db,
         recipient_email=to, category="reset_password",

@@ -23,6 +23,8 @@ from sqlalchemy import func
 from ..database import SessionLocal
 from ..models.audit_log import AuditEventType, AuditLog
 from ..models.file import File, FileState
+from ..models.notification import NotificationCategory
+from ..services import quarantine_admin
 from ..services.audit import record_audit_event
 from ..services.cron_tracker import exc_summary, mark_failed, track_cron
 from ..utils.timeutil import utc_now
@@ -95,6 +97,11 @@ async def purge_old_quarantine(_ctx) -> dict:
                         "reason": "retention_window_exceeded",
                         "age_days": days,
                     },
+                )
+                # The same notice the admin's purge sends: the file is gone
+                # for its uploader either way.
+                quarantine_admin.tell_uploader(
+                    db, file=f, category=NotificationCategory.file_quarantine_purged
                 )
                 db.commit()
                 purged += 1

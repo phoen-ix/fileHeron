@@ -212,6 +212,15 @@ REGISTRY: dict[str, TemplateSpec] = {
         Placeholder("[FILENAME]", "File name", "Name of the quarantined file.", "filename"),
         Placeholder("[THREAT]", "Threat name", "Antivirus signature / threat name.", "signature"),
     )),
+    "file_quarantine_released": TemplateSpec("file_quarantine_released", "shares", _p(
+        Placeholder("[UPLOADER]", "Uploader name", "Display name of who uploaded the file.", "uploader_name"),
+        Placeholder("[FILENAME]", "File name", "Name of the released file.", "filename"),
+        _SHARE_LINK,
+    )),
+    "file_quarantine_purged": TemplateSpec("file_quarantine_purged", "shares", _p(
+        Placeholder("[UPLOADER]", "Uploader name", "Display name of who uploaded the file.", "uploader_name"),
+        Placeholder("[FILENAME]", "File name", "Name of the removed file.", "filename"),
+    )),
     # ---- Account ----------------------------------------------------------
     "account_created": TemplateSpec("account_created", "account", _p(
         Placeholder("[INVITER]", "Inviter name", "Display name of the inviter.", "inviter_name"),
@@ -482,6 +491,8 @@ def sample_ctx(slug: str, *, app_url: str) -> dict:
         # admin preview and test-send of that template rendered both as blanks.
         "signature": "Eicar-Test-Signature",
         "uploader_name": "Grace Hopper",
+        # file_quarantine_released says so only when the release put the share back.
+        "share_restored": True,
         # smtp_test is the one template whose body prints `now`.
         "now": soon,
         "size_bytes": 1048576,

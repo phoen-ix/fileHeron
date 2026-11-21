@@ -1,0 +1,10 @@
+Hallo {{ uploader_name|default("zusammen") }},
+
+Ein Administrator hat eine deiner Dateien geprüft, die der Antivirus markiert hatte, und sie aus der Quarantäne freigegeben.
+
+Datei: {{ filename }}
+{% if share_restored %}Die zugehörige Freigabe steht ihren Empfängern wieder zur Verfügung.
+{% endif %}{% if share_url %}
+Freigabe öffnen: {{ share_url }}
+{% endif %}
+- {{ app_name }}

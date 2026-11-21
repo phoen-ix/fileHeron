@@ -1,0 +1,11 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}Eine Datei in Quarantäne wurde entfernt{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("Antivirus", tone="danger") }}
+  {{ ui.headline("Eine Datei in Quarantäne wurde entfernt") }}
+  {% call ui.specs() %}
+    {{ ui.spec("datei", filename) }}
+  {% endcall %}
+  {% call ui.para(gap=0) %}Diese Datei, die der Antivirus markiert hatte, wurde endgültig entfernt. Die Empfänger haben sie nie erhalten. Falls du sie weiterhin senden möchtest, lade eine saubere Kopie in einer neuen Freigabe hoch.{% endcall %}
+{% endblock %}

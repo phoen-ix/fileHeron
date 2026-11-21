@@ -1,6 +1,7 @@
 import api from './client'
 import type {
   ActivateInviteRequest,
+  ActivatedInviteResponse,
   AdminApiTokenItem,
   AdminApiTokenListResponse,
   AdminAuditResponse,
@@ -485,7 +486,7 @@ export function resendInvite(id: number) {
 }
 
 export function activateInvite(id: number, payload: ActivateInviteRequest) {
-  return api.post<AdminUserItem>(`/admin/invites/${id}/activate`, payload)
+  return api.post<ActivatedInviteResponse>(`/admin/invites/${id}/activate`, payload)
 }
 
 export function getUser(id: number) {

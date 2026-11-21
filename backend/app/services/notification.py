@@ -50,6 +50,8 @@ _DEFAULT_CHANNEL: dict[NotificationCategory, NotificationChannel] = {
     # unauthorised link is hard to miss.
     NotificationCategory.oidc_linked: NotificationChannel.both,
     NotificationCategory.file_quarantined: NotificationChannel.both,
+    NotificationCategory.file_quarantine_released: NotificationChannel.both,
+    NotificationCategory.file_quarantine_purged: NotificationChannel.both,
     # Session-cap eviction: in_app only by default (informational; the user
     # can re-login any time). Users can opt into email via preferences.
     NotificationCategory.session_evicted: NotificationChannel.in_app,

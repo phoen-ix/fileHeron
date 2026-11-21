@@ -28,6 +28,8 @@ const CATEGORIES = [
   'login_alert',
   'oidc_linked',
   'file_quarantined',
+  'file_quarantine_released',
+  'file_quarantine_purged',
   'session_evicted',
   'ops_alert',
   'release_available',
@@ -52,7 +54,6 @@ describe('notif_bell.cat covers every NotificationCategory', () => {
     })
   }
 })
-
 
 // The importable version of the same idea, over a list the frontend itself
 // owns. This is what would have caught `public_links:read` shipping as a

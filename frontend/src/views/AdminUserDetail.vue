@@ -55,7 +55,7 @@
   const savingError = ref<string | null>(null)
 
   const resetting = ref(false)
-  const resetTokenPlaintext = ref<string | null>(null)
+  const resetLink = ref<string | null>(null)
   const unlocking = ref(false)
 
   const newEmail = ref('')
@@ -266,7 +266,7 @@
     resetting.value = true
     try {
       const { data } = await forcePasswordReset(user.value.id)
-      resetTokenPlaintext.value = data.plaintext_token
+      resetLink.value = data.reset_url
     } catch (err) {
       ui.pushToast(describe(err), 'error')
     } finally {
@@ -505,10 +505,10 @@
         </div>
       </div>
 
-      <div v-if="resetTokenPlaintext" class="reset-box fh-rise">
+      <div v-if="resetLink" class="reset-box fh-rise">
         <div class="reset-eyebrow">{{ t('admin_user_detail.reset_eyebrow') }}</div>
         <p class="warning">{{ t('admin_user_detail.reset_warning') }}</p>
-        <pre class="token fh-mono">{{ resetTokenPlaintext }}</pre>
+        <pre class="token fh-mono">{{ resetLink }}</pre>
       </div>
 
       <form class="change-email-form" @submit.prevent="onChangeEmail">

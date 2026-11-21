@@ -23,6 +23,8 @@
   "login_alert": "Anmeldung von einem neuen Gerät",
   "oidc_linked": "Ein Anmelde-Anbieter wurde mit deinem {app_name}-Konto verknüpft",
   "file_quarantined": "Eine infizierte Datei wurde unter Quarantäne gestellt",
+  "file_quarantine_released": "Eine Datei wurde aus der Quarantäne freigegeben",
+  "file_quarantine_purged": "Eine Datei in Quarantäne wurde entfernt",
   "session_evicted": "Eine Sitzung wurde von deinem {app_name}-Konto abgemeldet",
   "smtp_test": "{app_name} · SMTP-Test",
   "release_available": "{app_name} {version} ist verfügbar",

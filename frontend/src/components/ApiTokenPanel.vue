@@ -114,7 +114,12 @@
 
     <ul v-if="tokens.length > 0" class="token-list">
       <li v-for="token in tokens" :key="token.id" class="token-row">
-        <div class="token-name">{{ token.name }}</div>
+        <div class="token-name">
+          {{ token.name }}
+          <span v-if="token.disabled" class="token-off" data-testid="token-disabled">{{
+            t('api_tokens.disabled_badge')
+          }}</span>
+        </div>
         <div class="token-meta">
           <span class="fh-mono last4">…{{ token.last4 }}</span>
           <span class="fh-mono created">{{
@@ -475,6 +480,13 @@
   .token-name {
     font-size: var(--fh-text-body-md);
     color: var(--fh-ink);
+  }
+
+  .token-off {
+    margin-left: var(--fh-space-2);
+    font-family: var(--fh-font-mono);
+    font-size: var(--fh-text-mono-sm);
+    color: var(--fh-danger);
   }
 
   .token-meta {

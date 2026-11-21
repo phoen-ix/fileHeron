@@ -16,13 +16,52 @@ from sqlalchemy.orm import Session
 from ..middleware.errors import AppError
 from ..models.audit_log import AuditEventType, AuditLog
 from ..models.file import File, FileState
+from ..models.notification import NotificationCategory
 from ..models.share import Share, ShareState
 from ..models.user import User
+from . import notification as notif_svc
+from . import site as site_svc
 from .audit import record_audit_event
 from .quota import reserve_bytes
 from .storage_backend import get_storage_backend
 
 logger = logging.getLogger("fileheron.quarantine_admin")
+
+
+def tell_uploader(
+    db: Session,
+    *,
+    file: File,
+    category: NotificationCategory,
+    actor: User | None = None,
+    share_restored: bool = False,
+) -> None:
+    """Tell the uploader how their quarantined file ended. They were told when
+    it was flagged, and then nothing - not when an admin released it, not when
+    it was purged. One helper for every path that ends a quarantine (release,
+    the admin's purge, the retention task), so the notice follows the outcome.
+
+    Not sent to an admin about their own upload: they just did it. The admin's
+    release reason is a note for the audit log and is not passed on."""
+    uploader = db.query(User).filter(User.id == file.uploaded_by_id).one_or_none()
+    if uploader is None or uploader.is_disabled:
+        return
+    if actor is not None and actor.id == uploader.id:
+        return
+    share_url = f"{site_svc.get_site_url(db).rstrip('/')}/share/{file.share_id}" if file.share_id else None
+    notif_svc.dispatch(
+        db,
+        user=uploader,
+        category=category,
+        payload={
+            "uploader_name": uploader.display_name,
+            "filename": file.original_filename,
+            "share_url": share_url,
+            "share_restored": share_restored,
+        },
+        link_url=share_url,
+        email_to=uploader.email,
+    )
 
 
 def _refuse_unless_infected(file: File) -> None:
@@ -152,6 +191,13 @@ def release(
         },
         request=request,
     )
+    tell_uploader(
+        db,
+        file=file,
+        category=NotificationCategory.file_quarantine_released,
+        actor=admin,
+        share_restored=share_restored,
+    )
 
 
 def purge(
@@ -186,3 +232,4 @@ def purge(
         },
         request=request,
     )
+    tell_uploader(db, file=file, category=NotificationCategory.file_quarantine_purged, actor=admin)

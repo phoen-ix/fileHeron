@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import en from '@/i18n/locales/en.json'
 
-const listTokens = vi.fn(async () => ({ data: { items: [], can_create: true } }))
+const listTokens = vi.fn(async () => ({ data: { items: [] as unknown[], can_create: true } }))
 const revokeToken = vi.fn(async (_id: number) => ({}))
 const createToken = vi.fn()
 vi.mock('@/api/apiTokens', () => ({
@@ -82,7 +82,6 @@ describe('ApiTokenPanel create form', () => {
   })
 })
 
-
 describe('ApiTokenPanel password dialog', () => {
   // The dialog and the form shared one error: "Password incorrect." stayed
   // under the form after the dialog that asked for the password was dismissed.
@@ -115,7 +114,10 @@ describe('ApiTokenPanel password dialog', () => {
 
 describe('ApiTokenPanel failures are shown, not swallowed', () => {
   const envelope = (code: string, status: number) =>
-    Object.assign(new Error(code), { isAxiosError: true, response: { status, data: { code, error: code } } })
+    Object.assign(new Error(code), {
+      isAxiosError: true,
+      response: { status, data: { code, error: code } },
+    })
 
   it('a failed load is an error, not "No API tokens yet"', async () => {
     listTokens.mockRejectedValueOnce(envelope('SERVER_ERROR', 500))
@@ -130,9 +132,16 @@ describe('ApiTokenPanel failures are shown, not swallowed', () => {
       data: {
         items: [
           {
-            id: 5, name: 'ci', prefix: 'fh_abcd1234', scopes: null, expires_at: null,
-            last_used_at: null, created_at: '2026-09-01T00:00:00', revoked_at: null,
-            disabled_at: null, owner_display_name: null,
+            id: 5,
+            name: 'ci',
+            prefix: 'fh_abcd1234',
+            scopes: null,
+            expires_at: null,
+            last_used_at: null,
+            created_at: '2026-09-01T00:00:00',
+            revoked_at: null,
+            disabled_at: null,
+            owner_display_name: null,
           },
         ],
         can_create: true,
@@ -198,5 +207,37 @@ describe('ApiTokenPanel asks for the password in a dialog', () => {
     await flushPromises()
     expect(dialog(w).exists()).toBe(true)
     expect(dialog(w).find('[role="alert"]').exists()).toBe(true)
+  })
+})
+
+// A token an admin switched off looked like any other in its owner's list.
+describe('ApiTokenPanel list', () => {
+  const item = (id: number, name: string, disabled: boolean) => ({
+    id,
+    name,
+    last4: 'abcd',
+    created_at: '2026-11-01T10:00:00',
+    last_used_at: null,
+    expires_at: null,
+    scopes: null,
+    disabled,
+  })
+
+  it('marks a token an administrator switched off, and only that one', async () => {
+    listTokens.mockResolvedValueOnce({
+      data: { items: [item(1, 'backup-script', true), item(2, 'laptop', false)], can_create: true },
+    })
+    const w = makeWrapper()
+    await flushPromises()
+
+    const rows = w.findAll('.token-row')
+    expect(rows.map((r) => r.find('.token-name').text().split(/\s+/)[0])).toEqual([
+      'backup-script',
+      'laptop',
+    ])
+    expect(rows[0].find('[data-testid="token-disabled"]').text()).toBe(
+      'Switched off by an administrator',
+    )
+    expect(rows[1].find('[data-testid="token-disabled"]').exists()).toBe(false)
   })
 })

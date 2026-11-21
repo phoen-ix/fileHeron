@@ -54,7 +54,7 @@
 
 <script setup lang="ts">
   import { onClickOutside } from '@vueuse/core'
-  import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+  import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
   import { useI18n } from 'vue-i18n'
   import { useRouter } from 'vue-router'
 
@@ -104,8 +104,13 @@
     },
   })
 
+  // Someone who must still enrol in two-factor is signed in, but the list and
+  // the stream are closed to them until they have (403 TWOFA_SETUP_REQUIRED):
+  // asking anyway was refused on every page and retried by the stream.
+  const mayListen = computed(() => auth.isAuthenticated && auth.user?.requires_2fa !== true)
+
   watch(
-    () => auth.isAuthenticated,
+    mayListen,
     (authed) => {
       if (authed) {
         void store.refresh()
@@ -127,7 +132,7 @@
   // if we're authed but no longer connected so live notifications recover without
   // a page reload.
   function onVisible() {
-    if (document.visibilityState === 'visible' && auth.isAuthenticated && !sse.connected.value) {
+    if (document.visibilityState === 'visible' && mayListen.value && !sse.connected.value) {
       sse.start()
     }
   }

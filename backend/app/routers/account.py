@@ -705,6 +705,7 @@ def list_api_tokens(
                 last_used_at=r.last_used_at,
                 expires_at=r.expires_at,
                 scopes=r.scopes_list,
+                disabled=r.disabled_at is not None,
             )
             for r in rows
         ],

@@ -302,9 +302,10 @@ def activate_invite_as_admin(
 
     Server generates a placeholder password (a 32-byte urlsafe-base64
     string, never returned, only the Argon2 hash is stored). The user
-    can never authenticate with this password - admins must rely on
-    SSO or a follow-up "force password reset" if a usable local
-    password is needed.
+    can never authenticate with this password, so the route hands the
+    admin a one-time set-password link beside the new account
+    (`routers/admin/invites.py::activate_invite`). SSO is not the way
+    in for staff: they are never linked by email.
 
     Refuses on:
       - INVITE_ALREADY_CONSUMED if the invite has been consumed already

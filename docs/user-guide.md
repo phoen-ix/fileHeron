@@ -50,6 +50,10 @@ The inbox lists shares addressed to you (directly or via a group). Per file you 
 **Download** button (scanned clean), "Scan in progress" (`425`), "Quarantined"
 (`410`), or "Deleted" (`410`).
 
+**If the antivirus flags a file you sent**, the share is withdrawn and you are told
+(bell and mail). You are told again how it ended: an admin released the file and
+the share is back, or the file was removed for good.
+
 > **Client submissions are company-wide, by design.** A share a *client* sends in
 > (an "inbound" share) is not addressed to one person: **every employee and admin
 > can see and download it**, as can any other client who shares at least one group
@@ -198,7 +202,10 @@ request**: every other link stops working, and the answer arrives as a secret th
 only you can open (you are told in-app and by mail). If you set a **passphrase**
 when asking, the answer is encrypted to it: nobody, the server included, can open
 it without that passphrase, and nobody has to pass a passphrase to you. Requests
-are under **Secrets → Requests** (*Asked by me* / *Asked of me*); you can cancel an
+are under **Secrets → Requests** (*Asked by me* / *Asked of me*). The list opens on
+the *Open* ones, and an answered request is *Closed*: when the filter hides
+everything the list says so and offers **Show all** (the secrets lists do the
+same for *Active*). You can cancel an
 open one, copy its links again, and discard the answer unread. An unanswered
 request expires at its time and you are told.
 
@@ -231,7 +238,7 @@ A single scrollable page (left quick-nav with scroll-spy):
 - **SSO connections** - connect/disconnect OIDC providers (refuses on email mismatch).
 - **Email address** - change your sign-in email (if the admin's [email-change policy](admin-guide.md#policies--settings) allows it), via a confirm-by-email flow.
 - **Notifications** - per-category channel (off / email / in-app / both). Security-critical types (password reset, sign-in alerts) are shown but **locked on**. Admins also get one row per **operational alert** type, grouped (Antivirus, Storage, Scheduled tasks, Services, Security, Updates, Housekeeping): choose for each whether it is mailed - see the [admin guide](admin-guide.md#operational-alerts).
-- **API tokens** - if policy allows: **Full access** or **Limited** (tick exactly what it may do across *Sharing*, *Files* and *Secrets*); a limited token is refused (`403 INSUFFICIENT_SCOPE`) outside its scopes. Plaintext shown once.
+- **API tokens** - if policy allows: **Full access** or **Limited** (tick exactly what it may do across *Sharing*, *Files* and *Secrets*); a limited token is refused (`403 INSUFFICIENT_SCOPE`) outside its scopes. Plaintext shown once. A token an administrator switched off is marked so in the list; it is refused until they reactivate it.
 
 Every email carries a **Manage subscriptions** footer link (and ordinary
 notifications a one-click **Unsubscribe**) that works **without logging in** via a

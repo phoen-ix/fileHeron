@@ -64,6 +64,12 @@ class NotificationCategory(str, enum.Enum):
     # enum) so no migration is needed for the new value.
     oidc_linked = "oidc_linked"
     file_quarantined = "file_quarantined"
+    # How a quarantined file ended, told to its uploader: an admin released it
+    # (a false positive), or it was purged - by an admin or by the retention
+    # task. The uploader used to hear "quarantined" and then nothing. Plain
+    # strings (non-native enum, length 40) → no migration.
+    file_quarantine_released = "file_quarantine_released"
+    file_quarantine_purged = "file_quarantine_purged"
     # Fired when the session cap (MAX_ACTIVE_SESSIONS_PER_USER) signs an
     # older idle session out on a new login - so the eviction isn't silent.
     # Stored as a plain string (non-native enum), so no migration for the

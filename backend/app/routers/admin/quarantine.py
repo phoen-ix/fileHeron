@@ -22,6 +22,7 @@ from ...schemas.quarantine import (
 from ...services import av_scan as av_scan_svc
 from ...services import file_encryption
 from ...services import quarantine_admin as quarantine_admin_svc
+from ...services import share as share_svc
 from ...services.audit import record_audit_event
 
 router = APIRouter()
@@ -79,10 +80,16 @@ def admin_quarantine_release(
     admin: User = Depends(get_current_admin),
 ) -> Response:
     file = _get_infected_file_or_404(db, file_id)
+    share_id = file.share_id
     quarantine_admin_svc.release(
         db, admin=admin, file=file, reason=payload.reason, request=request
     )
     db.commit()
+    # A release completes a share's readiness like a scan's verdict does: the
+    # flag revoked the share before it was ever announced, so its recipients'
+    # mail is still owed. The minute sweep only looks 48 hours back - a release
+    # after a long weekend restored a share nobody was told about.
+    share_svc.notify_after_commit(db, share_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

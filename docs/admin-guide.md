@@ -17,8 +17,8 @@ historical URL.
 
 <img src="screenshots/admin-users.png" alt="The admin user list: employees and clients with role, status, 2FA, storage and last sign-in" width="800">
 
-- **`/admin/users`** - paginated, role/status filter, search. **Invite** (one-time link, 24 h; optional initial groups; pre-flights `USER_EXISTS` / `INVITE_PENDING`) or **create directly** (set a password; account active immediately, for out-of-band hand-off).
-- **`/admin/users/:id`** - edit name/role/quota (NULL = unlimited)/disabled, plus three irreversible actions: **Force password reset** (one-time token), **Erase user (GDPR)** (hard-deletes files and the secrets they sent, anonymises the row, audits `user_erased`; two-step with a pre-flight count), and **Erasure receipt PDF**. The page also shows the user's **sessions** and **current files** (with per-file delete) and authoritative **storage** figure.
+- **`/admin/users`** - paginated, role/status filter, search. **Invite** (one-time link, 24 h; optional initial groups; pre-flights `USER_EXISTS` / `INVITE_PENDING`) or **create directly** (set a password; account active immediately, for out-of-band hand-off). A pending invitation can be resent, given a **new link** (the mailed one stops working), deleted, or **activated** without waiting for the person to register: the account then has no password, and the page shows a one-time **set-password link** to hand to them (valid one hour; *Force password reset* on their user page makes another).
+- **`/admin/users/:id`** - edit name/role/quota (NULL = unlimited)/disabled, plus three irreversible actions: **Force password reset** (shows a one-time reset LINK to hand to the person; their current password and sessions stay valid until they use it), **Erase user (GDPR)** (hard-deletes files and the secrets they sent, anonymises the row, audits `user_erased`; two-step with a pre-flight count), and **Erasure receipt PDF**. The page also shows the user's **sessions** and **current files** (with per-file delete) and authoritative **storage** figure.
 
 ## Groups
 
@@ -47,10 +47,13 @@ user's; both audited.
 
 Files ClamAV flagged. Bytes stay under `./data/quarantine/{share_id}/{filename}`. Per
 row: **Download** (forensics), **Release** (back to active, re-reserves quota,
-conditionally restores the share), **Purge** (unlink bytes, keep the marker row). **Release**
+restores the share if the flag is what revoked it, and announces it to its recipients if they
+had not been told yet), **Purge** (unlink bytes, keep the marker row). **Release**
 requires a reason; Purge takes no body - you have already seen the file in the
 list and confirmed the dialog, and the `file_quarantine_purged` audit row
-records the actor and the file. Companion toggle at **`/admin/settings/quarantine`** fans an
+records the actor and the file. The uploader is told either way (bell and mail, their own
+choice under *Account → Notifications*): that the file was released, or that it was removed -
+also when the retention window removes it. Your release reason is not passed on. Companion toggle at **`/admin/settings/quarantine`** fans an
 infection alert out to all admins.
 
 **A scan that could not finish** is not a quarantine: the file stays "Scanning" and is
@@ -217,7 +220,7 @@ always pass.
 
 | Page | Route | Controls |
 |---|---|---|
-| API token policy | `/admin/settings/api-tokens` | Who may mint API tokens (+ allowlist). Cross-user inventory at `/admin/api-tokens` (disable/revoke, generate-for-user, per-token scopes). |
+| API token policy | `/admin/settings/api-tokens` | Who may mint API tokens (+ allowlist). Cross-user inventory at `/admin/api-tokens` (disable/revoke, generate-for-user, per-token scopes); a token you disable is marked *Switched off by an administrator* in its owner's own list. |
 | Public-link policy | `/admin/settings/public-links` | Who may mint public links. |
 | Secrets | `/admin/settings/secrets` (the *Policy* tab of **Secrets**; the *Secrets* tab at `/admin/secrets` lists every secret's metadata, with **Burn now**, and the *Requests* tab at `/admin/secret-requests` every secret request, with **Cancel**) | The on/off switch (off by default; turning it off stops new secrets, those already sent stay readable until they end), who may send secrets (default everyone; a client reaches only connected employees), who may send them outside the organisation - to an address or as a link (default employees and admins; never a client), what wrong passphrases do (slow down and lock, or destroy after N), and the limits: most views (100), latest expiry (90 days), longest life (90 days, also ending secrets that have only a view limit; `0` = none) and the passphrase throttle - the same rules decide who may ask for a secret, and whom. Admins never see a secret's text or its links. |
 | 2FA enforcement | `/admin/settings/twofa` | Which roles/groups must enrol TOTP (computed live; **no admin escape**). **Passkey sign-in** (off by default): a passkey alone signs in, and a passkey counts as 2FA - the desktop app cannot use passkeys yet, so people whose only second factor is a passkey sign in there with an API token. |

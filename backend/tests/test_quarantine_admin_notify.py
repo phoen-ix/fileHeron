@@ -178,3 +178,93 @@ async def test_settings_put_writes_audit_row(
     )
     assert resp_get.status_code == 200
     assert resp_get.json() == {"notify_admins": True}
+
+
+# ---------------------------------------------------------------------------
+# How it ended: the uploader is told
+# ---------------------------------------------------------------------------
+#
+# The uploader was told "upload.bin was quarantined by antivirus" and then
+# nothing: not when an admin released it as a false positive, not when it was
+# purged. Only the audit log knew (decided with the user, 2026-11-21).
+
+
+def _rows(db, user_id: int, category: NotificationCategory) -> list[Notification]:
+    return (
+        db.query(Notification)
+        .filter(Notification.user_id == user_id, Notification.category == category)
+        .all()
+    )
+
+
+def test_a_release_tells_the_uploader_and_links_the_share(make_user, db, tmp_path, monkeypatch):
+    from app.services import quarantine_admin as qadmin_svc
+
+    sender = make_user(email="up@test.local", role=UserRole.employee)
+    admin = make_user(email="ad@test.local", role=UserRole.admin)
+    monkeypatch.setattr("app.config.settings.STORAGE_ROOT", str(tmp_path / "out"))
+    f = _seed_and_quarantine(db, sender, tmp_path, monkeypatch)
+
+    qadmin_svc.release(db, admin=admin, file=f, reason="manual review: a false positive")
+    db.commit()
+
+    told = _rows(db, sender.id, NotificationCategory.file_quarantine_released)
+    assert len(told) == 1
+    assert told[0].payload_json["filename"] == "upload.bin"
+    assert told[0].link_url.endswith(f"/share/{f.share_id}")
+    # The admin's reason is a note for the audit log, not for the uploader.
+    assert "false positive" not in str(told[0].payload_json)
+    assert _rows(db, sender.id, NotificationCategory.file_quarantine_purged) == []
+    assert _rows(db, admin.id, NotificationCategory.file_quarantine_released) == []
+
+
+def test_a_purge_tells_the_uploader(make_user, db, tmp_path, monkeypatch):
+    from app.services import quarantine_admin as qadmin_svc
+
+    sender = make_user(email="up@test.local", role=UserRole.employee)
+    admin = make_user(email="ad@test.local", role=UserRole.admin)
+    f = _seed_and_quarantine(db, sender, tmp_path, monkeypatch)
+
+    qadmin_svc.purge(db, admin=admin, file=f)
+    db.commit()
+
+    told = _rows(db, sender.id, NotificationCategory.file_quarantine_purged)
+    assert len(told) == 1
+    assert told[0].payload_json["filename"] == "upload.bin"
+    assert _rows(db, sender.id, NotificationCategory.file_quarantine_released) == []
+
+
+def test_an_admin_is_not_told_about_what_they_did_to_their_own_upload(
+    make_user, db, tmp_path, monkeypatch
+):
+    from app.services import quarantine_admin as qadmin_svc
+
+    admin = make_user(email="ad@test.local", role=UserRole.admin)
+    f = _seed_and_quarantine(db, admin, tmp_path, monkeypatch)
+
+    qadmin_svc.purge(db, admin=admin, file=f)
+    db.commit()
+
+    assert _rows(db, admin.id, NotificationCategory.file_quarantine_purged) == []
+
+
+def test_the_retention_task_tells_the_uploader_too(make_user, db, tmp_path, monkeypatch):
+    """Two code paths purge a quarantined file - the admin's button and the
+    nightly retention task. The notice follows the outcome, not the path."""
+    import asyncio
+
+    from app.workers import purge_old_quarantine as pq
+
+    sender = make_user(email="up@test.local", role=UserRole.employee)
+    f = _seed_and_quarantine(db, sender, tmp_path, monkeypatch)
+    # Quarantined well past the retention window.
+    db.query(AuditLog).filter(
+        AuditLog.event_type == AuditEventType.file_quarantined.value, AuditLog.target_id == f.id
+    ).update({"created_at": _now_naive() - timedelta(days=365)})
+    db.commit()
+
+    asyncio.run(pq.purge_old_quarantine(None))
+
+    db.expire_all()
+    assert db.get(File, f.id).storage_path is None, "the task did not purge - the test proves nothing"
+    assert len(_rows(db, sender.id, NotificationCategory.file_quarantine_purged)) == 1

@@ -1200,6 +1200,8 @@
       "share_rejected": "Freigabe abgelehnt",
       "public_link_downloaded": "Öffentlicher Link heruntergeladen",
       "file_quarantined": "Datei unter Quarantäne",
+      "file_quarantine_released": "Datei aus Quarantäne freigegeben",
+      "file_quarantine_purged": "Datei in Quarantäne entfernt",
       "account_created": "Konto erstellt",
       "login_alert": "Anmeldung von neuem Gerät",
       "oidc_linked": "Anmelde-Anbieter verknüpft",
@@ -1469,6 +1471,8 @@
       "login_alert": "Anmeldung",
       "oidc_linked": "SSO-Verknüpfung",
       "file_quarantined": "Quarantäne",
+      "file_quarantine_released": "Quarantäne: freigegeben",
+      "file_quarantine_purged": "Quarantäne: entfernt",
       "session_evicted": "Abgemeldet",
       "ops_alert": "Betriebsalarm",
       "release_available": "Update verfügbar",
@@ -1489,6 +1493,8 @@
       "twofa_required": "Zwei-Faktor-Authentifizierung ist erforderlich.",
       "login_alert": "Anmeldung von einem neuen Gerät.",
       "file_quarantined": "{filename} wurde durch Antivirus unter Quarantäne gestellt.",
+      "file_quarantine_released": "{filename} wurde aus der Quarantäne freigegeben.",
+      "file_quarantine_purged": "{filename} wurde entfernt, nachdem der Antivirus die Datei markiert hatte.",
       "session_evicted": "Eine ältere Sitzung wurde abgemeldet - Limit von {cap} Sitzungen erreicht.",
       "release_available": "fileHeron {version} ist verfügbar.",
       "server_error": "Serverfehler: {code} ({path})",
@@ -1729,7 +1735,8 @@
         "link_copied": "Einladungslink in die Zwischenablage kopiert.",
         "resent": "Einladung erneut gesendet. Neues Ablaufdatum: {expires}.",
         "deleted": "Einladung gelöscht.",
-        "activated": "Account aktiviert. Anmeldung ist sofort möglich."
+        "activated": "Account aktiviert.",
+        "set_password_link_copied": "Link zum Festlegen des Passworts in die Zwischenablage kopiert."
       },
       "details": {
         "title": "Einladungsdetails",
@@ -1743,7 +1750,9 @@
       },
       "activate": {
         "title": "Account direkt aktivieren",
-        "body": "Account für {email} mit Rolle {role} sofort aktivieren - der Empfänger muss kein Passwort setzen und kann sich direkt per SSO anmelden. Der Einladungslink wird ungültig.",
+        "body": "Erstellt sofort einen aktiven Account für {email} mit Rolle {role}, ohne auf die Registrierung zu warten. Der Account hat noch kein Passwort: Du erhältst einen Einmal-Link zum Weitergeben, mit dem die Person eines festlegt. Der Einladungslink wird ungültig.",
+        "ready": "{email} ist aktiv und hat noch kein Passwort. Gib der Person diesen Link, um eines festzulegen: Er funktioniert einmal, eine Stunde lang. Danach erstellt „Passwort-Reset erzwingen“ auf der Benutzerseite einen neuen.",
+        "field_label": "Link zum Festlegen des Passworts",
         "display_name_label": "Anzeigename",
         "display_name_help": "Standard ist der lokale Teil der E-Mail. Bei Bedarf anpassen; der Benutzer kann ihn später selbst ändern.",
         "confirm": "Jetzt aktivieren"
@@ -1767,9 +1776,9 @@
     "created": "Erstellt",
     "last_login": "Zuletzt angemeldet",
     "force_reset": "Passwort-Reset erzwingen",
-    "force_reset_confirm": "Einmal-Token generieren? Das aktuelle Passwort bleibt gültig, bis der Link verwendet wird.",
+    "force_reset_confirm": "Einmaligen Link zum Zurücksetzen des Passworts erstellen? Das aktuelle Passwort bleibt gültig, bis die Person den Link verwendet.",
     "reset_eyebrow": "Passwort-Reset-Link",
-    "reset_warning": "Diesen Token über einen sicheren Kanal teilen. Der Link läuft in 1 Stunde ab.",
+    "reset_warning": "Gib diesen Link über einen vertrauenswürdigen Kanal an die Person weiter. Er funktioniert einmal und läuft in 1 Stunde ab; das aktuelle Passwort bleibt gültig, bis er verwendet wird.",
     "email_unverified_pill": "Bestätigung ausstehend",
     "locked_pill": "gesperrt bis {time}",
     "unlock": "Jetzt entsperren",
@@ -2191,6 +2200,7 @@
     "scope_limited": "Eingeschränkter Zugriff",
     "scope_limited_help": "lege genau fest, was dieser Token darf; alles andere wird abgelehnt.",
     "scope_full_badge": "voller Zugriff",
+    "disabled_badge": "Von einem Administrator deaktiviert",
     "scope_group_sharing": "Teilen",
     "scope_group_files": "Dateien",
     "scopes": {
@@ -2317,6 +2327,7 @@
     "toast_partial": "{n} Datei konnte nicht hochgeladen werden. Unten erneut versuchen. | {n} Dateien konnten nicht hochgeladen werden. Unten erneut versuchen.",
     "blockers": {
       "title": "Bevor du senden kannst:",
+      "maintenance": "Der Wartungsmodus ist aktiv: Senden ist pausiert. Versuche es erneut, sobald der Hinweis oben verschwunden ist.",
       "no_files": "Füge mindestens eine Datei hinzu.",
       "no_recipient": "Wähle einen Empfänger aus der Liste.",
       "no_recipient_or_link": "Wähle einen Empfänger aus der Liste oder hänge unten einen öffentlichen Link an.",
@@ -3111,7 +3122,9 @@
     },
     "empty": {
       "received": "Keine Geheimnisse für dich.",
-      "sent": "Du hast noch kein Geheimnis gesendet."
+      "sent": "Du hast noch kein Geheimnis gesendet.",
+      "hidden": "Kein Geheimnis passt zu diesem Filter.",
+      "show_all": "Alle anzeigen"
     },
     "copy_link": "Link kopieren",
     "copied": "Kopiert",
@@ -3375,7 +3388,9 @@
     "asked_on": "Gefragt am {d}",
     "empty": {
       "mine": "Du hast noch kein Geheimnis angefragt.",
-      "asked": "Niemand hat dich um ein Geheimnis gebeten."
+      "asked": "Niemand hat dich um ein Geheimnis gebeten.",
+      "hidden": "Keine Anfrage passt zu diesem Filter.",
+      "show_all": "Alle anzeigen"
     },
     "terms": {
       "views": "{n} Aufruf | {n} Aufrufe",

@@ -11,7 +11,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import en from '@/i18n/locales/en.json'
 
-const api = vi.hoisted(() => ({ getUser: vi.fn(), unlockUser: vi.fn() }))
+const api = vi.hoisted(() => ({
+  getUser: vi.fn(),
+  unlockUser: vi.fn(),
+  forcePasswordReset: vi.fn(),
+}))
 const empty = { data: { items: [], total: 0, page: 1, page_size: 50 } }
 vi.mock('@/api/admin', () => ({
   getUser: (id: number) => api.getUser(id),
@@ -26,7 +30,7 @@ vi.mock('@/api/admin', () => ({
   erasePreflight: vi.fn(),
   eraseUser: vi.fn(),
   erasureReceiptPdf: vi.fn(),
-  forcePasswordReset: vi.fn(),
+  forcePasswordReset: (id: number) => api.forcePasswordReset(id),
   updateUser: vi.fn(),
 }))
 vi.mock('vue-router', () => ({
@@ -39,10 +43,19 @@ import AdminUserDetail from '@/views/AdminUserDetail.vue'
 
 function user(lockedUntil: string | null) {
   return {
-    id: 7, display_name: 'Lou', email: 'lou@test.local', role: 'employee', is_disabled: false,
-    requires_2fa: false, quota_bytes: null, storage_used_bytes: 0,
-    created_at: '2026-01-01T00:00:00', last_login_at: null, has_2fa: false,
-    email_verified: true, locked_until: lockedUntil,
+    id: 7,
+    display_name: 'Lou',
+    email: 'lou@test.local',
+    role: 'employee',
+    is_disabled: false,
+    requires_2fa: false,
+    quota_bytes: null,
+    storage_used_bytes: 0,
+    created_at: '2026-01-01T00:00:00',
+    last_login_at: null,
+    has_2fa: false,
+    email_verified: true,
+    locked_until: lockedUntil,
   }
 }
 
@@ -53,7 +66,9 @@ function mountPage() {
       plugins: [i18n],
       stubs: {
         RouterLink: { template: '<a><slot /></a>' },
-        AdminPageHeader: { template: '<header><slot name="title" /><slot /><slot name="actions" /></header>' },
+        AdminPageHeader: {
+          template: '<header><slot name="title" /><slot /><slot name="actions" /></header>',
+        },
         StepUpDialog: true,
       },
     },
@@ -64,6 +79,7 @@ beforeEach(() => {
   setActivePinia(createPinia())
   api.getUser.mockReset()
   api.unlockUser.mockReset()
+  api.forcePasswordReset.mockReset()
 })
 
 describe('AdminUserDetail lockout', () => {
@@ -108,5 +124,33 @@ describe('AdminUserDetail lockout', () => {
     await flushPromises()
     expect(w.find('[data-testid="locked-pill"]').exists()).toBe(false)
     expect(w.find('[data-testid="unlock-btn"]').exists()).toBe(false)
+  })
+})
+
+// Under the heading "Password reset link" the page showed the bare token: the
+// admin had nothing to pass on (found by an e2e chain, 2026-11-21).
+describe('AdminUserDetail forced password reset', () => {
+  it('shows the link to hand over, not the token inside it', async () => {
+    api.getUser.mockResolvedValue({ data: user(null) })
+    api.forcePasswordReset.mockResolvedValue({
+      data: {
+        plaintext_token: 'tok-abc',
+        reset_url: 'https://files.example.test/reset-password/tok-abc',
+        expires_at: '2030-01-01T10:00:00',
+      },
+    })
+    const w = mountPage()
+    await flushPromises()
+    vi.spyOn(useUiStore(), 'confirm').mockResolvedValue(true)
+
+    await w
+      .findAll('button')
+      .find((b) => b.text() === en.admin_user_detail.force_reset)!
+      .trigger('click')
+    await flushPromises()
+
+    const box = w.find('.reset-box')
+    expect(box.text()).toContain(en.admin_user_detail.reset_eyebrow)
+    expect(box.find('.token').text()).toBe('https://files.example.test/reset-password/tok-abc')
   })
 })

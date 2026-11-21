@@ -1,0 +1,12 @@
+{% extends "layout.html.j2" %}
+{% import "_components.html.j2" as ui %}
+{% block subject %}A quarantined file was released{% endblock %}
+{% block content %}
+  {{ ui.eyebrow("Antivirus") }}
+  {{ ui.headline("A file was released from quarantine") }}
+  {% call ui.specs() %}
+    {{ ui.spec("file", filename) }}
+  {% endcall %}
+  {% call ui.para(gap=24) %}An administrator checked this file, which the antivirus had flagged, and released it.{% if share_restored %} The share it belongs to is available to its recipients again.{% endif %}{% endcall %}
+  {% if share_url %}{{ ui.button(share_url, "Open the share") }}{% endif %}
+{% endblock %}

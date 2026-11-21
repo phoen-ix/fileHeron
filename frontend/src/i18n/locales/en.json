@@ -1200,6 +1200,8 @@
       "share_rejected": "Share rejected",
       "public_link_downloaded": "Public link downloaded",
       "file_quarantined": "File quarantined",
+      "file_quarantine_released": "Quarantined file released",
+      "file_quarantine_purged": "Quarantined file removed",
       "account_created": "Account created",
       "login_alert": "New-device sign-in alert",
       "oidc_linked": "Sign-in provider linked",
@@ -1469,6 +1471,8 @@
       "login_alert": "Sign-in",
       "oidc_linked": "SSO link",
       "file_quarantined": "Quarantine",
+      "file_quarantine_released": "Quarantine: released",
+      "file_quarantine_purged": "Quarantine: removed",
       "session_evicted": "Signed out",
       "ops_alert": "Ops alert",
       "release_available": "Update available",
@@ -1489,6 +1493,8 @@
       "twofa_required": "Two-factor authentication is required.",
       "login_alert": "Sign-in from a new device.",
       "file_quarantined": "{filename} was quarantined by antivirus.",
+      "file_quarantine_released": "{filename} was released from quarantine.",
+      "file_quarantine_purged": "{filename} was removed after the antivirus flagged it.",
       "session_evicted": "An older session was signed out - you reached your {cap}-session limit.",
       "release_available": "fileHeron {version} is available.",
       "server_error": "Server error: {code} ({path})",
@@ -1729,7 +1735,8 @@
         "link_copied": "Invite link copied to clipboard.",
         "resent": "Invite resent. New expiry: {expires}.",
         "deleted": "Invite deleted.",
-        "activated": "Account activated. They can sign in immediately."
+        "activated": "Account activated.",
+        "set_password_link_copied": "Set-password link copied to clipboard."
       },
       "details": {
         "title": "Invite details",
@@ -1743,7 +1750,9 @@
       },
       "activate": {
         "title": "Activate account directly",
-        "body": "Create a fully active account for {email} with role {role}, bypassing the invitee's password-set step. They can sign in via SSO immediately. The invite link will no longer work.",
+        "body": "Create an active account for {email} with role {role} without waiting for them to register. The account has no password yet: you are shown a one-time link to hand to them, with which they set one. The invite link will no longer work.",
+        "ready": "{email} is active and has no password yet. Hand them this link to set one: it works once, for one hour. After that, “Force password reset” on their user page makes a new one.",
+        "field_label": "Set-password link",
         "display_name_label": "Display name",
         "display_name_help": "Defaults to the email's local part. Edit if you'd prefer something else; the user can change it later.",
         "confirm": "Activate now"
@@ -1767,9 +1776,9 @@
     "created": "Created",
     "last_login": "Last sign-in",
     "force_reset": "Force password reset",
-    "force_reset_confirm": "Generate a one-time reset token? The current password keeps working until the user clicks the link.",
+    "force_reset_confirm": "Create a one-time password reset link? The current password keeps working until the person uses the link.",
     "reset_eyebrow": "Password reset link",
-    "reset_warning": "Share this token via a secure out-of-band channel. The link expires in 1 hour.",
+    "reset_warning": "Give this link to the person over a channel you trust. It works once and expires in 1 hour; their current password keeps working until they use it.",
     "email_unverified_pill": "verification pending",
     "locked_pill": "locked until {time}",
     "unlock": "Unlock now",
@@ -2191,6 +2200,7 @@
     "scope_limited": "Limited access",
     "scope_limited_help": "pick exactly what this token may do; everything else is refused.",
     "scope_full_badge": "full access",
+    "disabled_badge": "Switched off by an administrator",
     "scope_group_sharing": "Sharing",
     "scope_group_files": "Files",
     "scopes": {
@@ -2317,6 +2327,7 @@
     "toast_partial": "{n} file failed to upload. Retry below. | {n} files failed to upload. Retry below.",
     "blockers": {
       "title": "Before you can send:",
+      "maintenance": "Maintenance mode is on: sending is paused. Try again once the banner at the top is gone.",
       "no_files": "Add at least one file.",
       "no_recipient": "Pick a recipient from the list.",
       "no_recipient_or_link": "Pick a recipient from the list, or attach a public link below.",
@@ -3111,7 +3122,9 @@
     },
     "empty": {
       "received": "No secrets for you.",
-      "sent": "You haven't sent a secret yet."
+      "sent": "You haven't sent a secret yet.",
+      "hidden": "No secret matches this filter.",
+      "show_all": "Show all"
     },
     "copy_link": "Copy link",
     "copied": "Copied",
@@ -3375,7 +3388,9 @@
     "asked_on": "Asked {d}",
     "empty": {
       "mine": "You haven't asked for a secret yet.",
-      "asked": "Nobody has asked you for a secret."
+      "asked": "Nobody has asked you for a secret.",
+      "hidden": "No request matches this filter.",
+      "show_all": "Show all"
     },
     "terms": {
       "views": "{n} view | {n} views",

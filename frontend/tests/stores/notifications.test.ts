@@ -74,9 +74,26 @@ describe('notifications store', () => {
     const api: any = await import('@/api/notifications')
     const s = useNotificationsStore()
     await s.refresh()
-    expect(api.listNotifications).toHaveBeenCalledWith(
-      expect.objectContaining({ unread: true }),
+    expect(api.listNotifications).toHaveBeenCalledWith(expect.objectContaining({ unread: true }))
+  })
+
+  // `refresh` had a `finally` and no `catch`, and every caller is `void
+  // store.refresh()`: a refused or failed load was an uncaught error in the
+  // page. Someone who must still enrol in two-factor got one on every page,
+  // because the list is closed to them until they have (2026-11-21).
+  it('a refresh that fails keeps what the bell shows and raises nothing', async () => {
+    const api = await import('@/api/notifications')
+    const s = useNotificationsStore()
+    s.pushFromSSE(fakeNotif(1))
+    vi.mocked(api.listNotifications).mockRejectedValueOnce(
+      Object.assign(new Error('Request failed with status code 403'), { isAxiosError: true }),
     )
+
+    await expect(s.refresh()).resolves.toBeUndefined()
+
+    expect(s.items.map((i) => i.id)).toEqual([1])
+    expect(s.unreadCount).toBe(1)
+    expect(s.loading).toBe(false)
   })
 
   it('removeAll empties the bell', async () => {

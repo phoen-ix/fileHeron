@@ -276,3 +276,81 @@ async def test_download_returns_bytes_for_infected_file_only(
     )
     assert resp2.status_code == 404
     assert resp2.json()["code"] == "QUARANTINED_FILE_NOT_FOUND"
+
+
+# A scan that flags a file revokes its share BEFORE the share was ever
+# announced, so its recipients' mail is still owed. Releasing the false
+# positive put the share back and told nobody: the route did not run the
+# announcement, and the minute sweep (`announce_ready_shares`) only looks at
+# shares created in the last 48 hours. An admin who worked through the
+# quarantine after a long weekend restored a share its recipients never heard
+# of (found while writing the quarantine use case, 2026-11-21).
+@pytest.mark.asyncio
+async def test_releasing_a_file_announces_the_share_it_restores(
+    make_user, db, client, login_as, tmp_path, monkeypatch
+):
+    from app.models.notification import Notification, NotificationCategory
+    from app.services import share as share_svc
+
+    make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
+    sender = make_user(email="up@test.local", role=UserRole.employee)
+    recipient = make_user(email="to@test.local", role=UserRole.employee)
+    monkeypatch.setattr("app.config.settings.STORAGE_ROOT", str(tmp_path / "out"))
+    monkeypatch.setattr("app.config.settings.QUARANTINE_DIR", str(tmp_path / "quarantine"))
+
+    share = share_svc.create_share(
+        db,
+        created_by=sender,
+        kind=ShareKind.outbound,
+        recipient_user_ids=[recipient.id],
+        expires_at=_now_naive() + timedelta(days=30),
+    )
+    share.upload_batch_done = True
+    # Older than the sweep's lookback: only the release itself can announce it.
+    share.created_at = _now_naive() - timedelta(days=4)
+    on_disk = tmp_path / "flagged.bin"
+    on_disk.write_bytes(b"EICAR_FAKE")
+    file = File(
+        id="qf-announce-1",
+        share_id=share.id,
+        original_filename="report.pdf",
+        mime_type="application/pdf",
+        size_bytes=10,
+        state=FileState.ready_unscanned,
+        storage_path=str(on_disk),
+        uploaded_by_id=sender.id,
+    )
+    db.add(file)
+    db.commit()
+    q_svc.quarantine_file(db, file=file, signature="Eicar-Test-Signature")
+    db.commit()
+    db.refresh(share)
+    assert share.state == ShareState.revoked
+    assert share.notify_on_activation is not None, "the announcement is still owed"
+
+    def announcements() -> list[Notification]:
+        return (
+            db.query(Notification)
+            .filter(
+                Notification.user_id == recipient.id,
+                Notification.category == NotificationCategory.share_created,
+            )
+            .all()
+        )
+
+    assert announcements() == []
+
+    token, _ = await login_as("admin@test.local", "Pass12345678!")
+    resp = await client.post(
+        f"/api/admin/files/{file.id}/quarantine/release",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"reason": "manual review confirmed a false positive"},
+    )
+    assert resp.status_code == 204, resp.text
+
+    db.expire_all()
+    assert db.get(Share, share.id).state == ShareState.active
+    told = announcements()
+    assert len(told) == 1, "the recipient of a restored share was never told it exists"
+    assert told[0].payload_json["file_count"] == 1
+    assert db.get(Share, share.id).notify_on_activation is None

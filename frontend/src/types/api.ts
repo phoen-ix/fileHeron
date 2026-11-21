@@ -530,6 +530,8 @@ export type NotificationCategory =
   | 'login_alert'
   | 'oidc_linked'
   | 'file_quarantined'
+  | 'file_quarantine_released'
+  | 'file_quarantine_purged'
   | 'session_evicted'
   | 'ops_alert'
   | 'release_available'
@@ -657,6 +659,13 @@ export interface ActivateInviteRequest {
   locale?: Locale
 }
 
+/** The new account, and the one-time link with which its owner sets a
+ * password: an activated account has none. */
+export interface ActivatedInviteResponse extends AdminUserItem {
+  set_password_url: string
+  set_password_expires_at: string
+}
+
 export interface RegenerateInviteResponse {
   token: string
   url: string
@@ -686,6 +695,8 @@ export interface CreateUserRequest {
 
 export interface ForcePasswordResetResponse {
   plaintext_token: string
+  /** The link to hand over: the reset page with the token in it. */
+  reset_url: string
   expires_at: string
 }
 
@@ -982,6 +993,8 @@ export interface ApiTokenListItem {
   expires_at: string | null
   /** null = unrestricted (full access); else the granted scope names. */
   scopes: string[] | null
+  /** An admin switched it off; it is refused until an admin reactivates it. */
+  disabled: boolean
 }
 
 export interface ApiTokenListResponse {

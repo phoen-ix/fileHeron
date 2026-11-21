@@ -159,6 +159,41 @@ async def test_force_password_reset_returns_token(make_user, db, client, login_a
 
 
 @pytest.mark.asyncio
+async def test_force_password_reset_hands_the_admin_a_link_that_resets(
+    make_user, db, client, login_as
+):
+    """The page headed "Password reset link" showed a bare token: the admin had
+    nothing to pass on unless they knew the URL scheme by heart (found by an
+    e2e chain that tried to open what the admin was given, 2026-11-21). The
+    link is the site's own reset page, the one the "Forgot password" mail
+    carries."""
+    from app.services import settings as settings_svc
+
+    make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
+    target = make_user(email="t@test.local", role=UserRole.client, password="OldPassword123!")
+    settings_svc.set_value(db, key="site.url", value="https://files.example.test", actor=None)
+    db.commit()
+    token, _ = await login_as("admin@test.local", "Pass12345678!")
+
+    resp = await client.post(
+        f"/api/admin/users/{target.id}/force-password-reset",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    body = resp.json()
+    assert body["reset_url"] == f"https://files.example.test/reset-password/{body['plaintext_token']}"
+
+    # ...and what it carries is a working reset.
+    done = await client.post(
+        "/api/auth/reset-password",
+        json={"token": body["reset_url"].rsplit("/", 1)[1], "new_password": "BrandNew!Pass9word"},
+    )
+    assert done.status_code == 200, done.text
+    assert (await client.post(
+        "/api/auth/login", json={"email": "t@test.local", "password": "BrandNew!Pass9word"}
+    )).status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_erase_user_hard_deletes_files_and_anonymizes(
     make_user, db, client, login_as, tmp_path
 ):

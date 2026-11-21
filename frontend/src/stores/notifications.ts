@@ -30,6 +30,10 @@ export const useNotificationsStore = defineStore('notifications', () => {
       const { data } = await listNotifications({ unread: true, page_size: RECENT_LIMIT })
       items.value = data.items
       unreadCount.value = data.unread_count
+    } catch {
+      // Every caller is `void store.refresh()`, so a rejection here was an
+      // uncaught error in the page. A load that fails keeps what the bell
+      // shows; the stream and the next refresh bring it up to date.
     } finally {
       loading.value = false
     }

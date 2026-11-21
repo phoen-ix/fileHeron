@@ -194,8 +194,12 @@ def force_password_reset(
         db, actor=admin, target=target, request=request
     )
     db.commit()
+    from ...services import email as email_svc
+    from ...services import site as site_svc
+
     return ForcePasswordResetResponse(
         plaintext_token=forced.token,
+        reset_url=email_svc.password_reset_url(site_svc.get_site_url(db), forced.token),
         expires_at=forced.expires_at,
     )
 

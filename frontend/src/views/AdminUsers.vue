@@ -115,6 +115,10 @@
   // was left holding a working link at all. Confirm first, then SHOW the link;
   // the clipboard is only a convenience.
   const freshInviteLink = ref<{ email: string; url: string } | null>(null)
+  // An account activated directly has no usable password: the server answers
+  // with a one-time link to set one. Shown on the page, not in the invites
+  // section - that is gone once the last pending invitation was activated.
+  const activatedLink = ref<{ email: string; url: string } | null>(null)
 
   async function onCopyLink(inv: AdminInviteItem) {
     const ok = await ui.confirm({
@@ -143,6 +147,10 @@
     // it by hand.
     if (freshInviteLink.value && (await copy(freshInviteLink.value.url)))
       ui.pushToast(t('admin_users.invites.toast.link_copied'), 'success')
+  }
+  async function copyActivatedLink() {
+    if (activatedLink.value && (await copy(activatedLink.value.url)))
+      ui.pushToast(t('admin_users.invites.toast.set_password_link_copied'), 'success')
   }
 
   async function onResend(inv: AdminInviteItem) {
@@ -205,9 +213,10 @@
     activateInProgress.value = true
     activateError.value = null
     try {
-      await activateInvite(activateInviteRow.value.id, {
+      const { data } = await activateInvite(activateInviteRow.value.id, {
         display_name: activateDisplayName.value || undefined,
       })
+      activatedLink.value = { email: activateInviteRow.value.email, url: data.set_password_url }
       ui.pushToast(t('admin_users.invites.toast.activated'), 'success')
       closeActivate()
       // Refresh both lists - invite row vanishes, new user appears.
@@ -339,6 +348,31 @@
     </form>
 
     <template v-if="!showInviteForm">
+      <div
+        v-if="activatedLink"
+        class="fh-notice fresh-link"
+        data-tone="info"
+        role="status"
+        data-testid="activated-link"
+      >
+        <p>{{ t('admin_users.invites.activate.ready', { email: activatedLink.email }) }}</p>
+        <input
+          class="fh-field-input fh-mono"
+          readonly
+          :value="activatedLink.url"
+          :aria-label="t('admin_users.invites.activate.field_label')"
+          @focus="($event.target as HTMLInputElement).select()"
+        />
+        <div class="fresh-link-actions">
+          <button type="button" class="fh-btn-text" @click="copyActivatedLink">
+            {{ t('admin_users.invites.new_link.copy') }}
+          </button>
+          <button type="button" class="fh-btn-text" @click="activatedLink = null">
+            {{ t('admin_users.invites.new_link.dismiss') }}
+          </button>
+        </div>
+      </div>
+
       <!-- Pending invites section -->
       <section v-if="invites.length > 0 || invitesLoading" class="invites-section">
         <h2 class="section-h2">{{ t('admin_users.invites.heading') }}</h2>

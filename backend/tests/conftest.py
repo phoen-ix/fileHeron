@@ -404,6 +404,17 @@ def counting(db):
 
 
 @pytest.fixture(autouse=True)
+def _strict_ops_alert_reasons(monkeypatch):
+    """An ops alert with a reason missing from `admin_alerts.OPS_REASONS`
+    raises in tests, so every test that sends one is a registry test. The
+    registry is what the bell's wording and the per-alert preferences are
+    built from; in production an unregistered reason is still delivered."""
+    from app.services import admin_alerts
+
+    monkeypatch.setattr(admin_alerts, "STRICT_REASONS", True)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_alert_dedup(monkeypatch):
     """Give services/alert_dedup a per-test in-memory Redis and a fresh
     in-process record.

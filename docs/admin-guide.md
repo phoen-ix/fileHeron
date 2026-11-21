@@ -53,6 +53,12 @@ list and confirmed the dialog, and the `file_quarantine_purged` audit row
 records the actor and the file. Companion toggle at **`/admin/settings/quarantine`** fans an
 infection alert out to all admins.
 
+**A scan that could not finish** is not a quarantine: the file stays "Scanning" and is
+not downloadable, a `file_scan_failed` audit row records ClamAV's answer, and every
+admin gets the **Antivirus could not scan an upload** alert at once (at most one an
+hour while it keeps happening). The scan is retried every hour. Typical causes: ClamAV
+cannot read the storage folder (permissions, a missing mount) or it ran out of memory.
+
 ## Analytics (`/admin/analytics`)
 
 A usage dashboard - active users, shares/files created, downloads, top senders, and a

@@ -153,6 +153,7 @@ class AuditEventType(str, enum.Enum):
     group_member_removed = "group_member_removed"          # Phase 4
     file_expired = "file_expired"                          # Phase 4
     file_purge_failed = "file_purge_failed"                # bytes left on disk after a failed unlink
+    file_scan_failed = "file_scan_failed"                  # an antivirus scan ended without a verdict
     settings_changed = "settings_changed"                  # Phase 9
     # Admin-editable email templates (v1.25.0). slug+locale only - never the body.
     email_template_changed = "email_template_changed"

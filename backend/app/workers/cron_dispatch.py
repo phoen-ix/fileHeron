@@ -6,20 +6,38 @@ replaces the static per-job ARQ ``cron(...)`` entries so cadence/enable/disable
 are runtime-editable (see ``services/cron_schedule.py``).
 
 Per-job try/except: one job's evaluation failing never blocks the others. Not
-itself ``@track_cron`` - it runs 1440x/day and would flood ``cron_runs``; it logs
-instead, and a real dispatch failure surfaces via the worker logs.
+itself ``@track_cron`` - it runs 1440x/day and would flood ``cron_runs``. A task
+it cannot dispatch raises the `cron_failing` alert instead (at most one an
+hour): logged only, such a task silently stopped running.
 """
 from __future__ import annotations
 
 import logging
 
 from ..database import SessionLocal
+from ..services import admin_alerts, job_queue
 from ..services import cron_schedule as cs
-from ..services import job_queue
 from ..services import site as site_svc
+from ..services.cron_tracker import exc_summary
 from ..utils.timeutil import utc_now
 
 logger = logging.getLogger("fileheron.cron_dispatch")
+
+
+def _alarm(db, name: str, exc: Exception) -> None:
+    """Tell the admins a task could not be dispatched. Never raises: the loop
+    goes on to the other tasks either way."""
+    try:
+        admin_alerts.ops_alert(
+            db,
+            reason="cron_failing",
+            detail=f"{name} could not be dispatched: {exc_summary(exc)}",
+            link_url="/admin/scheduled-tasks",
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("cron_dispatch: could not raise the alarm for %s", name)
 
 
 async def cron_dispatch(_ctx) -> dict:
@@ -56,9 +74,10 @@ async def cron_dispatch(_ctx) -> dict:
                     db.commit()
                     await job_queue.aenqueue(name)
                     enqueued.append(name)
-            except Exception:
+            except Exception as exc:
                 db.rollback()
-                logger.exception("cron_dispatch: failed for %s", name)
+                logger.warning("cron_dispatch: failed for %s", name, exc_info=True)
+                _alarm(db, name, exc)
         if enqueued:
             logger.info("cron_dispatch enqueued: %s", enqueued)
         return {"enqueued": enqueued}

@@ -28,6 +28,7 @@ _KNOWN_NON_COLUMN_CLIPS: set[tuple[str, str]] = {
     ('routers/files.py', 'f"share-{share.id[:8]}",'),
     ('routers/oidc_connect.py', 'return f"…{sub[-4:]}"'),
     ('routers/public.py', 'f"share-{share.id[:8]}",'),
+    ('services/admin_alerts.py', 'payload = {"reason": reason, "detail": detail[:500], "at": utc_now().isoformat()}'),
     ('services/api_token.py', 'last4=secret[-4:],'),
     ('services/auto_update.py', 'f"starts once running ones finish, at the latest {deadline[:16]} UTC."),'),
     ('services/auto_update.py', 'if settings.scope == "patch" and latest_key[:2] != running_key[:2]:'),
@@ -62,7 +63,7 @@ _KNOWN_NON_COLUMN_CLIPS: set[tuple[str, str]] = {
     # app/workers: JSON payload / result-dict caps and a batch cap, no column.
     ('workers/auto_update.py', 'return {CRON_FAILED_KEY: True, "error": f"{type(exc).__name__}: {exc}"[:500]}'),
     ('workers/disk_check.py', '"detail": str(stats.get("error"))[:200],'),
-    ('workers/ops_check.py', 'payload = {"reason": reason, "detail": detail[:500], "at": utc_now().isoformat()}'),
+    ('workers/av_scan.py', '"detail": detail[:500],'),
     ('workers/rescan_inbound_attachments.py', 'q = q.filter(InboundAttachment.id.notin_(list(deferred)[:1000]))'),
     ('workers/send_email.py', '"subject": subject[:120],'),
     ('workers/send_email.py', '"smtp_message": (message or "")[:300],'),

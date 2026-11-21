@@ -226,6 +226,7 @@ One doc per subsystem in `docs/engineering/`. They are not auto-loaded. **Before
 - `WorkerSettings.job_timeout` must stay above `av_scan.SOCKET_TIMEOUT_SEC`.
 - The verdict flip is conditional (`av_release.apply_verdict`); the infected branch reads the state `with_for_update()`.
 - `file.hard_delete` refuses an `infected` row unless `allow_quarantined=True`.
+- A scan that ends without a verdict (clamd `ERROR`, or the job crashing) writes a `file_scan_failed` audit row and raises `av_scan_failed` at once (`_report_scan_failure`); never turn it back into a log line. A `Retry` is not a failed scan.
 - clamd reads the store as its OWN user: `LocalFilesystemBackend.finalize` leaves every file `0644` (direct uploads stage at `0600` - broken v1.21.0 to v2.31.0), and `scan_stored`'s INSTREAM fallback fires only on clamd's open failures, never on every `error`.
 #### Shares and share approval → [`shares.md`](docs/engineering/shares.md)
 - Co-recipient visibility has ONE definition, `share.RosterVisibility`, and every `ShareRecipientRef` builder goes through it (AST-pinned in `test_share_recipient_privacy.py`).
@@ -261,6 +262,7 @@ One doc per subsystem in `docs/engineering/`. They are not auto-loaded. **Before
 #### Error log, alerts, CSP, anomaly detection, analytics, webhooks → [`observability.md`](docs/engineering/observability.md)
 - Logging an error and alerting on it are decoupled (`error_log.enabled` vs `error_alert.enabled`) - don't re-couple them.
 - The scheduled checks' alert dedup is ONE helper, `services/alert_dedup.py`.
+- Every ops alert `reason` is in `admin_alerts.OPS_REASONS` (the bell's wording is built from it; an unregistered one raises in tests, is still sent in production); a plain "reason + detail" alert goes through `admin_alerts.ops_alert`.
 - `TOKEN_EXPIRED` is never captured (`_NEVER_CAPTURE_CODES`), and 4xx capture is opt-in and allowlist-gated.
 - The CSP is Report-Only; its reports ride `error_log.enabled`, never `error_log.capture_4xx`.
 - Anomaly detection alerts and never blocks; webhook SSRF is re-checked on every delivery (`utils/net.assert_public_http_url`).
@@ -302,6 +304,7 @@ One doc per subsystem in `docs/engineering/`. They are not auto-loaded. **Before
 - Cadences live in `services/cron_schedule.py::REGISTRY`, which is also the Run-now allowlist.
 - `is_due` allows `_DUE_SLACK` (5s) early - don't scale it to a fraction of the tick.
 - A cron that swallows its own errors must report the run through `cron_tracker.mark_failed` (it sets `CRON_FAILED_KEY`), or `track_cron` records it as a success - eleven did exactly that until 2026-11-07. Pinned generically by `tests/test_cron_failure_reporting.py`: every `@track_cron` function with a non-re-raising `except` must reference it; `services/admin_alerts.notify_admins` is the one "alert every admin" fan-out and returns what failed so the cron can fold it in - pinned generically by `tests/test_admin_fanout_one_helper.py` (any function outside it that filters `role == UserRole.admin` and calls `dispatch` fails).
+- An error-level log in a worker is never the only trace of a failure: record it or raise (`tests/test_worker_errors_are_reported.py`, AST over every worker; `cron_dispatch` alarms a task it cannot dispatch).
 - `mark_ran` persists before enqueue; `cron_dispatch` is deliberately not `@track_cron`; it reads one `cron_schedule.snapshot` per tick.
 #### Desktop client → [`desktop-client.md`](docs/engineering/desktop-client.md)
 - Only 401/403 from `/api/auth/refresh` end a desktop session; anything else is `SERVER_UNAVAILABLE`.

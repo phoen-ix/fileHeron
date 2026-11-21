@@ -17,10 +17,13 @@ from arq import Retry
 
 from ..config import CLAMD_MAX_FILE_SIZE, settings
 from ..database import SessionLocal
+from ..models.audit_log import AuditEventType
 from ..models.file import File, FileState
-from ..services import av_release
+from ..services import admin_alerts, av_release
 from ..services import av_scan as av_scan_svc
 from ..services import share as share_svc
+from ..services.audit import record_audit_event
+from ..services.cron_tracker import exc_summary
 from ..services.quarantine import quarantine_file
 
 logger = logging.getLogger("fileheron.workers.av_scan")
@@ -103,195 +106,250 @@ async def _release_unscanned(db, *, file_id: str, file: File, reason: str) -> di
     }
 
 
+def _report_scan_failure(db, file_id: str, detail: str) -> None:
+    """A scan that ended without a verdict is an EVENT: a `file_scan_failed`
+    audit row and the `av_scan_failed` alert to every admin, at once.
+
+    It was one `logger.error` line. On 2026-11-20 clamd answered `Access
+    denied` for an upload it could not open; nothing recorded it, the only
+    escalation was the sweep failing six hours later, and an admin heard of it
+    from the sender. Every failure gets its row; the alert goes out at most
+    once an hour (admin_alerts.ops_alert), so a clamd that cannot read the
+    store does not mail once per upload. Never raises: the sweep's six-hour
+    rule (cleanup_stale_uploads) still stands behind it."""
+    try:
+        db.rollback()
+        f = db.get(File, file_id)
+        name = f.original_filename if f is not None else file_id
+        record_audit_event(
+            db,
+            event_type=AuditEventType.file_scan_failed,
+            actor_user_id=None,
+            target_type="file",
+            target_id=file_id,
+            metadata={
+                "detail": detail[:500],
+                "filename": name,
+                "share_id": f.share_id if f is not None else None,
+                "size_bytes": f.size_bytes if f is not None else None,
+            },
+        )
+        admin_alerts.ops_alert(
+            db,
+            reason="av_scan_failed",
+            detail=f"{name}: {detail}",
+            link_url="/admin/audit-log",
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("av_scan: could not record the failed scan of %s", file_id)
+
+
 async def av_scan_file(_ctx, file_id: str) -> dict:
     """Scan a single file. Idempotent - silently skips files not in
-    `ready_unscanned` state (already scanned, deleted, etc.)."""
+    `ready_unscanned` state (already scanned, deleted, etc.).
+
+    A run that ends without a verdict - clamd answered an error, or the job
+    itself crashed - is reported (`_report_scan_failure`). A `Retry` is not:
+    the job comes back, and ops_check's ping reports a clamd that stays down."""
     db = SessionLocal()
     try:
-        file = db.query(File).filter(File.id == file_id).one_or_none()
-        if file is None:
-            logger.warning("av_scan: unknown file %s", file_id)
-            return {"file_id": file_id, "state": "missing"}
-        if file.state != FileState.ready_unscanned:
-            logger.info(
-                "av_scan: file %s in state %s; skipping",
-                file_id,
-                file.state.value,
-            )
-            return {"file_id": file_id, "state": file.state.value, "skipped": True}
-        if file.release_verdict is not None:
-            # Scanned already: the verdict waits for the encryption release lane.
-            # The stale-upload sweep re-enqueues a file that sat here too long
-            # (a lane run killed by a restart) - kick the lane, never rescan.
-            from ..services import encryption_lanes
-
-            await encryption_lanes.kick_release_lane()
-            return {"file_id": file_id, "state": "awaiting_encryption"}
-        if not file.storage_path:
-            logger.warning("av_scan: file %s has no storage_path", file_id)
-            return {"file_id": file_id, "state": "no_path"}
-        # Bound here, not read inside _scan(): narrowing does not survive into a
-        # nested function, because the attribute could be rebound before the call.
-        locator = file.storage_path
-
-        # Local backend → path-scan (clamd reads the shared mount). Object store →
-        # stream the bytes to clamd via INSTREAM (no shared path).
-        from ..services.storage_backend import get_storage_backend
-        backend = get_storage_backend()
-
-        # Decide unscannable BEFORE scanning, against CLAMD_MAX_FILE_SIZE - the
-        # ceiling clamd clamps ITSELF to, not the operator-tunable
-        # AV_MAX_SCAN_BYTES. Keying this skip off the tunable would turn a
-        # documented knob into a silent antivirus off-switch: lowering it (a
-        # small clamd, a slow disk - docker/clamav/clamd.conf invites exactly
-        # that) would stop files above the new value being scanned at all, and
-        # an infected one would be released `clean` instead of quarantined.
-        # The tunable's job is further down, and it is only about TRUST.
-        #
-        # clamd cannot produce a verdict for a file past its MaxFileSize, and the two backends failed differently on
-        # it: a path-scan answers a meaningless "OK" (handled below), while
-        # INSTREAM answers `error` - which is not a terminal state, so the file
-        # sat at ready_unscanned and got re-enqueued forever. Every download of
-        # it, browser or client or public link, returned 425 "try again shortly"
-        # about something that was never going to succeed (audit 2026-07-30).
-        #
-        # Not scanning at all is the honest answer, and it terminates: there is
-        # no verdict to be had, so record the file as served-unscanned in one
-        # pass. It also stops streaming multi-gigabyte objects out of S3 to be
-        # rejected on arrival.
-        #
-        # This branch skips the AV scan, so it is only safe because size_bytes
-        # cannot be inflated to reach it: the tus pre-finish hook refuses the
-        # upload unless the final size equals the HMAC-authorised max_size
-        # (tus_hooks._pre_finish), and that authorised size is what the row
-        # carries; the direct-upload route records the bytes it actually
-        # received. Getting here therefore costs a real multi-gigabyte transfer
-        # - which is exactly the case where clamd was never going to produce a
-        # verdict anyway. Do not relax either check without revisiting this.
-        if (file.size_bytes or 0) > CLAMD_MAX_FILE_SIZE and not settings.AV_SKIP:
-            return await _release_unscanned(
-                db, file_id=file_id, file=file, reason="exceeds_clamd_max_file_size"
-            )
-        # Both scan paths are BLOCKING socket I/O, and this is an `async def`
-        # running on the ARQ worker's single event loop - so a slow scan used to
-        # freeze every other job in the process (send_email, webhook_deliver,
-        # every cron) for its whole duration, up to the socket timeout per file.
-        # Hand them to a thread so only this task waits (audit 2026-07-30).
-        # A file is scanned BEFORE it is ever encrypted (the release lane runs
-        # after the verdict), so this is None in normal operation; the cipher
-        # is passed anyway so an encrypted row can never reach the path scan.
-        from ..services import file_encryption
-
-        cipher = file_encryption.cipher_for_file(file)
-
-        def _scan() -> av_scan_svc.ScanResult:
-            return av_scan_svc.scan_stored(backend, locator, cipher)
-
-        try:
-            result = await asyncio.to_thread(_scan)
-        except av_scan_svc.AVUnavailableError as e:
-            # clamd is down/not-ready. A plain re-raise is NOT re-enqueued by
-            # arq (only Retry/RetryJob are), so it would burn the job with no
-            # retry; raise Retry so max_tries applies with a capped backoff.
-            # cleanup_stale_uploads recovers anything that outlives the retries.
-            attempt = _ctx.get("job_try", 1)
-            logger.warning("clamd unavailable for %s (try %d): %s", file_id, attempt, e)
-            # The backoff has to outlast a clamav COLD START, not just a blip.
-            # `min(60, 5 * attempt)` gave 5+10+15+20 = 50 seconds across the
-            # four retries `max_tries=5` allows, while docker-compose budgets
-            # clamav 180s to become healthy (freshclam's first mirror sync is
-            # far longer). So any clamav restart, host reboot or OOM burned
-            # every in-flight scan job. 30+60+90+120 = 300s covers it, and
-            # cleanup_stale_uploads is still the backstop for anything that
-            # outlives even that (audit 2026-07-30).
-            raise Retry(defer=min(_RETRY_MAX_DEFER_SEC, 30 * attempt)) from e
-
-        if result.state == "clean":
-            # AV_MAX_SCAN_BYTES is the TRUST threshold, and it is a different
-            # thing from the skip above. clamd was asked and answered; the
-            # question here is whether that answer is worth recording as a
-            # verdict. An operator may legitimately lower this (a small clamd,
-            # a slow disk) - and lowering it must mean "stop believing clean
-            # above this size", never "stop scanning above this size". Making
-            # it a skip threshold would turn a documented tuning knob into a
-            # silent antivirus off-switch: an infected file above the value
-            # would be released `clean` instead of quarantined.
-            if (
-                (file.size_bytes or 0) > settings.AV_MAX_SCAN_BYTES
-                and not settings.AV_SKIP
-            ):
-                return await _release_unscanned(
-                    db,
-                    file_id=file_id,
-                    file=file,
-                    reason="exceeds_av_max_scan_bytes",
-                )
-            # Conditional flip (services/av_release): a slow scan can run while
-            # share expiry commits `deleted` (bytes gone), and marking clean then
-            # would resurrect a deleted file whose bytes no longer exist.
-            share_id = file.share_id
-            outcome = await _release(db, file=file, verdict=av_release.VERDICT_CLEAN)
-            if outcome == "superseded":
-                logger.info(
-                    "av_scan: %s left ready_unscanned mid-scan; not marking clean",
-                    file_id,
-                )
-                return {"file_id": file_id, "state": "superseded"}
-            if outcome == "held":
-                logger.info("av_scan: %s clean; held for encryption", file_id)
-                return {"file_id": file_id, "state": "awaiting_encryption"}
-            logger.info("av_scan: %s clean", file_id)
-            share_svc.notify_after_commit(db, share_id)
-            return {"file_id": file_id, "state": "clean"}
-
-        if result.state == "infected":
-            # Same guard as the clean path: if the row left ready_unscanned
-            # mid-scan (share expiry committed `deleted` and freed the bytes),
-            # don't resurrect it into `infected` - which would also revoke a
-            # dead share and fire an infection notice for a file that's gone.
-            # A LOCKING read. Under MariaDB's REPEATABLE READ a plain SELECT
-            # answers from this transaction's snapshot, so a `deleted` the API
-            # connection committed while clamd was working is invisible - the
-            # guard could not fire at all, and quarantine_file then flipped a
-            # deleted row back to `infected`, revoked a share that still had
-            # other clean files in it, released the same bytes from the quota a
-            # second time and emailed the uploader about a file they had already
-            # deleted (audit #2).
-            current_state = (
-                db.query(File.state)
-                .filter(File.id == file_id)
-                .with_for_update()
-                .scalar()
-            )
-            if current_state != FileState.ready_unscanned:
-                db.rollback()
-                logger.info(
-                    "av_scan: %s left ready_unscanned mid-scan; not quarantining", file_id
-                )
-                return {"file_id": file_id, "state": "superseded"}
-            quarantine_file(db, file=file, signature=result.signature)
-            db.commit()
-            logger.warning(
-                "av_scan: %s INFECTED (%s) - quarantined", file_id, result.signature
-            )
-            return {
-                "file_id": file_id,
-                "state": "infected",
-                "signature": result.signature,
-            }
-
-        # ScanResult.state == "error": clamd answered but couldn't decide.
-        # Don't quarantine; leave in ready_unscanned. `cleanup_stale_uploads`
-        # re-enqueues it once it is 30 minutes past finalize, and the cron runs
-        # hourly - so recovery is 30-90 minutes away, not immediate.
-        #
-        # There is NO manual rescan. This comment used to name one, as did
-        # tus_hooks; no rescan endpoint or admin action exists anywhere in the
-        # product. If clamd keeps answering `error` for the same file, this is
-        # the path that loops: the sweep re-enqueues and the scan fails the
-        # same way. After six hours without a verdict the sweep reports its run
-        # as failed, which is what escalates it (cleanup_stale_uploads).
-        logger.error("av_scan: %s error from clamd: %s", file_id, result.raw)
-        return {"file_id": file_id, "state": "error", "raw": result.raw}
+        return await _scan_file(db, _ctx, file_id)
+    except Retry:
+        raise
+    except Exception as e:
+        _report_scan_failure(db, file_id, exc_summary(e))
+        raise
     finally:
         db.close()
+
+
+async def _scan_file(db, _ctx, file_id: str) -> dict:
+    file = db.query(File).filter(File.id == file_id).one_or_none()
+    if file is None:
+        logger.warning("av_scan: unknown file %s", file_id)
+        return {"file_id": file_id, "state": "missing"}
+    if file.state != FileState.ready_unscanned:
+        logger.info(
+            "av_scan: file %s in state %s; skipping",
+            file_id,
+            file.state.value,
+        )
+        return {"file_id": file_id, "state": file.state.value, "skipped": True}
+    if file.release_verdict is not None:
+        # Scanned already: the verdict waits for the encryption release lane.
+        # The stale-upload sweep re-enqueues a file that sat here too long
+        # (a lane run killed by a restart) - kick the lane, never rescan.
+        from ..services import encryption_lanes
+
+        await encryption_lanes.kick_release_lane()
+        return {"file_id": file_id, "state": "awaiting_encryption"}
+    if not file.storage_path:
+        logger.warning("av_scan: file %s has no storage_path", file_id)
+        return {"file_id": file_id, "state": "no_path"}
+    # Bound here, not read inside _scan(): narrowing does not survive into a
+    # nested function, because the attribute could be rebound before the call.
+    locator = file.storage_path
+
+    # Local backend → path-scan (clamd reads the shared mount). Object store →
+    # stream the bytes to clamd via INSTREAM (no shared path).
+    from ..services.storage_backend import get_storage_backend
+    backend = get_storage_backend()
+
+    # Decide unscannable BEFORE scanning, against CLAMD_MAX_FILE_SIZE - the
+    # ceiling clamd clamps ITSELF to, not the operator-tunable
+    # AV_MAX_SCAN_BYTES. Keying this skip off the tunable would turn a
+    # documented knob into a silent antivirus off-switch: lowering it (a
+    # small clamd, a slow disk - docker/clamav/clamd.conf invites exactly
+    # that) would stop files above the new value being scanned at all, and
+    # an infected one would be released `clean` instead of quarantined.
+    # The tunable's job is further down, and it is only about TRUST.
+    #
+    # clamd cannot produce a verdict for a file past its MaxFileSize, and the two backends failed differently on
+    # it: a path-scan answers a meaningless "OK" (handled below), while
+    # INSTREAM answers `error` - which is not a terminal state, so the file
+    # sat at ready_unscanned and got re-enqueued forever. Every download of
+    # it, browser or client or public link, returned 425 "try again shortly"
+    # about something that was never going to succeed (audit 2026-07-30).
+    #
+    # Not scanning at all is the honest answer, and it terminates: there is
+    # no verdict to be had, so record the file as served-unscanned in one
+    # pass. It also stops streaming multi-gigabyte objects out of S3 to be
+    # rejected on arrival.
+    #
+    # This branch skips the AV scan, so it is only safe because size_bytes
+    # cannot be inflated to reach it: the tus pre-finish hook refuses the
+    # upload unless the final size equals the HMAC-authorised max_size
+    # (tus_hooks._pre_finish), and that authorised size is what the row
+    # carries; the direct-upload route records the bytes it actually
+    # received. Getting here therefore costs a real multi-gigabyte transfer
+    # - which is exactly the case where clamd was never going to produce a
+    # verdict anyway. Do not relax either check without revisiting this.
+    if (file.size_bytes or 0) > CLAMD_MAX_FILE_SIZE and not settings.AV_SKIP:
+        return await _release_unscanned(
+            db, file_id=file_id, file=file, reason="exceeds_clamd_max_file_size"
+        )
+    # Both scan paths are BLOCKING socket I/O, and this is an `async def`
+    # running on the ARQ worker's single event loop - so a slow scan used to
+    # freeze every other job in the process (send_email, webhook_deliver,
+    # every cron) for its whole duration, up to the socket timeout per file.
+    # Hand them to a thread so only this task waits (audit 2026-07-30).
+    # A file is scanned BEFORE it is ever encrypted (the release lane runs
+    # after the verdict), so this is None in normal operation; the cipher
+    # is passed anyway so an encrypted row can never reach the path scan.
+    from ..services import file_encryption
+
+    cipher = file_encryption.cipher_for_file(file)
+
+    def _scan() -> av_scan_svc.ScanResult:
+        return av_scan_svc.scan_stored(backend, locator, cipher)
+
+    try:
+        result = await asyncio.to_thread(_scan)
+    except av_scan_svc.AVUnavailableError as e:
+        # clamd is down/not-ready. A plain re-raise is NOT re-enqueued by
+        # arq (only Retry/RetryJob are), so it would burn the job with no
+        # retry; raise Retry so max_tries applies with a capped backoff.
+        # cleanup_stale_uploads recovers anything that outlives the retries.
+        attempt = _ctx.get("job_try", 1)
+        logger.warning("clamd unavailable for %s (try %d): %s", file_id, attempt, e)
+        # The backoff has to outlast a clamav COLD START, not just a blip.
+        # `min(60, 5 * attempt)` gave 5+10+15+20 = 50 seconds across the
+        # four retries `max_tries=5` allows, while docker-compose budgets
+        # clamav 180s to become healthy (freshclam's first mirror sync is
+        # far longer). So any clamav restart, host reboot or OOM burned
+        # every in-flight scan job. 30+60+90+120 = 300s covers it, and
+        # cleanup_stale_uploads is still the backstop for anything that
+        # outlives even that (audit 2026-07-30).
+        raise Retry(defer=min(_RETRY_MAX_DEFER_SEC, 30 * attempt)) from e
+
+    if result.state == "clean":
+        # AV_MAX_SCAN_BYTES is the TRUST threshold, and it is a different
+        # thing from the skip above. clamd was asked and answered; the
+        # question here is whether that answer is worth recording as a
+        # verdict. An operator may legitimately lower this (a small clamd,
+        # a slow disk) - and lowering it must mean "stop believing clean
+        # above this size", never "stop scanning above this size". Making
+        # it a skip threshold would turn a documented tuning knob into a
+        # silent antivirus off-switch: an infected file above the value
+        # would be released `clean` instead of quarantined.
+        if (
+            (file.size_bytes or 0) > settings.AV_MAX_SCAN_BYTES
+            and not settings.AV_SKIP
+        ):
+            return await _release_unscanned(
+                db,
+                file_id=file_id,
+                file=file,
+                reason="exceeds_av_max_scan_bytes",
+            )
+        # Conditional flip (services/av_release): a slow scan can run while
+        # share expiry commits `deleted` (bytes gone), and marking clean then
+        # would resurrect a deleted file whose bytes no longer exist.
+        share_id = file.share_id
+        outcome = await _release(db, file=file, verdict=av_release.VERDICT_CLEAN)
+        if outcome == "superseded":
+            logger.info(
+                "av_scan: %s left ready_unscanned mid-scan; not marking clean",
+                file_id,
+            )
+            return {"file_id": file_id, "state": "superseded"}
+        if outcome == "held":
+            logger.info("av_scan: %s clean; held for encryption", file_id)
+            return {"file_id": file_id, "state": "awaiting_encryption"}
+        logger.info("av_scan: %s clean", file_id)
+        share_svc.notify_after_commit(db, share_id)
+        return {"file_id": file_id, "state": "clean"}
+
+    if result.state == "infected":
+        # Same guard as the clean path: if the row left ready_unscanned
+        # mid-scan (share expiry committed `deleted` and freed the bytes),
+        # don't resurrect it into `infected` - which would also revoke a
+        # dead share and fire an infection notice for a file that's gone.
+        # A LOCKING read. Under MariaDB's REPEATABLE READ a plain SELECT
+        # answers from this transaction's snapshot, so a `deleted` the API
+        # connection committed while clamd was working is invisible - the
+        # guard could not fire at all, and quarantine_file then flipped a
+        # deleted row back to `infected`, revoked a share that still had
+        # other clean files in it, released the same bytes from the quota a
+        # second time and emailed the uploader about a file they had already
+        # deleted (audit #2).
+        current_state = (
+            db.query(File.state)
+            .filter(File.id == file_id)
+            .with_for_update()
+            .scalar()
+        )
+        if current_state != FileState.ready_unscanned:
+            db.rollback()
+            logger.info(
+                "av_scan: %s left ready_unscanned mid-scan; not quarantining", file_id
+            )
+            return {"file_id": file_id, "state": "superseded"}
+        quarantine_file(db, file=file, signature=result.signature)
+        db.commit()
+        logger.warning(
+            "av_scan: %s INFECTED (%s) - quarantined", file_id, result.signature
+        )
+        return {
+            "file_id": file_id,
+            "state": "infected",
+            "signature": result.signature,
+        }
+
+    # ScanResult.state == "error": clamd answered but couldn't decide.
+    # Don't quarantine; leave in ready_unscanned. `cleanup_stale_uploads`
+    # re-enqueues it once it is 30 minutes past finalize, and the cron runs
+    # hourly - so recovery is 30-90 minutes away, not immediate.
+    #
+    # There is NO manual rescan. This comment used to name one, as did
+    # tus_hooks; no rescan endpoint or admin action exists anywhere in the
+    # product. If clamd keeps answering `error` for the same file, this is
+    # the path that loops: the sweep re-enqueues and the scan fails the
+    # same way. Each failure is recorded and alarmed here; after six hours
+    # without a verdict the sweep also reports its own run as failed
+    # (cleanup_stale_uploads), the backstop for an alert that never arrived.
+    logger.warning("av_scan: %s error from clamd: %s", file_id, result.raw)
+    _report_scan_failure(db, file_id, result.raw)
+    return {"file_id": file_id, "state": "error", "raw": result.raw}

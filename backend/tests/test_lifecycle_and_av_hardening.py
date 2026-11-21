@@ -195,7 +195,7 @@ def test_the_mid_scan_guard_reads_the_committed_row():
 
     from app.workers import av_scan
 
-    src = inspect.getsource(av_scan.av_scan_file)
+    src = inspect.getsource(av_scan._scan_file)
     clean_branch, _, infected_branch = src.partition('if result.state == "infected":')
 
     # The clean branch was always safe: a conditional UPDATE reads the latest

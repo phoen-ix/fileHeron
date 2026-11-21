@@ -55,13 +55,7 @@ def _dedup_seen(reason: str) -> bool:
 def _alert_admins(db, *, reason: str, detail: str) -> admin_alerts.FanOut:
     if _dedup_seen(reason):
         return admin_alerts.FanOut()
-    payload = {"reason": reason, "detail": detail[:500], "at": utc_now().isoformat()}
-    out = admin_alerts.notify_admins(db, payload=payload, link_url="/admin/system")
-
-    from ..services import webhook as webhook_svc
-    emit_payload = {"target_type": "ops", "target_id": reason, "metadata": payload}
-    webhook_svc.emit_after_commit(db, webhook_svc.OPS_ALERT_EVENT, emit_payload)
-    return out
+    return admin_alerts.ops_alert(db, reason=reason, detail=detail, dedup=False)
 
 
 # One failed ping is not an outage. clamd stops answering for several seconds

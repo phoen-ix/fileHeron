@@ -360,7 +360,7 @@ def test_a_lower_limit_does_not_disable_scanning():
 
     from app.workers import av_scan as av_scan_worker
 
-    src = inspect.getsource(av_scan_worker.av_scan_file)
+    src = inspect.getsource(av_scan_worker._scan_file)
     pre_scan = src.split("def _scan()")[0]
     assert "> CLAMD_MAX_FILE_SIZE" in pre_scan
     assert "settings.AV_MAX_SCAN_BYTES" not in pre_scan, (

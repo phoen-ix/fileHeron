@@ -7,7 +7,22 @@ summary and points here. Read this before changing the code listed below.
 
 ## Current state
 
-Backend **`v2.32.0`** is the newest tag (2026-11-20): a public-link download is charged only with a ticket
+Backend **`v2.33.0`** is the newest tag (2026-11-21). **Alerts:** a clamd `ERROR` reply or a crashing scan job writes
+`file_scan_failed` and sends the `av_scan_failed` ops alert at once (`workers/av_scan.py::_report_scan_failure`) - it was a
+log line; `admin_alerts.OPS_REASONS` registers every ops reason with its group and default, `admin_alerts.ops_alert` is the
+one "reason + detail" alert, and `cron_dispatch` alarms a task it cannot dispatch. An admin chooses per alert type
+(`ops_alert:<reason>`, table `user_notification_topic_preferences`, migration `202611210001`); alarms default to `both`,
+notices and the two flood-prone reasons (`anomaly`, `scan_guard_block`) to `in_app`. **Quarantine:** every path that ends
+one tells the uploader (`quarantine_admin.tell_uploader`, categories `file_quarantine_released` / `file_quarantine_purged`,
+four template files each), and the release route runs `share.notify_after_commit` - the sweep only looks 48 hours back.
+**Hand-overs** (found by `e2e/tests/usecases/`, 27 chains in which every person acts in the browser): activating an
+invitation answers `ActivatedInviteResponse` with a one-time set-password link (the dialog promised an SSO sign-in a staff
+account cannot do), a forced reset answers `reset_url` (it showed a bare token), `ApiTokenListItem.disabled` marks a token an
+admin switched off, the bell asks for nothing while `requires_2fa` holds, an empty FILTERED secrets or requests list says so
+(`useHiddenByFilter`), and the share form lists maintenance mode among its blockers. **Frontend:** a field takes a click only
+on its label's words and its control (`utils/fieldLabels.ts`), the popups share `usePopupList` / `useSuggestions`, and
+`ShareResponse.recipient_users` names a share's people to whoever may see the roster. Minor; one additive migration, no
+host step, one default move (ops alarms are mailed); no client tag. **`v2.32.0`** (2026-11-20): a public-link download is charged only with a ticket
 minted by `POST /api/public/{token}/download-ticket` on a click (`public_link.issue_download_ticket`, bound to the
 link id + one target, `downloads.signed_url_ttl_sec`), checked right before the decrement - a Microsoft 365 link
 scanner had spent a two-download link 44 s after the mail went out; resumes and the `bytes=1-1` probe stay
@@ -171,8 +186,8 @@ audit on three anyio CVEs; tags are immutable, so the same commits shipped as
 v2.17.1 plus the anyio bump). **v2.17.1 shipped a sidebar showing nothing but
 "Overview"** (a `v-if` on the Overview link captured the categories' `v-else`;
 no test mounted AdminLayout); v2.17.2 is that one-line fix plus
-`tests/components/AdminLayout.test.ts`. **The reference host runs v2.31.0**
-(an automatic update on 2026-11-20 02:31 UTC - its `updates.auto_scope` is `minor` and
+`tests/components/AdminLayout.test.ts`. **The reference host runs v2.32.0**
+(an automatic update on 2026-11-21 02:32 UTC, v2.31.0 the same way the night before - its `updates.auto_scope` is `minor` and
 `updates.auto_min_age_hours` 0, so minor releases install there too; v2.30.2 came by
 `scripts/deploy.sh` on 2026-11-15, after the nightly backup unit run by hand, as for v2.30.1
 the same morning; `CSP_ENFORCE=true` there since v2.30.1, so its SPA policy is enforced: no `csp` row in its error log from 2026-08-16 to
@@ -254,6 +269,7 @@ record.
 | v2.31.0 | - | - (minor, so patch-only automatic updates do not install it; no infra change. The update TO v2.31.0 is supervised by the v2.30.x shim, which passes no hand-over env - the v2.31.0 executor then enforces the downgrade and rollback rules itself. From v2.31.0 a Rollback runs the RUNNING release's executor, not the target's) | **Behaviour change: staff accounts (admins AND employees) no longer auto-link SSO by email** on their first SSO sign-in - `OIDC_LINK_FROM_ACCOUNT`, they connect once from Account settings; existing links and clients are unchanged. API tokens keep working while the owner's password sign-in is locked (`ACCOUNT_LOCKED` no longer refuses them; disabled still does). Sign-out-others continues the caller's session (sign-in time and absolute end) and mints nothing without a live refresh cookie. Change password/email spend the per-user step-up window (still 401 `INVALID_CREDENTIALS`, `step_up_failed` rows). `?dt=` URLs carry an issue time and honour the revocation mark (format `<user>.<iat>.<exp>.<sig>`, domain v2: a URL minted before the update is refused once). The tus hook answers only its literal path. Desktop `client-v1.6.4` beside it (the 2026-11-19 audit) |
 | v2.31.1 | - | - (a patch: automatic updates install it; no infra change) | - (direct uploads are stored `0644` so clamd can open them - broken since v1.21.0; a file clamd cannot open is streamed instead, so files stuck before the update clear on the next hourly sweep; release pages carry only their own section; frontend image on nginx 1.31.9) |
 | v2.32.0 | - | - (minor: installed automatically only with `updates.auto_scope` `minor`/`any`, as on the reference host; no infra change) | **Behaviour change: a public-link download needs a click ticket** - a bare GET of `/api/public/{token}/files/{id}/download` or `/download-zip` answers 403 `DOWNLOAD_TICKET_REQUIRED`; scripts POST `/download-ticket` first. A link's download limit is editable (`PATCH /api/shares/{id}/public-link`). The recipient picker reopens its list for the next recipient. The announcement decision (`share.notify_if_downloadable`) locks the share row first in a fresh transaction and runs after every writer commits (scan release, `files-added`, approve), so a scan and a batch signal crossing no longer leave the mail to the minute sweep |
+| v2.33.0 | `202611210001` `user_notification_topic_preferences` (additive: one new table, nothing altered; a rollback past it needs the `alembic stamp` recovery) | - (minor: installed automatically only with `updates.auto_scope` `minor`/`any`, as on the reference host; no infra change) | **Default move: ops ALARMS are mailed** - an admin without a stored choice now gets mail as well as the bell for `av_scan_failed`, ClamAV/Redis down, storage low or unreadable, a failed or repeatedly failing task, failing mail, a failed update; notices, `anomaly` and `scan_guard_block` stay bell-only; a stored `ops_alert` category choice keeps applying to every type. Two new notification categories (`file_quarantine_released`, `file_quarantine_purged`, default `both`) and their templates. API: `POST /api/admin/invites/{id}/activate` answers `ActivatedInviteResponse` (the user item plus `set_password_url`, `set_password_expires_at`); `ForcePasswordResetResponse.reset_url`, `ApiTokenListItem.disabled`, `ShareResponse.recipient_users` and `PreferenceItem.topic`/`group` are added fields. A quarantine release announces the share it restores |
 
 Per-release admin-facing notes for v2.13.0 and newer are in `RELEASE_NOTES.md`,
 one `# file:Heron vX.Y.Z` section each, newest first; older releases live in

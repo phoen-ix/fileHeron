@@ -1,3 +1,99 @@
+# file:Heron v2.33.0
+
+**An admin hears about a virus scan that could not finish, chooses per alert
+type where it reaches them, and several hand-overs between people that led
+nowhere now work.**
+
+**New: a scan that could not finish raises an alarm.** When ClamAV answered
+with an error for an upload (for example "Access denied"), the only trace was a
+log line; an admin learned of it from the sender. Now the audit log records it
+(`file_scan_failed`) and every admin is alerted at once, at most once an hour.
+A scheduled task that cannot be started is alerted the same way.
+
+**New: choose per alert type.** *Account → Notifications* had one row,
+"Operational alerts", for sixteen different things, shown in the bell only. It
+is now one row per alert type, grouped (Antivirus, Storage, Mail, Scheduled
+tasks, Updates, ...), each with its own choice of bell, mail, both or off.
+
+- **Changed default:** what means "something is broken" - a failed scan, ClamAV
+  or Redis not answering, storage low or unreadable, a failing task, failing
+  mail, a failed update - is now **mailed as well** to every admin who never
+  chose. Notices (update scheduled / started / finished, cleanup) stay in the
+  bell, and so do unusual activity and scan-guard blocks, which can arrive by
+  the dozen under attack. An admin who had set "Operational alerts" before
+  keeps that choice for every type until they change one.
+- The bell now says what each alert is; ten of the sixteen read only
+  "Operational alert."
+
+**New: the uploader is told how a quarantine ended.** Someone whose file was
+quarantined heard that, and then nothing. They are now told when an admin
+releases the file ("released from quarantine", with a link to the share) and
+when it is removed - by an admin or by the retention period. Bell and mail by
+default; two new rows under *Account → Notifications* and two new templates
+under *Mail templates*. Your release reason is not passed on.
+
+**New: the share page names the people.** A share's page listed its groups and
+outside addresses but not the people it was sent to. The sender, admins and
+approvers now see their names and roles there; a recipient sees no list, as
+before.
+
+**Changes on the Users page.**
+
+- **Activate account directly** said the person "can sign in via SSO
+  immediately". The account it creates has no password, and an employee or
+  admin is not connected to SSO automatically, so they could not sign in at
+  all. Activating now shows you a **one-time link with which the person sets a
+  password** (valid one hour; *Force password reset* makes another), and the
+  dialog says so.
+- **Force password reset** showed a bare token under "Password reset link". It
+  now shows the link itself.
+
+**Change: the share form does not send during maintenance mode.** It used to
+create the share, then fail the upload, leaving an empty share behind. While
+the maintenance banner is up the form lists it as the reason and the button
+stays disabled.
+
+**Fixes.**
+
+- **A second use works everywhere.** The fault behind "a second recipient
+  cannot be added" existed in other places: the admin setting search stayed
+  shut after Escape, the group page lost the search field and the scroll
+  position on every change, pickers could refill with an outdated answer after
+  a pick, a failed copy still said "Copied", and several forms kept the last
+  values and error after Cancel.
+- **A click beside a label no longer jumps into the field.** A field takes a
+  click on its label's words and on the field itself, not on the help text or
+  the empty space next to the label. The recipient search line is as wide as
+  the other fields.
+- **A released file's share is announced.** Releasing a false positive put the
+  share back but did not tell its recipients when the share was older than two
+  days. They are now told on release.
+- **Someone who must still set up two-factor** got an error on every page from
+  the notification bell asking for data they may not have yet. It waits until
+  they are set up.
+- **A token an admin switched off** is marked "Switched off by an
+  administrator" in its owner's list; it looked untouched while their script
+  was refused.
+- **Secrets and secret requests:** a list showing only open (or active) items
+  told someone whose request had just been answered "You haven't asked for a
+  secret yet". It now says the filter hides what is there and offers **Show
+  all**.
+- **Restoring a configuration backup** failed when the admin restoring it had a
+  notification preference of their own.
+- The **Update** dialog puts the cursor in the password field every time it
+  opens.
+
+## On this update
+
+- A minor release: automatic updates install it only where the update scope is
+  `minor` or `any` (the default is `patch`).
+- One migration, applied automatically: a new table for the per-alert choices.
+  Nothing existing is changed. No step on the host.
+- **Admins will start receiving mail for alarms** (see the changed default
+  above). Each admin can change that per alert type under *Account →
+  Notifications*.
+- No desktop client release.
+
 # file:Heron v2.32.0
 
 **A company's mail scanner no longer uses up a public link, a link's download

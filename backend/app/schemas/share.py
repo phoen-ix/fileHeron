@@ -176,6 +176,15 @@ class FileInShareResponse(APIBaseModel):
     approval_state: str = "approved"
 
 
+class ShareRecipientRef(APIBaseModel):
+    """Compact recipient display info, used to render group/filter UI
+    without a second roundtrip per row."""
+    kind: str  # 'user' or 'group'
+    id: int
+    label: str
+    role: str | None = None  # populated for kind='user'
+
+
 class GroupRecipientRef(APIBaseModel):
     id: int
     name: str
@@ -229,6 +238,11 @@ class ShareResponse(APIBaseModel):
     # `expires_at` is then null. See CreateShareRequest.expires_in_sec.
     expires_in_sec: int | None = None
     recipient_user_ids: list[int]
+    # The people it was sent to, by name and role, for a viewer who may see the
+    # full roster (the creator, an admin, whoever may decide it) - the viewers
+    # the list routes already name them to. Empty for everyone else: a plain
+    # recipient keeps their own id above and gets no roster.
+    recipient_users: list[ShareRecipientRef] = []
     recipient_groups: list[GroupRecipientRef]
     files: list[FileInShareResponse]
     # v1.1.0 per-share download budget. Both null = unlimited.
@@ -293,15 +307,6 @@ class RejectShareRequest(APIBaseModel):
     """Body for `POST /api/shares/{id}/reject` - optional reason shown to the
     sender."""
     reason: str | None = Field(default=None, max_length=1000)
-
-
-class ShareRecipientRef(APIBaseModel):
-    """Compact recipient display info, used to render group/filter UI
-    without a second roundtrip per row."""
-    kind: str  # 'user' or 'group'
-    id: int
-    label: str
-    role: str | None = None  # populated for kind='user'
 
 
 class ShareSenderRef(APIBaseModel):

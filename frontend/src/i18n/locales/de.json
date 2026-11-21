@@ -2378,6 +2378,7 @@
     "created": "Erstellt",
     "total": "Gesamt",
     "files_heading": "Dateien ({n})",
+    "targeted_people": "Personen",
     "targeted_groups": "Gruppen",
     "external_recipients": "Gesendet an (ohne Konto)",
     "external_emailed": "Link per E-Mail gesendet",

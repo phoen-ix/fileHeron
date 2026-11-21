@@ -72,7 +72,9 @@ Click column headers to **sort**; **filter** by recipient/sender/state (default 
 active only)/free text; **group** by recipient or group. On a share's detail page:
 **Edit expiry**, **Expire now** (deletes bytes immediately), **Revoke**, **Add files**
 (creator-only, while active), and the **Public link panel** (create / view / copy /
-revoke).
+revoke). The page names who the share went to - **People**, **Groups** and addresses
+without an account - to its sender, to admins and to approvers; a recipient sees only
+the groups they are in, never the other recipients.
 
 ## Public links (anonymous recipients)
 

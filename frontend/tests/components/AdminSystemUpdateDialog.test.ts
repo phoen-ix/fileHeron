@@ -199,6 +199,29 @@ describe('AdminSystem update dialog - pre-update backup', () => {
     w.unmount()
   })
 
+  // The field carried the `autofocus` attribute. A browser honours that once
+  // per page and not at all while something else has the focus - here the
+  // button that opened the dialog - so the admin had to click into the field.
+  it('puts the focus in the password field every time it opens', async () => {
+    getUpdaterStatus.mockResolvedValue(updaterStatus())
+    const w = await makeWrapper()
+    const field = () => w.find('.fh-modal input[type="password"]').element
+
+    await openDialog(w, 'Update to v1.1.0')
+    expect(document.activeElement).toBe(field())
+
+    await w
+      .findAll('.fh-modal button')
+      .find((b) => b.text() === en.common.cancel)!
+      .trigger('click')
+    expect(w.find('.fh-modal').exists()).toBe(false)
+
+    await openDialog(w, 'Update to v1.1.0')
+    expect(document.activeElement).toBe(field())
+    expect(field().hasAttribute('autofocus')).toBe(false)
+    w.unmount()
+  })
+
   it('rollback offers no backup box', async () => {
     getUpdaterStatus.mockResolvedValue(updaterStatus())
     const w = await makeWrapper()

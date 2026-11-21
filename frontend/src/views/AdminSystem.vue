@@ -272,10 +272,16 @@
     jobPollHandle = setInterval(tick, 2000)
   }
 
+  // Focused by hand on every opening, the way StepUpDialog does. The field
+  // carried `autofocus`, which a browser honours once per page and not at all
+  // while something else has the focus - here the button that opened this.
+  const passwordField = ref<HTMLInputElement | null>(null)
+
   async function openConfirm(kind: 'update' | 'rollback' | 'force') {
     confirming.value = kind
     passwordInput.value = ''
     confirmError.value = null
+    void nextTick(() => passwordField.value?.focus())
     const settingDefault = updaterStatus.value?.backup_default ?? true
     backupBeforeUpdate.value =
       kind === 'force' ? (pendingUpdate.value?.backup ?? settingDefault) : settingDefault
@@ -743,12 +749,12 @@
           <label class="fh-field">
             <span class="fh-field-label">{{ t('common.current_password') }}</span>
             <input
+              ref="passwordField"
               v-model="passwordInput"
               type="password"
               class="fh-field-input"
               autocomplete="current-password"
               required
-              autofocus
             />
           </label>
           <div v-if="confirmError" class="fh-notice" data-tone="error" role="alert">

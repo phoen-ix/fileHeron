@@ -44,6 +44,44 @@ def test_recipient_only_sees_self_creator_sees_all(make_user, db):
     assert set(resp_creator.recipient_user_ids) == {a.id, b.id}
 
 
+def test_the_share_page_names_the_people_to_whoever_the_list_names_them_to(make_user, db):
+    """The detail response carried bare ids, so the share page listed a share's
+    groups and outside addresses but not the PEOPLE it was sent to - while the
+    outbox list one click back showed their names. Same projection, same
+    viewers: the creator, an admin, whoever may decide the share. A plain
+    recipient gets no roster at all, not a roster of themselves."""
+    creator = make_user(email="sender@test.local", role=UserRole.employee, display_name="Sam Sender")
+    admin = make_user(email="boss@test.local", role=UserRole.admin)
+    zoe = make_user(email="zoe@test.local", role=UserRole.client, display_name="Zoe Client")
+    adam = make_user(email="adam@test.local", role=UserRole.employee, display_name="adam Colleague")
+    share = Share(
+        created_by_id=creator.id,
+        kind=ShareKind.outbound,
+        subject=None,
+        message=None,
+        expires_at=_future(),
+        state=ShareState.active,
+    )
+    db.add(share)
+    db.flush()
+    db.add(ShareRecipient(share_id=share.id, recipient_user_id=zoe.id))
+    db.add(ShareRecipient(share_id=share.id, recipient_user_id=adam.id))
+    db.commit()
+
+    for viewer in (creator, admin):
+        people = _to_share_response(db, share, viewer=viewer).recipient_users
+        # By name, whatever order they were added in.
+        assert [(p.kind, p.label, p.role) for p in people] == [
+            ("user", "adam Colleague", "employee"),
+            ("user", "Zoe Client", "client"),
+        ]
+        assert {p.id for p in people} == {zoe.id, adam.id}
+
+    as_recipient = _to_share_response(db, share, viewer=zoe)
+    assert as_recipient.recipient_users == []
+    assert as_recipient.recipient_user_ids == [zoe.id]
+
+
 # --- the same rule on the LIST route ----------------------------------------
 #
 # The projection existed only on the detail serializer. GET /api/shares?box=inbox

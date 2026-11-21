@@ -553,6 +553,20 @@
         </div>
       </div>
 
+      <!-- The people it was sent to. The API names them only to a viewer who
+           may see the full roster; a recipient gets none. -->
+      <div
+        v-if="share.recipient_users && share.recipient_users.length > 0"
+        class="recipient-groups"
+        data-testid="recipient-people"
+      >
+        <span class="group-eyebrow">{{ t('share_detail.targeted_people') }}</span>
+        <span v-for="p in share.recipient_users" :key="p.id" class="group-chip">
+          ◆ {{ p.label }}
+          <span v-if="p.role" class="inbox-flag fh-mono">{{ p.role }}</span>
+        </span>
+      </div>
+
       <div v-if="share.recipient_groups.length > 0" class="recipient-groups">
         <span class="group-eyebrow">{{ t('share_detail.targeted_groups') }}</span>
         <span

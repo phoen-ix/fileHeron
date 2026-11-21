@@ -2378,6 +2378,7 @@
     "created": "Created",
     "total": "Total",
     "files_heading": "Files ({n})",
+    "targeted_people": "People",
     "targeted_groups": "Groups",
     "external_recipients": "Sent to (no account)",
     "external_emailed": "link emailed",

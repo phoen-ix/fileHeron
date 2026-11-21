@@ -98,6 +98,19 @@ def _to_share_response(db: Session, share, *, viewer: User) -> ShareResponse:
     roster = share_svc.RosterVisibility(db, viewer, [share])
     rec_user_ids = [uid for uid in rec_user_ids if roster.allows_user(share.id, uid)]
     rec_groups = [g for g in rec_groups if roster.allows_group(share.id, g.id)]
+    # The same people BY NAME, for the viewers the list routes name them to.
+    # The page showed a share's groups and outside addresses but not who it was
+    # sent to, because all it had were these ids.
+    rec_users: list[ShareRecipientRef] = []
+    if rec_user_ids and roster.may_see_full(share.id):
+        people = db.query(User).filter(User.id.in_(rec_user_ids)).all()
+        rec_users = sorted(
+            (
+                ShareRecipientRef(kind="user", id=u.id, label=u.display_name, role=u.role.value)
+                for u in people
+            ),
+            key=lambda ref: (ref.label.casefold(), ref.id),
+        )
     all_files = list(share.files)
     files = [f for f in all_files if f.state != FileState.deleted]
     files_pending = [
@@ -138,6 +151,7 @@ def _to_share_response(db: Session, share, *, viewer: User) -> ShareResponse:
         created_by_id=share.created_by_id,
         expires_in_sec=share.expires_in_sec,
         recipient_user_ids=rec_user_ids,
+        recipient_users=rec_users,
         recipient_groups=rec_groups,
         files=[
             FileInShareResponse(

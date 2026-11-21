@@ -26,8 +26,10 @@ and EVERY builder of a `ShareRecipientRef` goes through its
 the detail serialiser" is what let a THIRD route (the approvals queue) be built
 without it, so it is pinned **generically** by an AST scan in
 `test_share_recipient_privacy.py`, not by a hand-list of today's routes - do not
-narrow it. List refs carry display names, roles and group names, strictly MORE
-than detail shows a fully privileged viewer.
+narrow it. The detail response names the people too (`recipient_users`, since
+2026-11-21 - the share page listed groups and outside addresses but not who it
+was sent to), only when `roster.may_see_full`: a plain recipient keeps their own
+id in `recipient_user_ids` and gets no roster.
 
 ### Share approval / four-eyes
 

@@ -98,6 +98,38 @@ beforeEach(() => {
   api.getShare.mockReset()
 })
 
+// The page listed a share's groups and outside addresses but not the PEOPLE it
+// was sent to: the detail response carried bare ids (2026-11-21, found by an
+// e2e journey that looked for the two names it had just picked).
+describe('ShareDetail - the people it was sent to', () => {
+  const PEOPLE = [
+    { kind: 'user' as const, id: 7, label: 'Adam Colleague', role: 'employee' },
+    { kind: 'user' as const, id: 8, label: 'Zoe Client', role: 'client' },
+  ]
+
+  it('names them, with their role, beside the groups', async () => {
+    const w = await mountPage(share({ recipient_user_ids: [7, 8], recipient_users: PEOPLE }))
+
+    const block = w.find('[data-testid="recipient-people"]')
+    expect(block.exists()).toBe(true)
+    expect(block.text()).toContain(en.share_detail.targeted_people)
+    const chips = block.findAll('.group-chip').map((c) => c.text().replace(/\s+/g, ' '))
+    expect(chips).toEqual(['◆ Adam Colleague employee', '◆ Zoe Client client'])
+    // The neighbouring blocks still render - the new v-if did not capture them.
+    expect(w.text()).toContain('Finance')
+    expect(w.find('.message').text()).toBe('See attached.')
+  })
+
+  it('shows no such row to a viewer who is sent none, or by an older server', async () => {
+    const recipient = await mountPage(share({ recipient_user_ids: [1], recipient_users: [] }))
+    expect(recipient.find('[data-testid="recipient-people"]').exists()).toBe(false)
+    expect(recipient.text()).toContain('Finance')
+
+    const older = await mountPage(share({ recipient_users: undefined }))
+    expect(older.find('[data-testid="recipient-people"]').exists()).toBe(false)
+  })
+})
+
 describe('ShareDetail - recipients without an account', () => {
   it('lists the addresses the link was mailed to, beside the groups and message', async () => {
     const w = await mountPage(

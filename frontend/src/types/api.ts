@@ -328,6 +328,9 @@ export interface ShareResponse {
   expires_in_sec?: number | null
   created_by_id: number
   recipient_user_ids: number[]
+  /** The people it was sent to, by name and role - only for a viewer who may
+   *  see the full roster (creator, admin, approver); empty for everyone else. */
+  recipient_users?: ShareRecipientRef[]
   recipient_groups: GroupRecipientRef[]
   files: FileInShareResponse[]
   /** v1.1.0 per-share download budget. Both null = unlimited. */

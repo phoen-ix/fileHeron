@@ -77,6 +77,7 @@ from ..models.user import User, UserRole
 from ..models.user_notification_preference import (
     NotificationChannel,
     UserNotificationPreference,
+    UserNotificationTopicPreference,
 )
 from ..models.user_recovery_code import UserRecoveryCode
 from ..models.user_totp import UserTOTP
@@ -440,6 +441,13 @@ def export_users(db: Session, *, mode: str, warnings: list[str]) -> dict:
         {"user_id": p.user_id, "category": p.category.value, "channel": p.channel.value}
         for p in db.query(UserNotificationPreference).all()
     ]
+    topic_prefs = [
+        {
+            "user_id": p.user_id, "category": p.category.value,
+            "topic": p.topic, "channel": p.channel.value,
+        }
+        for p in db.query(UserNotificationTopicPreference).all()
+    ]
     # invite-source connections are sticky and not derivable from group
     # membership, so they must travel in the backup; shared_group rows are
     # recomputed on import instead.
@@ -456,6 +464,7 @@ def export_users(db: Session, *, mode: str, warnings: list[str]) -> dict:
     return {
         "users": users, "user_totp": totp, "user_recovery_codes": recovery,
         "user_webauthn_credentials": webauthn, "user_notification_preferences": prefs,
+        "user_notification_topic_preferences": topic_prefs,
         "client_employee_connections": connections,
     }
 
@@ -1048,6 +1057,10 @@ def _validate_backup_payload(p: dict, actor: User) -> None:
             _ = pref["user_id"]
             NotificationCategory(pref["category"])
             NotificationChannel(pref["channel"])
+        for pref in users.get("user_notification_topic_preferences", []):
+            _ = (pref["user_id"], pref["topic"])
+            NotificationCategory(pref["category"])
+            NotificationChannel(pref["channel"])
         for t in users.get("user_totp", []):
             _ = t["user_id"]
             _ingest_secret_totp(t.get("secret"))
@@ -1501,7 +1514,17 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
             db.query(UserTOTP).filter(UserTOTP.user_id.in_(local_ids)).delete(synchronize_session=False)
             db.query(UserRecoveryCode).filter(UserRecoveryCode.user_id.in_(local_ids)).delete(synchronize_session=False)
             db.query(UserWebAuthnCredential).filter(UserWebAuthnCredential.user_id.in_(local_ids)).delete(synchronize_session=False)
-            db.query(UserNotificationPreference).filter(UserNotificationPreference.user_id.in_(local_ids)).delete(synchronize_session=False)
+            db.flush()
+        # Notification preferences are replaced for EVERY mapped user, the
+        # importing admin included: they are no way to lock anyone out, and the
+        # rows below are inserted for the admin too. Left in place, the
+        # admin's own rows collided with the backup's on the primary key and
+        # the import failed - whenever the importing admin had ever changed a
+        # preference and the backup carried one for the same category.
+        mapped_ids = set(user_id_map.values())
+        if mapped_ids:
+            for model in (UserNotificationPreference, UserNotificationTopicPreference):
+                db.query(model).filter(model.user_id.in_(mapped_ids)).delete(synchronize_session=False)
             db.flush()
         for t in p["users"].get("user_totp", []):
             uid = user_id_map.get(t["user_id"])
@@ -1535,6 +1558,15 @@ def apply_backup(db: Session, *, parsed: ParsedBackup, actor: User, request=None
             db.add(UserNotificationPreference(
                 user_id=uid, category=NotificationCategory(pref["category"]),
                 channel=NotificationChannel(pref["channel"]),
+            ))
+        # Absent from a backup made before the per-topic choice existed.
+        for pref in p["users"].get("user_notification_topic_preferences", []):
+            uid = user_id_map.get(pref["user_id"])
+            if uid is None:
+                continue
+            db.add(UserNotificationTopicPreference(
+                user_id=uid, category=NotificationCategory(pref["category"]),
+                topic=pref["topic"], channel=NotificationChannel(pref["channel"]),
             ))
         db.flush()
 

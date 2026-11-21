@@ -2,7 +2,9 @@
 
 `admin_alerts.OPS_REASONS` names every `reason` an ops alert is sent with; the
 bell picks `notif_bell.headline.ops_alert.<reason>` and falls back to the
-generic line. Until 2026-11-21 nothing tied the two together, and ten of the
+generic line, and the notification preferences list one row per reason
+(`notif_prefs.topic.ops_alert.<reason>`, grouped by `notif_prefs.group.*`).
+Until 2026-11-21 nothing tied the registry to the wording, and ten of the
 sixteen reasons - ClamAV down, Redis down, mail failing, a task that keeps
 failing, both storage alarms - read "Operational alert." and nothing else.
 
@@ -23,9 +25,12 @@ from app.services import admin_alerts
 LOCALES = pathlib.Path(__file__).resolve().parents[2] / "frontend" / "src" / "i18n" / "locales"
 
 
+def _locale(locale: str) -> dict:
+    return json.loads((LOCALES / f"{locale}.json").read_text())
+
+
 def _headlines(locale: str) -> dict[str, str]:
-    data = json.loads((LOCALES / f"{locale}.json").read_text())
-    return data["notif_bell"]["headline"]["ops_alert"]
+    return _locale(locale)["notif_bell"]["headline"]["ops_alert"]
 
 
 @pytest.mark.parametrize("locale", ["en", "de"])
@@ -35,6 +40,16 @@ def test_the_bell_words_every_reason_and_no_other(locale):
     assert all(v.strip() for v in words.values())
     # A reason's own line says more than the fallback.
     assert not [k for k, v in words.items() if k != "generic" and v == words["generic"]]
+
+
+@pytest.mark.parametrize("locale", ["en", "de"])
+def test_the_preferences_name_every_alert_type_and_every_group(locale):
+    """One row per alert type on the notification preferences, under its
+    group's heading (NotificationPreferencesTable.vue)."""
+    prefs = _locale(locale)["notif_prefs"]
+    assert set(prefs["topic"]["ops_alert"]) == set(admin_alerts.OPS_REASONS)
+    assert set(prefs["group"]) == {spec.group for spec in admin_alerts.OPS_REASONS.values()}
+    assert all(v.strip() for v in (*prefs["topic"]["ops_alert"].values(), *prefs["group"].values()))
 
 
 def test_an_unregistered_reason_fails_in_tests_and_is_still_sent_in_production(

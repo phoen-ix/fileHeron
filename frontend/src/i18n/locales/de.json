@@ -1545,6 +1545,36 @@
     "title": "Benachrichtigungen",
     "intro": "Wähle für jedes Ereignis, wie du benachrichtigt werden möchtest. „Beides\" steht für E-Mail und Benachrichtigungsglocke.",
     "locked": "Erforderlich",
+    "group_heading": "Betriebsalarme",
+    "group": {
+      "antivirus": "Virenschutz",
+      "storage": "Speicher",
+      "tasks": "Geplante Aufgaben",
+      "services": "Dienste",
+      "security": "Sicherheit",
+      "updates": "Updates",
+      "housekeeping": "Aufräumen"
+    },
+    "topic": {
+      "ops_alert": {
+        "av_scan_failed": "Ein Upload konnte nicht geprüft werden",
+        "av_unhealthy": "ClamAV antwortet nicht",
+        "storage_critical_low": "Der Speicherplatz ist kritisch knapp",
+        "storage_unreadable": "Der Speicherordner ist nicht lesbar",
+        "cron_failed": "Eine geplante Aufgabe ist fehlgeschlagen",
+        "cron_failing": "Eine geplante Aufgabe schlägt wiederholt fehl",
+        "redis_unhealthy": "Redis antwortet nicht",
+        "smtp_failing": "Der E-Mail-Versand schlägt fehl",
+        "anomaly": "Ungewöhnliche Aktivität erkannt",
+        "scan_guard_block": "Der Scan-Schutz hat eine Adresse gesperrt",
+        "update_failed": "Ein Update ist fehlgeschlagen",
+        "update_auto_scheduled": "Ein automatisches Update wurde geplant",
+        "update_triggered": "Ein Update wurde gestartet",
+        "rollback_triggered": "Ein Rollback wurde gestartet",
+        "update_completed": "Ein Update wurde abgeschlossen",
+        "orphaned_files_reclaimed": "Verwaiste Dateien wurden entfernt"
+      }
+    },
     "channel_for": "Benachrichtigung über, für: {category}",
     "col": {
       "category": "Ereignis",

@@ -19,8 +19,9 @@
   import { useApiError } from '@/composables/useApiError'
   import { useUiStore } from '@/stores/ui'
   import { getPreferences, updatePreferences } from '@/api/notifications'
-  import type { NotificationCategory, NotificationChannel, PreferenceItem } from '@/types/api'
+  import type { NotificationChannel, PreferenceItem } from '@/types/api'
   import { useSavedFlash } from '@/composables/useSavedFlash'
+  import { preferenceKey } from '@/utils/notificationPrefs'
 
   const { t } = useI18n()
   const ui = useUiStore()
@@ -43,20 +44,17 @@
     }
   }
 
-  async function onChange(cat: NotificationCategory, channel: NotificationChannel) {
+  async function onChange(key: string, channel: NotificationChannel) {
     saving.value = true
     // Keep the previous value so a failed save can be rolled back. The select is
     // controlled by `items`, and the local write below only happened on success -
     // but the BROWSER had already moved the dropdown, so a rejected save left the
     // control showing a preference the server does not have, with no error
     // anywhere (audit 2026-07-30, fe-correct-5).
-    const row = items.value.find((i) => i.category === cat)
+    const row = items.value.find((i) => preferenceKey(i) === key)
     const previous = row?.channel
     try {
-      await updatePreferences({ [cat]: channel } as Record<
-        NotificationCategory,
-        NotificationChannel
-      >)
+      await updatePreferences({ [key]: channel })
       // Reflect the saved value locally (the table is now controlled via props).
       if (row) row.channel = channel
       flashSaved()

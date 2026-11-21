@@ -14,10 +14,13 @@ must not fail the action that produced it (services/notification.py) - but it
 RETURNS what happened, so a cron can fold a failed fan-out into its own result
 (`cron_tracker.mark_failed`) and the Scheduled-tasks page shows it.
 
-`OPS_REASONS` names every reason an `ops_alert` is sent for. The bell words
-each one from it (`notif_bell.headline.ops_alert.<reason>`); ten of them read
+`OPS_REASONS` names every reason an `ops_alert` is sent for, with the heading
+it is listed under and where it reaches an admin by default. The bell words
+each one from it (`notif_bell.headline.ops_alert.<reason>`) - ten of them read
 "Operational alert." and nothing else until 2026-11-21, because nothing said
-which reasons existed. `tests/test_ops_alert_reasons.py` reads both sides.
+which reasons existed - and an admin chooses per reason whether it is mailed
+(services/notification_prefs). `tests/test_ops_alert_reasons.py` reads both
+sides.
 """
 from __future__ import annotations
 
@@ -30,40 +33,52 @@ from sqlalchemy.orm import Session
 
 from ..models.notification import NotificationCategory
 from ..models.user import User, UserRole
+from ..models.user_notification_preference import NotificationChannel
 from ..utils.timeutil import utc_now
 from . import alert_dedup
 from . import notification as notif_svc
 
 logger = logging.getLogger("fileheron.admin_alerts")
 
-# Every `payload["reason"]` an ops alert carries.
-OPS_REASONS: frozenset[str] = frozenset(
-    {
-        # Antivirus
-        "av_scan_failed",  # a scan ended without a verdict (workers/av_scan)
-        "av_unhealthy",  # clamd does not answer (ops_check)
-        # Storage
-        "storage_critical_low",
-        "storage_unreadable",
-        # Scheduled tasks
-        "cron_failed",  # one run failed (cron_tracker)
-        "cron_failing",  # a task keeps failing (ops_check)
-        # Services
-        "redis_unhealthy",
-        "smtp_failing",
-        # Security
-        "anomaly",
-        "scan_guard_block",
-        # Updates
-        "update_auto_scheduled",
-        "update_triggered",
-        "rollback_triggered",
-        "update_completed",
-        "update_failed",
-        # Housekeeping
-        "orphaned_files_reclaimed",
-    }
-)
+@dataclass(frozen=True)
+class OpsReason:
+    """One kind of ops alert: the heading the preferences list it under, and
+    where it reaches an admin who has not chosen."""
+
+    group: str
+    default: NotificationChannel
+
+
+# "Something is broken" is mailed AND rings the bell: the bell alone is a dot
+# nobody sees until they open the app, and until 2026-11-21 it was the default
+# for every one of these. "Something happened" rings the bell only - an update
+# alone is three of them. Each admin can change any one of them.
+_ALARM = NotificationChannel.both
+_NOTICE = NotificationChannel.in_app
+
+# Every `payload["reason"]` an ops alert carries, in the order the preferences
+# list them.
+OPS_REASONS: dict[str, OpsReason] = {
+    "av_scan_failed": OpsReason("antivirus", _ALARM),  # a scan ended without a verdict
+    "av_unhealthy": OpsReason("antivirus", _ALARM),  # clamd does not answer (ops_check)
+    "storage_critical_low": OpsReason("storage", _ALARM),
+    "storage_unreadable": OpsReason("storage", _ALARM),
+    "cron_failed": OpsReason("tasks", _ALARM),  # one run failed (cron_tracker)
+    "cron_failing": OpsReason("tasks", _ALARM),  # a task keeps failing (ops_check)
+    "redis_unhealthy": OpsReason("services", _ALARM),
+    "smtp_failing": OpsReason("services", _ALARM),
+    # One per finding, and a distributed attack is many findings an hour: a
+    # mail each is the mailstorm these were bell-only for. A scan-guard block
+    # is opt-in on its own page and one per block.
+    "anomaly": OpsReason("security", _NOTICE),
+    "scan_guard_block": OpsReason("security", _NOTICE),
+    "update_failed": OpsReason("updates", _ALARM),
+    "update_auto_scheduled": OpsReason("updates", _NOTICE),
+    "update_triggered": OpsReason("updates", _NOTICE),
+    "rollback_triggered": OpsReason("updates", _NOTICE),
+    "update_completed": OpsReason("updates", _NOTICE),
+    "orphaned_files_reclaimed": OpsReason("housekeeping", _NOTICE),
+}
 
 # The test suite turns this on (tests/conftest.py): an unregistered reason then
 # raises, so every test that sends an ops alert is a registry test - the way

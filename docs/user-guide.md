@@ -228,7 +228,7 @@ A single scrollable page (left quick-nav with scroll-spy):
 - **Recovery codes** / **Passkeys** - regenerate codes; register/remove WebAuthn authenticators (both ask for your password: a passkey can be your second factor). While passkey sign-in is on, a passkey kept on the device is marked **Signs in without a password** - keep a second one, or an authenticator app, in case you lose that device.
 - **SSO connections** - connect/disconnect OIDC providers (refuses on email mismatch).
 - **Email address** - change your sign-in email (if the admin's [email-change policy](admin-guide.md#policies--settings) allows it), via a confirm-by-email flow.
-- **Notifications** - per-category channel (off / email / in-app / both). Security-critical types (password reset, sign-in alerts) are shown but **locked on**.
+- **Notifications** - per-category channel (off / email / in-app / both). Security-critical types (password reset, sign-in alerts) are shown but **locked on**. Admins also get one row per **operational alert** type, grouped (Antivirus, Storage, Scheduled tasks, Services, Security, Updates, Housekeeping): choose for each whether it is mailed - see the [admin guide](admin-guide.md#operational-alerts).
 - **API tokens** - if policy allows: **Full access** or **Limited** (tick exactly what it may do across *Sharing*, *Files* and *Secrets*); a limited token is refused (`403 INSUFFICIENT_SCOPE`) outside its scopes. Plaintext shown once.
 
 Every email carries a **Manage subscriptions** footer link (and ordinary

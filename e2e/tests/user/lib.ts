@@ -225,6 +225,17 @@ const WORKER = BACKEND.replace(/-backend$/, '-worker')
  * fallback) sends it instead - up to a minute later. */
 export const ANNOUNCED_WITHIN = 75_000
 
+/** One printed mail (utils/emailing.send_email with SMTP unset): its recipient
+ * line, then everything up to its own closing rule.
+ *
+ * Matched on the RECIPIENT LINE and cut at the mail's end. It was "any text
+ * after an EMAIL DEV marker that mentions the address", and the log line
+ * "admin created user <address>" sits after the previous mail - someone
+ * else's. When the poll ran before the worker had printed the right mail, the
+ * test opened that person's link (seen 2026-11-21: the manage page greeted
+ * another user). */
+const PRINTED_MAIL = /EMAIL DEV → (\S+)\n([\s\S]*?)\n={72}/g
+
 /** The newest one-time link `/<kind>/<token>` mailed to `email` (printed by the
  * backend or the worker with SMTP unset - the mail log masks these tokens).
  * Polls: the worker sends notification mails a moment after the request. */
@@ -236,9 +247,9 @@ export async function mailedToken(kind: string, email: string, timeout = 20_000)
         for (const c of [BACKEND, WORKER]) {
           const r = spawnSync('docker', ['logs', c], { maxBuffer: 256 * 1024 * 1024, encoding: 'utf8' })
           if (r.status !== 0) throw new Error(`[e2e] docker logs ${c}: ${r.stderr}`)
-          // One printed mail: "EMAIL DEV -> <to> ..." up to the next one.
-          for (const block of (r.stderr + r.stdout).split('EMAIL DEV').filter((b) => b.includes(email))) {
-            const m = [...block.matchAll(new RegExp(`/${kind}/([A-Za-z0-9._~-]+)`, 'g'))]
+          for (const [, to, body] of (r.stderr + r.stdout).matchAll(PRINTED_MAIL)) {
+            if (to !== email) continue
+            const m = [...body.matchAll(new RegExp(`/${kind}/([A-Za-z0-9._~-]+)`, 'g'))]
             if (m.length) found = m[m.length - 1][1]
           }
         }

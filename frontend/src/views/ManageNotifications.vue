@@ -60,9 +60,10 @@
     updateSubscriptions,
   } from '@/api/notificationSubscriptions'
   import NotificationPreferencesTable from '@/components/NotificationPreferencesTable.vue'
-  import type { NotificationCategory, NotificationChannel, PreferenceItem } from '@/types/api'
+  import type { NotificationChannel, PreferenceItem } from '@/types/api'
   import { asEnvelope } from '@/api/client'
   import { useSavedFlash } from '@/composables/useSavedFlash'
+  import { preferenceKey } from '@/utils/notificationPrefs'
 
   const route = useRoute()
   const { t, te } = useI18n()
@@ -138,7 +139,7 @@
     }
   }
 
-  async function onChange(category: NotificationCategory, channel: NotificationChannel) {
+  async function onChange(key: string, channel: NotificationChannel) {
     saving.value = true
     saveError.value = false
     // The BROWSER has already moved the dropdown by the time this runs, so a
@@ -146,10 +147,10 @@
     // signed-in preferences table fixed (fe-correct-5), missed in this sibling:
     // here it was an unhandled rejection and a select showing a preference the
     // server does not have, on a page with no toast host to fall back on.
-    const row = items.value.find((i) => i.category === category)
+    const row = items.value.find((i) => preferenceKey(i) === key)
     const previous = row?.channel
     try {
-      const { data } = await updateSubscriptions(token.value, { [category]: channel })
+      const { data } = await updateSubscriptions(token.value, { [key]: channel })
       items.value = data.items
       flashSaved()
     } catch {
@@ -162,7 +163,7 @@
 
   async function undo() {
     if (!confirmedCategory.value || !previousChannel.value) return
-    const cat = confirmedCategory.value as NotificationCategory
+    const cat = confirmedCategory.value
     const chan = previousChannel.value
     confirmedCategory.value = null
     previousChannel.value = null

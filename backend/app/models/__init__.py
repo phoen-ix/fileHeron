@@ -55,6 +55,7 @@ from .user import Locale, User, UserRole
 from .user_notification_preference import (
     NotificationChannel,
     UserNotificationPreference,
+    UserNotificationTopicPreference,
 )
 from .user_recovery_code import UserRecoveryCode
 from .user_totp import UserTOTP
@@ -124,6 +125,7 @@ __all__ = [
     "ShareState",
     "User",
     "UserNotificationPreference",
+    "UserNotificationTopicPreference",
     "UserRecoveryCode",
     "UserRole",
     "UserTOTP",

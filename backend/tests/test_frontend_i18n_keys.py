@@ -140,6 +140,8 @@ DYNAMIC_PREFIXES = (
     "admin_email_templates.locale.",
     "notif_bell.cat.",                      # per NotificationCategory
     "notif_bell.headline.",
+    "notif_prefs.topic.",                   # NotificationPreferencesTable: per category + topic
+    "notif_prefs.group.",                   # ... and the heading of a topic's group
     "admin_webhooks.event.",                # per event id (dots -> underscores)
     "api_tokens.scopes.",                   # utils/tokenScopes scopeLabelKey
     "api_tokens.scope_group_",

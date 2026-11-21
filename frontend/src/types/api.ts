@@ -547,6 +547,11 @@ export interface PreferenceItem {
   /** False for operational alerts: changeable on this page, but never by a
    *  one-tap unsubscribe from an email. Distinct from `locked` (read-only). */
   one_click: boolean
+  /** Set on an item of a category chosen per topic - an operational alert's
+   *  reason: which one, and the heading it is listed under. Its key in an
+   *  update is `<category>:<topic>` (utils/notificationPrefs.preferenceKey). */
+  topic?: string | null
+  group?: string | null
 }
 
 export interface PreferencesResponse {

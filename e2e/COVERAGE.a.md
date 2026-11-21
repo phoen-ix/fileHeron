@@ -7,7 +7,7 @@ notifications. The admin console is part b (`COVERAGE.b.md`); the index is `COVE
   ```sh
   sed -n "1,/\/\* admin ---/p;/path: '\/account\/2fa\/forced'/,\$p" frontend/src/router/index.ts | grep -oE "path: '[^']+'"
   ```
-- **Features** (2026-10-30, 97 items; 7 repeated actions added 2026-11-21): the forms, actions, dialogs and error states of the views and
+- **Features** (2026-10-30, 97 items; 7 repeated actions and the per-alert preferences added 2026-11-21): the forms, actions, dialogs and error states of the views and
   components those routes render (`frontend/src/views/{Login,LoginSecondFactor,RegisterFromInvite,ForgotPassword,ResetPassword,EmailVerify,ConfirmEmailChange,CancelEmailChange,Setup,Account,TwoFactorSetup,ShareList,ShareCreate,ShareDetail,Approvals,Secret*,Public*,ManageNotifications,LegalPage,NotFound}.vue`
   and `frontend/src/components/{AppHeader,ApiTokenPanel,WebAuthnPanel,OIDCConnectPanel,NotificationBell,NotificationPreferences,RecipientPicker,FileUploadArea,FileRow,FilePreviewModal,PublicLinkPanel,SecretReveal,SecretAnswerForm}.vue`),
   listed by hand from their `@submit`/`@click` handlers and error branches (`grep -nE "@submit|@click" <file>`).
@@ -17,7 +17,7 @@ notifications. The admin console is part b (`COVERAGE.b.md`); the index is `COVE
   in `e2e/tests/user/` (this part) and the older journeys in `e2e/tests/`. Test ids below are
   `<file under e2e/tests/> › <title>`.
 
-Totals: 30 routes × 4 roles = 120 sweep cells, all ✅. Features: 104 - ✅ 97, ❌ 7 (a 0, b 0, c 7, d 0, e 0).
+Totals: 30 routes × 4 roles = 120 sweep cells, all ✅. Features: 105 - ✅ 98, ❌ 7 (a 0, b 0, c 7, d 0, e 0).
 
 ## Routes × roles (breadth)
 
@@ -121,6 +121,7 @@ Role gate on the admin console for non-admins: `user/sweep.spec.ts › client �
 | C9 | API token: step-up (wrong password in the dialog), shown once, works, revoke | employee | `user/account.spec.ts › API tokens: limited scopes, created behind the password, shown once, used, revoked` | ✅ |
 | C10 | API token scope enforcement | admin | `api-token-scope.spec.ts › a shares:read token is refused on a shares:create call (403)` | ✅ |
 | C11 | Notification preferences per event | client | `user/account.spec.ts › notification preferences save per event` | ✅ |
+| C14 | Operational alerts: one row per alert type, grouped; an alarm mailed by default, a notice not; one type changed and kept; no such rows for a client | admin, client | `user/account.spec.ts › an admin chooses per alert type where an operational alert reaches them` | ✅ |
 | C12 | Passkey added (step-up) and removed | client | `user/account.spec.ts › passkeys: one is added behind the password and removed again` | ✅ |
 | C13 | Section quick-nav | client | ❌ (c) `frontend/tests/components/SectionQuickNav.test.ts` | ❌ |
 

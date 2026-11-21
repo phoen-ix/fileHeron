@@ -1545,6 +1545,36 @@
     "title": "Notifications",
     "intro": "Choose how you'd like to be notified for each event. \"Both\" means email and the bell.",
     "locked": "Required",
+    "group_heading": "Operational alerts",
+    "group": {
+      "antivirus": "Antivirus",
+      "storage": "Storage",
+      "tasks": "Scheduled tasks",
+      "services": "Services",
+      "security": "Security",
+      "updates": "Updates",
+      "housekeeping": "Housekeeping"
+    },
+    "topic": {
+      "ops_alert": {
+        "av_scan_failed": "An upload could not be scanned",
+        "av_unhealthy": "ClamAV is not answering",
+        "storage_critical_low": "Storage is critically low",
+        "storage_unreadable": "The storage folder cannot be read",
+        "cron_failed": "A scheduled task failed",
+        "cron_failing": "A scheduled task keeps failing",
+        "redis_unhealthy": "Redis is not answering",
+        "smtp_failing": "Outgoing mail is failing",
+        "anomaly": "Unusual activity detected",
+        "scan_guard_block": "The scan guard blocked an address",
+        "update_failed": "An update failed",
+        "update_auto_scheduled": "An automatic update was scheduled",
+        "update_triggered": "An update started",
+        "rollback_triggered": "A rollback started",
+        "update_completed": "An update finished",
+        "orphaned_files_reclaimed": "Orphaned files were removed"
+      }
+    },
     "channel_for": "Notify me via, for: {category}",
     "col": {
       "category": "Event",

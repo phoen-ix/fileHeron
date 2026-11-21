@@ -1,7 +1,6 @@
 import api from './client'
 import type {
   MarkReadResponse,
-  NotificationCategory,
   NotificationChannel,
   NotificationListResponse,
   PreferencesResponse,
@@ -33,7 +32,8 @@ export function getPreferences() {
   return api.get<PreferencesResponse>('/notifications/preferences')
 }
 
-export function updatePreferences(preferences: Record<NotificationCategory, NotificationChannel>) {
+/** Keys are `preferenceKey(item)`: a category, or `<category>:<topic>`. */
+export function updatePreferences(preferences: Record<string, NotificationChannel>) {
   return api.put<PreferencesResponse>('/notifications/preferences', {
     preferences,
   })

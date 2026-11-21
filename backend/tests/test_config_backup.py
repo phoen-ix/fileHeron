@@ -167,6 +167,104 @@ def test_users_groups_roundtrip_remaps_fks(db):
     assert tg.id != src_group_id
 
 
+def _prefs(db, user_id):
+    from app.models.user_notification_preference import (
+        UserNotificationPreference,
+        UserNotificationTopicPreference,
+    )
+
+    return (
+        {
+            p.category.value: p.channel.value
+            for p in db.query(UserNotificationPreference).filter_by(user_id=user_id)
+        },
+        {
+            p.topic: p.channel.value
+            for p in db.query(UserNotificationTopicPreference).filter_by(user_id=user_id)
+        },
+    )
+
+
+def test_notification_preferences_roundtrip_per_category_and_per_alert_type(db):
+    from app.models.notification import NotificationCategory
+    from app.models.user_notification_preference import (
+        NotificationChannel,
+        UserNotificationPreference,
+        UserNotificationTopicPreference,
+    )
+
+    ops = User(email="ops@x", password_hash="h", display_name="Ops", role=UserRole.admin)
+    db.add(ops)
+    db.commit()
+    db.add_all([
+        UserNotificationPreference(
+            user_id=ops.id, category=NotificationCategory.share_created,
+            channel=NotificationChannel.email,
+        ),
+        UserNotificationTopicPreference(
+            user_id=ops.id, category=NotificationCategory.ops_alert,
+            topic="av_scan_failed", channel=NotificationChannel.off,
+        ),
+        UserNotificationTopicPreference(
+            user_id=ops.id, category=NotificationCategory.ops_alert,
+            topic="update_completed", channel=NotificationChannel.both,
+        ),
+    ])
+    db.commit()
+
+    tgt, _, _ = _roundtrip(db, categories=["users"])
+
+    restored = tgt.query(User).filter(User.email == "ops@x").one()
+    assert _prefs(tgt, restored.id) == (
+        {"share_created": "email"},
+        {"av_scan_failed": "off", "update_completed": "both"},
+    )
+
+
+def test_the_importing_admins_own_preferences_are_replaced_by_the_backups(db):
+    """The import leaves the importing admin's 2FA alone (they must be able to
+    sign in again) - and it left their notification preferences in place too,
+    then inserted the backup's on top: a primary-key collision that failed the
+    whole import whenever both sides held a row for the same category."""
+    from app.models.notification import NotificationCategory
+    from app.models.user_notification_preference import (
+        NotificationChannel,
+        UserNotificationPreference,
+        UserNotificationTopicPreference,
+    )
+
+    # The same person on both sides: the backup's admin IS the importing admin.
+    src_admin = _admin(db)
+    db.add_all([
+        UserNotificationPreference(
+            user_id=src_admin.id, category=NotificationCategory.ops_alert,
+            channel=NotificationChannel.both,
+        ),
+        UserNotificationTopicPreference(
+            user_id=src_admin.id, category=NotificationCategory.ops_alert,
+            topic="av_scan_failed", channel=NotificationChannel.email,
+        ),
+    ])
+    db.commit()
+
+    def seed(tgt, actor):
+        tgt.add_all([
+            UserNotificationPreference(
+                user_id=actor.id, category=NotificationCategory.ops_alert,
+                channel=NotificationChannel.in_app,
+            ),
+            UserNotificationTopicPreference(
+                user_id=actor.id, category=NotificationCategory.ops_alert,
+                topic="av_scan_failed", channel=NotificationChannel.off,
+            ),
+        ])
+        tgt.commit()
+
+    tgt, actor, _ = _roundtrip(db, categories=["users"], seed_target=seed)
+
+    assert _prefs(tgt, actor.id) == ({"ops_alert": "both"}, {"av_scan_failed": "email"})
+
+
 def test_purge_unlisted_users_but_keep_importing_admin(db):
     kept = User(email="keep@x", password_hash="h", display_name="K", role=UserRole.client)
     db.add(kept)

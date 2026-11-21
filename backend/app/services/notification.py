@@ -53,12 +53,12 @@ _DEFAULT_CHANNEL: dict[NotificationCategory, NotificationChannel] = {
     # Session-cap eviction: in_app only by default (informational; the user
     # can re-login any time). Users can opt into email via preferences.
     NotificationCategory.session_evicted: NotificationChannel.in_app,
-    # Ops alerts: in-app only by default. On a busy system these fire in
-    # bursts (cron retries, transient SMTP/AV issues); emailing each one
-    # would mailstorm the admin's inbox. The /admin/system view + the
-    # bell SSE rail are where operators look anyway. Admins can flip to
-    # `both` via their notification preferences if they want pages.
-    NotificationCategory.ops_alert: NotificationChannel.in_app,
+    # Ops alerts are chosen PER REASON (admin_alerts.OPS_REASONS: an alarm is
+    # mailed, a routine notice rings the bell). This is only what a reason
+    # nobody registered falls back to, and an alarm nobody registered is
+    # still an alarm. It was `in_app` for all of them until 2026-11-21: a
+    # failed antivirus scan would have been a dot on a bell nobody watched.
+    NotificationCategory.ops_alert: NotificationChannel.both,
     # New-release detected. Default `both` so admins get the email even
     # without opening the app; dedup at the call site means at most one
     # notification per detected version transition.
@@ -81,14 +81,17 @@ _DEFAULT_CHANNEL: dict[NotificationCategory, NotificationChannel] = {
 
 
 def _channel_for(
-    db: Session, user_id: int, category: NotificationCategory
+    db: Session, user_id: int, category: NotificationCategory, payload: dict[str, Any]
 ) -> NotificationChannel:
     # Delegated to the shared prefs layer so locked (security) categories
-    # always resolve to their default channel regardless of any stored row.
+    # always resolve to their default channel regardless of any stored row,
+    # and a category chosen per topic (an ops alert's reason) is looked up by it.
     # Lazy import: notification_prefs imports _DEFAULT_CHANNEL from here.
     from . import notification_prefs
 
-    return notification_prefs.effective_channel(db, user_id, category)
+    return notification_prefs.effective_channel(
+        db, user_id, category, topic=notification_prefs.topic_of(category, payload)
+    )
 
 
 def _wants_email(channel: NotificationChannel) -> bool:
@@ -214,7 +217,7 @@ def dispatch(
         )
         return None
 
-    channel = _channel_for(db, user.id, category)
+    channel = _channel_for(db, user.id, category, payload)
 
     notif: Notification | None = None
     # Always write an in-app row when the channel is email-only too; the bell

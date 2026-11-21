@@ -16,6 +16,12 @@ both need:
 
 Defaults live in `services/notification.py::_DEFAULT_CHANNEL` and are reused
 here so there's a single source of truth.
+
+One category is chosen per TOPIC: `ops_alert`, by its `reason`
+(`admin_alerts.OPS_REASONS`). It was a single row for sixteen different alarms
+and notices. Its topics are listed one row each, keyed `ops_alert:<reason>` in
+an update, and stored in `user_notification_topic_preferences`; a category row
+stored before the split stays the fallback for every topic without a row.
 """
 from __future__ import annotations
 
@@ -29,8 +35,27 @@ from ..models.user import User, UserRole
 from ..models.user_notification_preference import (
     NotificationChannel,
     UserNotificationPreference,
+    UserNotificationTopicPreference,
 )
+from . import admin_alerts
 from .notification import _DEFAULT_CHANNEL
+
+# `<category>:<topic>` in an update's keys.
+TOPIC_SEP = ":"
+
+
+def topics_of(category: NotificationCategory) -> dict[str, admin_alerts.OpsReason]:
+    """The topics a category's preference is chosen per, with each one's group
+    and default; empty for a category with one preference."""
+    return admin_alerts.OPS_REASONS if category == NotificationCategory.ops_alert else {}
+
+
+def topic_of(category: NotificationCategory, payload: dict) -> str | None:
+    """The topic one notification belongs to: an ops alert's `reason`."""
+    if category != NotificationCategory.ops_alert:
+        return None
+    reason = payload.get("reason")
+    return reason if isinstance(reason, str) else None
 
 # Security-critical categories. They appear in the manage UI (so the user knows
 # they exist) but can never be switched off - disabling them would suppress
@@ -80,6 +105,10 @@ class PrefRow:
     # one-tap unsubscribe from an email. Separate from `locked` because a
     # locked row is also READ-ONLY, and these are not.
     one_click: bool = True
+    # Set on a row of a category chosen per topic: which one, and the heading
+    # the list puts it under.
+    topic: str | None = None
+    group: str | None = None
 
 
 def _default_channel(category: NotificationCategory) -> NotificationChannel:
@@ -111,10 +140,35 @@ def list_preferences(db: Session, user: User) -> list[PrefRow]:
         .all()
     )
     by_cat = {r.category: r.channel for r in rows}
+    by_topic = {
+        (r.category, r.topic): r.channel
+        for r in db.query(UserNotificationTopicPreference)
+        .filter(UserNotificationTopicPreference.user_id == user.id)
+        .all()
+    }
     hidden = hidden_categories(db, user)
     out: list[PrefRow] = []
+    # Listed AFTER every single-row category: they come in groups under
+    # headings, and a plain row following the last group read as part of it.
+    grouped: list[PrefRow] = []
     for cat in NotificationCategory:
         if cat in hidden:
+            continue
+        topics = topics_of(cat)
+        if topics:
+            # One row per topic, none for the category itself. A category-wide
+            # choice from before the split is what a topic without a row shows.
+            grouped.extend(
+                PrefRow(
+                    category=cat,
+                    channel=by_topic.get((cat, topic)) or by_cat.get(cat) or spec.default,
+                    locked=False,
+                    one_click=cat not in NO_ONE_CLICK_CATEGORIES,
+                    topic=topic,
+                    group=spec.group,
+                )
+                for topic, spec in topics.items()
+            )
             continue
         locked = cat in LOCKED_CATEGORIES
         channel = _default_channel(cat) if locked else by_cat.get(cat, _default_channel(cat))
@@ -126,7 +180,7 @@ def list_preferences(db: Session, user: User) -> list[PrefRow]:
                 one_click=cat not in NO_ONE_CLICK_CATEGORIES,
             )
         )
-    return out
+    return out + grouped
 
 
 def _set(db: Session, user_id: int, category: NotificationCategory, channel: NotificationChannel) -> None:
@@ -146,17 +200,44 @@ def _set(db: Session, user_id: int, category: NotificationCategory, channel: Not
         existing.channel = channel
 
 
+def _set_topic(
+    db: Session, user_id: int, category: NotificationCategory, topic: str, channel: NotificationChannel
+) -> None:
+    existing = (
+        db.query(UserNotificationTopicPreference)
+        .filter(
+            UserNotificationTopicPreference.user_id == user_id,
+            UserNotificationTopicPreference.category == category,
+            UserNotificationTopicPreference.topic == topic,
+        )
+        .one_or_none()
+    )
+    if existing is None:
+        db.add(
+            UserNotificationTopicPreference(
+                user_id=user_id, category=category, topic=topic, channel=channel
+            )
+        )
+    else:
+        existing.channel = channel
+
+
 def update_preferences(db: Session, user: User, prefs: dict[str, str]) -> None:
     """Validate + upsert. Rejects unknown/hidden categories, unknown channels,
-    and any attempt to change a LOCKED category. Caller commits."""
+    and any attempt to change a LOCKED category. A key is a category, or
+    `<category>:<topic>` for one topic of a category chosen per topic. Caller
+    commits."""
     hidden = hidden_categories(db, user)
     valid_cats = {c.value for c in NotificationCategory if c not in hidden}
     valid_chans = {c.value for c in NotificationChannel}
     locked_vals = {c.value for c in LOCKED_CATEGORIES}
 
-    for cat_key, chan_val in prefs.items():
-        if cat_key not in valid_cats:
-            raise AppError(400, "INVALID_CATEGORY", f"Unknown notification category: {cat_key}")
+    for key, chan_val in prefs.items():
+        cat_key, _, topic = key.partition(TOPIC_SEP)
+        if cat_key not in valid_cats or (
+            topic and topic not in topics_of(NotificationCategory(cat_key))
+        ):
+            raise AppError(400, "INVALID_CATEGORY", f"Unknown notification category: {key}")
         if chan_val not in valid_chans:
             raise AppError(400, "INVALID_CHANNEL", f"Unknown channel: {chan_val}")
         if cat_key in locked_vals:
@@ -165,8 +246,13 @@ def update_preferences(db: Session, user: User, prefs: dict[str, str]) -> None:
                 "This notification is required for account security and cannot be disabled.",
             )
 
-    for cat_key, chan_val in prefs.items():
-        _set(db, user.id, NotificationCategory(cat_key), NotificationChannel(chan_val))
+    for key, chan_val in prefs.items():
+        cat_key, _, topic = key.partition(TOPIC_SEP)
+        category, channel = NotificationCategory(cat_key), NotificationChannel(chan_val)
+        if topic:
+            _set_topic(db, user.id, category, topic, channel)
+        else:
+            _set(db, user.id, category, channel)
 
 
 def unsubscribe_category(db: Session, user: User, category_value: str) -> NotificationChannel:
@@ -209,13 +295,29 @@ def unsubscribe_category(db: Session, user: User, category_value: str) -> Notifi
 
 
 def effective_channel(
-    db: Session, user_id: int, category: NotificationCategory
+    db: Session, user_id: int, category: NotificationCategory, topic: str | None = None
 ) -> NotificationChannel:
     """Delivery channel the dispatcher should use. Locked categories ALWAYS
     resolve to their default channel, ignoring any stored row - so a user who
-    previously turned a security alert off still receives it."""
+    previously turned a security alert off still receives it.
+
+    With a `topic` (an ops alert's reason): the user's choice for that topic,
+    else their choice for the whole category, else the topic's own default."""
     if category in LOCKED_CATEGORIES:
         return _default_channel(category)
+    spec = topics_of(category).get(topic) if topic is not None else None
+    if spec is not None:
+        chosen = (
+            db.query(UserNotificationTopicPreference)
+            .filter(
+                UserNotificationTopicPreference.user_id == user_id,
+                UserNotificationTopicPreference.category == category,
+                UserNotificationTopicPreference.topic == topic,
+            )
+            .one_or_none()
+        )
+        if chosen is not None:
+            return chosen.channel
     pref = (
         db.query(UserNotificationPreference)
         .filter(
@@ -226,4 +328,4 @@ def effective_channel(
     )
     if pref is not None:
         return pref.channel
-    return _default_channel(category)
+    return spec.default if spec is not None else _default_channel(category)

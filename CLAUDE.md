@@ -144,6 +144,7 @@ Per-table models are the source; non-obvious facts only. **BigInteger PK** on hi
 
 - `refresh_tokens` - `replaced_by_id` self-FK = rotation chain; reuse → revoke whole family.
 - `group_members` / `client_employee_connections` - composite PKs; membership dynamic (affects past group-targeted shares immediately).
+- `user_notification_topic_preferences` - composite PK (user, category, topic); a finer choice INSIDE a category, beside `user_notification_preferences` and never instead of it (a category row is the fallback for its topics). Only `ops_alert` has topics.
 - **`files.sha256_hex` is direct-upload-only and verified nowhere** - see the docstring in `models/file.py`. NULL for every tus upload, so the SPA's sha badge never renders above 100 MB. The digest that IS load-bearing for integrity is the approval `content_fingerprint`.
 
 ### Design system
@@ -252,6 +253,7 @@ One doc per subsystem in `docs/engineering/`. They are not auto-loaded. **Before
 - Every notification goes through `notification.dispatch` - no direct `notifications` writes or `send_email_job` enqueues.
 - Mail headers are set in `utils/emailing.build_message`, and From goes through `formataddr`: the colon in file:Heron makes an f-string RFC 5322 group syntax.
 - Three unsubscribe tiers (`LOCKED_CATEGORIES`, `NO_ONE_CLICK_CATEGORIES`, the rest); the guard is `notification_prefs.unsubscribe_category`.
+- `ops_alert` is chosen per reason, not per category: one preference row per `admin_alerts.OPS_REASONS` entry (`ops_alert:<reason>`, table `user_notification_topic_preferences`), alarms defaulting to `both` and notices to `in_app`; a stored category row stays the fallback. A new reason needs its registry line, its bell headline and its preference label in both locales (`tests/test_ops_alert_reasons.py`).
 - An auth token in a mail must keep the canonical path form, or `mail_log` masking silently fails.
 - Every template slug ships four files (`test_email_template_matrix.py`).
 - A route authenticated by a signed `?token=` (the SSE streams) must stay outside `_gate`.

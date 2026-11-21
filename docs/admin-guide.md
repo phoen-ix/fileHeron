@@ -91,6 +91,36 @@ alerting are independent**.
   4xx capture ceiling is tunable on Advanced (`error_log.scan_capture_per_min`) if a
   scan burst exceeds the default.
 
+## Operational alerts
+
+What the instance tells its admins about itself. Each one rings the **bell**, and by
+default the ones that mean **something is broken are also mailed**; routine notices
+ring the bell only. Every admin chooses per alert type under **Account →
+Notifications** (off / email / in-app / both) - one row each, grouped as below. They can
+be changed there, never by a one-tap unsubscribe from a mail. Repeats are limited:
+at most one alert per type per hour while a condition lasts.
+
+| Group | Alert | Default |
+|---|---|---|
+| Antivirus | An upload could not be scanned (ClamAV answered an error, or the scan crashed; the file stays "Scanning" and is retried hourly) | email + bell |
+| Antivirus | ClamAV is not answering | email + bell |
+| Storage | Storage is critically low (uploads pause) | email + bell |
+| Storage | The storage folder cannot be read | email + bell |
+| Scheduled tasks | A scheduled task failed | email + bell |
+| Scheduled tasks | A scheduled task keeps failing, or could not be started | email + bell |
+| Services | Redis is not answering | email + bell |
+| Services | Outgoing mail is failing | email + bell |
+| Security | Unusual activity detected (one per finding; an attack can produce many) | bell |
+| Security | The scan guard blocked an address (only if switched on there) | bell |
+| Updates | An update failed | email + bell |
+| Updates | Automatic update scheduled · update started · rollback started · update finished | bell |
+| Housekeeping | Orphaned files were removed | bell |
+
+An admin who had set the single "Operational alerts" row before it was split keeps that choice
+for every type until they change one. Server errors (5xx) and new releases are their
+own rows, as before; the mail for a failed task is sent once, by whichever of this and
+[Error log & alerts](#error-log--alerts-adminerror-log--adminsettingserror-alerts) mails that admin.
+
 ## Webhooks (`/admin/settings/webhooks`)
 
 Register outbound webhook subscriptions (events such as share/file lifecycle) and

@@ -217,6 +217,41 @@ test('notification preferences save per event', async ({ page }) => {
   await expect(page.locator('#notifications').getByRole('combobox').first()).toHaveValue(next)
 })
 
+// "Operational alerts" was one row for sixteen different alarms and notices,
+// bell-only by default: a failed antivirus scan would have been a dot on a
+// bell (2026-11-20). An admin now has one row per alert type.
+test('an admin chooses per alert type where an operational alert reaches them', async ({ page, browser }) => {
+  const admin = await newUser('admin', 'alertprefs')
+  await signIn(page, admin)
+  await page.goto('/account')
+  const prefs = page.locator('#notifications')
+  const forAlert = (name: string) =>
+    prefs.getByRole('combobox', { name: `Notify me via, for: ${name}`, exact: true })
+
+  // Grouped, an alarm mailed by default and a routine notice not.
+  await expect(prefs.getByRole('columnheader', { name: 'Operational alerts · Antivirus' })).toBeVisible()
+  await expect(prefs.getByRole('columnheader', { name: 'Operational alerts · Updates' })).toBeVisible()
+  await expect(forAlert('An upload could not be scanned')).toHaveValue('both')
+  await expect(forAlert('ClamAV is not answering')).toHaveValue('both')
+  await expect(forAlert('An update finished')).toHaveValue('in_app')
+
+  // One type changed; its neighbours stay.
+  await forAlert('An update finished').selectOption('both')
+  await expect(prefs.getByText('Saved.')).toBeVisible()
+  await forAlert('An upload could not be scanned').selectOption('in_app')
+  await page.reload()
+  await expect(forAlert('An update finished')).toHaveValue('both')
+  await expect(forAlert('An upload could not be scanned')).toHaveValue('in_app')
+  await expect(forAlert('ClamAV is not answering')).toHaveValue('both')
+
+  // Nobody but an admin has these rows.
+  const client = await session(browser, await newUser('client', 'noalerts'))
+  await client.goto('/account')
+  await expect(client.locator('#notifications').getByRole('combobox').first()).toBeVisible()
+  await expect(client.locator('#notifications').getByText('Operational alerts')).toHaveCount(0)
+  await client.context().close()
+})
+
 test('passkeys: one is added behind the password and removed again', async ({ page }) => {
   const p = await newUser('client', 'passkey')
   const cdp = await page.context().newCDPSession(page)

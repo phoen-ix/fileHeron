@@ -19,6 +19,11 @@ class PreferenceItem(APIBaseModel):
     # False for operational alerts: changeable here, but never by a one-tap
     # unsubscribe from an email. Distinct from `locked`, which is read-only.
     one_click: bool = True
+    # A category chosen per topic (ops_alert, by reason) has one item per
+    # topic: which one, and the heading the list groups it under. Its key in
+    # an update is `<category>:<topic>`.
+    topic: str | None = None
+    group: str | None = None
 
     @classmethod
     def from_row(cls, row) -> PreferenceItem:
@@ -34,6 +39,8 @@ class PreferenceItem(APIBaseModel):
             channel=row.channel,
             locked=row.locked,
             one_click=row.one_click,
+            topic=row.topic,
+            group=row.group,
         )
 
 

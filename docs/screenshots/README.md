@@ -110,9 +110,9 @@ Files, subject, message, people and groups as recipients, the expiry and an opti
 
 ## A share (`/share/…`)
 
-Its files with their scan verdicts, preview, download and delete actions, and the public link panel.
+Who it went to - people and groups, shown to the sender, admins and approvers - its files with their scan verdicts, preview, download and delete actions, and the public link panel.
 
-<img src="share-page.png" alt="A share: its files with their scan verdicts, preview, download and delete actions, and the public link panel." width="800">
+<img src="share-page.png" alt="A share: who it went to, its files with their scan verdicts, preview, download and delete actions, and the public link panel." width="800">
 
 ## The same share in German
 

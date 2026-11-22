@@ -141,7 +141,10 @@ test('sessions: revoke one, then sign out all others', async ({ page, browser })
   const b = await session(browser, p)
   await signIn(page, p)
   await page.goto('/account')
-  await expect(page.locator('#sessions').getByText('current')).toBeVisible()
+  // Exact: the help text above the list also says "current" ("its current
+  // access token"), so the loose match was that paragraph until the list had
+  // loaded - and two elements, a strict-mode failure, once it had.
+  await expect(page.locator('#sessions').getByText('current', { exact: true })).toBeVisible()
   await expect(page.locator('#sessions').getByRole('button', { name: 'Revoke' })).toHaveCount(2)
 
   await page.locator('#sessions').getByRole('button', { name: 'Revoke' }).first().click()

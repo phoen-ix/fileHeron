@@ -53,6 +53,12 @@ _ACTION = re.compile(
 _RETRY_BLOCK = re.compile(r"expect\(\s*async\s*\(\)\s*=>\s*\{(.*?)\}\s*\)\s*\.toPass\(", re.S)
 
 E2E_RULES: dict[str, re.Pattern[str]] = {
+    # A click, and in the next statement the page is left. Nobody presses Save
+    # and reloads in the same instant - and the reload cancels the request the
+    # click just started. Two use cases did (2026-11-22): green on a fast
+    # machine, red on the release tag's run, whose tag cannot be moved. Wait
+    # for what the person sees (the "Saved." toast) in between.
+    "click-then-leave": re.compile(r"\.click\(\)\n\s*await [\w.]+\.(?:reload|goto)\("),
     "blur": re.compile(r"\.blur\(\)"),
     "wait": re.compile(r"\bwaitForTimeout\("),
     "force": re.compile(r"\bforce:\s*true"),
@@ -166,6 +172,13 @@ def test_the_scan_catches_what_it_is_for():
     }
     assert _unit_findings("el.dispatchEvent(new FocusEvent('blur'))") == {"focus-ctor": 1}
     assert _e2e_findings("await row.click({ force: true })") == {"force": 1}
+    left_at_once = "  await page.getByRole('button', { name: 'Save' }).click()\n  await page.reload()\n"
+    assert _e2e_findings(left_at_once) == {"click-then-leave": 1}
+    waited = (
+        "  await page.getByRole('button', { name: 'Save' }).click()\n"
+        "  await expect(toast(page, 'Saved.')).toBeVisible()\n  await page.reload()\n"
+    )
+    assert _e2e_findings(waited) == {}
 
     # What the use cases replaced: the outcome read from the API, the account
     # signed in through it, the newest token taken from the log.

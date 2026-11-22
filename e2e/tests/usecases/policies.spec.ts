@@ -335,6 +335,7 @@ test('U21 a storage quota the admin sets on a person stops their next upload, wi
   await openUser(adminPage, person.email)
   await adminPage.getByLabel('Quota (bytes)').fill('10')
   await adminPage.getByRole('button', { name: 'Save' }).click()
+  await expect(toast(adminPage, 'Saved.')).toBeVisible()
   await adminPage.reload()
   await expect(adminPage.getByLabel('Quota (bytes)')).toHaveValue('10')
 

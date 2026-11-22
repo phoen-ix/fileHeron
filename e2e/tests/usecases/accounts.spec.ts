@@ -322,6 +322,9 @@ test('U7 a role the admin changes is the app the person gets', async ({ page, br
   await openUser(adminPage, person.email)
   await adminPage.getByLabel('Role').selectOption('employee')
   await adminPage.getByRole('button', { name: 'Save' }).click()
+  // Wait for what the admin sees before leaving the page: a reload in the same
+  // instant cancels the save on its way out (it did, on a slower machine).
+  await expect(toast(adminPage, 'Saved.')).toBeVisible()
   await adminPage.reload()
   await expect(adminPage.getByLabel('Role')).toHaveValue('employee')
 
@@ -331,6 +334,7 @@ test('U7 a role the admin changes is the app the person gets', async ({ page, br
 
   await adminPage.getByLabel('Role').selectOption('client')
   await adminPage.getByRole('button', { name: 'Save' }).click()
+  await expect(toast(adminPage, 'Saved.')).toBeVisible()
   await adminPage.reload()
   await expect(adminPage.getByLabel('Role')).toHaveValue('client')
   await page.reload()

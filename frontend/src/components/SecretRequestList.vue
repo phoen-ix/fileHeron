@@ -144,8 +144,13 @@
     closed: ['fulfilled', 'cancelled', 'expired'],
     all: [],
   }
+  // What each box opens on. "Asked by me" is where you follow what happened to
+  // a request, so it shows them all: it opened on Open, and a request dropped
+  // out of it the moment it was answered. "Asked of me" is what you still have
+  // to do, so it keeps Open.
+  const OPENS_ON: Record<'mine' | 'asked', StateFilter> = { mine: 'all', asked: 'open' }
   const box = ref<'mine' | 'asked'>('mine')
-  const stateFilter = ref<StateFilter>('open')
+  const stateFilter = ref<StateFilter>(OPENS_ON[box.value])
   const q = ref('')
 
   const { hiddenByFilter, check } = useHiddenByFilter()
@@ -167,6 +172,10 @@
       ),
     )
 
+  // Before the reloading watcher, so a box switch is one load with its filter.
+  watch(box, (b) => {
+    stateFilter.value = OPENS_ON[b]
+  })
   watch([box, stateFilter], resetAndLoad)
   useDebouncedSearch(q, resetAndLoad)
 

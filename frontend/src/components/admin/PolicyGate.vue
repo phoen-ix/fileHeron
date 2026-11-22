@@ -29,8 +29,13 @@
       groups: string
       /** Pill on the company-inbox group; omitted = no pill. */
       inbox?: string
+      /** Beside a listed client under `staffOnly`. */
+      notStaff?: string
     }
     groups: GroupResponse[]
+    /** The policy is for employees and admins only (share approval): clients
+     *  are not offered, and one already on the list is marked. */
+    staffOnly?: boolean
   }>()
   const emit = defineEmits<{ 'update:modelValue': [value: PolicyGateValue<M>] }>()
   const { t } = useI18n()
@@ -47,6 +52,7 @@
   const { query, suggestions, addUser, removeUser } = usePolicyAllowlist({
     users: () => props.modelValue.users,
     setUsers: (users) => update({ users }),
+    exclude: (u) => props.staffOnly && u.role === 'client',
   })
 
   function toggleGroup(g: PolicyGateGroup) {
@@ -76,6 +82,12 @@
         <li v-for="u in modelValue.users" :key="u.id" class="picked-row">
           <span class="row-name">{{ u.display_name }}</span>
           <span class="fh-mono row-hint">{{ u.email }} · {{ u.role }}</span>
+          <span
+            v-if="staffOnly && u.role === 'client' && labels.notStaff"
+            class="fh-field-error not-staff"
+            data-testid="not-staff"
+            >{{ labels.notStaff }}</span
+          >
           <button type="button" class="fh-btn-text danger" @click="removeUser(u.id)">
             {{ t('common.remove') }}
           </button>

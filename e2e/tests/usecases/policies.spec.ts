@@ -11,6 +11,7 @@ import {
   given,
   openUser,
   pickRecipient,
+  receivedUnderAnyState,
   signIn,
   signOut,
   test,
@@ -50,7 +51,7 @@ test('U17 two-factor required for a role: the person is sent to enrol, finishes,
     const person = await given.user('client', 'mustenrol')
     const adminPage = await browserOf(browser, THE_ADMIN)
     await adminPage.goto('/admin/settings/twofa')
-    await adminPage.getByRole('checkbox', { name: 'Clients' }).check()
+    await adminPage.getByRole('checkbox', { name: 'Clients', exact: true }).check()
     await adminPage.getByRole('button', { name: 'Save' }).click()
     await expect(toast(adminPage, '2FA enforcement policy saved.')).toBeVisible()
 
@@ -109,10 +110,10 @@ test('U18 share approval switched on: a new share is held until an approver deci
     await page.getByRole('button', { name: 'View share' }).click()
     await expect(page.getByText('This share is awaiting approval.')).toBeVisible()
 
+    // Not in the recipient's list in ANY state: the list opens on "Active",
+    // where a held share would be missing whatever the server gave out.
     const theirs = await browserOf(browser, recipient)
-    await theirs.goto('/inbox')
-    await expect(theirs.getByRole('heading', { level: 1, name: 'Received' })).toBeVisible()
-    await expect(theirs.getByText(subject)).toHaveCount(0)
+    await expect(await receivedUnderAnyState(theirs, subject)).toHaveCount(0)
 
     await adminPage.goto('/approvals')
     await adminPage.locator('li.queue-row', { hasText: subject }).getByRole('link', { name: 'Review' }).click()
@@ -228,7 +229,7 @@ test.describe('U19 a policy decides what a person is offered', () => {
   })
 })
 
-test('U20 maintenance mode: people see the banner and the form will not send; switched off, it does', async ({
+test('U20 maintenance mode: people see the banner and neither form will send; switched off, both do', async ({
   page,
   browser,
 }) => {
@@ -236,6 +237,8 @@ test('U20 maintenance mode: people see the banner and the form will not send; sw
   const already = await given.user('employee', 'formopen')
   const colleague = await given.user('employee', 'aftermaint')
   const message = `Back at noon ${uid()}`
+  // A share the person sent earlier, to add a file to.
+  const existing = await given.share(person, { users: [colleague.id], files: { 'first.txt': 'first' } })
   await during('/api/admin/settings/maintenance', async () => {
     // Someone has the form open, filled in, before it starts.
     const openForm = await browserOf(browser, already)
@@ -258,6 +261,14 @@ test('U20 maintenance mode: people see the banner and the form will not send; sw
     await expect(page.getByTestId('submit-blockers')).toContainText('Maintenance mode is on: sending is paused.')
     await expect(page.getByRole('button', { name: 'Create + send' })).toBeDisabled()
 
+    // Adding a file to a share they already sent: the same answer, before
+    // anything is uploaded.
+    await page.goto(`/share/${existing.id}`)
+    await page.getByTestId('add-files-toggle').click()
+    await page.locator('input.dropzone-input').setInputFiles(file('second.txt', 'second'))
+    await expect(page.getByTestId('add-files-blocked')).toContainText('Maintenance mode is on: sending is paused.')
+    await expect(page.getByTestId('add-files-submit')).toBeDisabled()
+
     // The form that was already open knows nothing of it: the server refuses
     // the file, and the form shows the reason.
     await send(openForm, `During maintenance ${uid()}`)
@@ -278,6 +289,13 @@ test('U20 maintenance mode: people see the banner and the form will not send; sw
     await pickRecipient(page, colleague.name)
     await send(page, `After maintenance ${uid()}`)
     await expect(page.getByText('All files sent')).toBeVisible({ timeout: 30_000 })
+
+    await page.goto(`/share/${existing.id}`)
+    await page.getByTestId('add-files-toggle').click()
+    await page.locator('input.dropzone-input').setInputFiles(file('second.txt', 'second'))
+    await expect(page.getByTestId('add-files-blocked')).toHaveCount(0)
+    await page.getByTestId('add-files-submit').click()
+    await expect(toast(page, 'Added 1 file to the share.')).toBeVisible({ timeout: 30_000 })
     await adminPage.context().close()
   })
 })

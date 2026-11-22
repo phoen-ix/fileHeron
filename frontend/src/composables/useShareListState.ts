@@ -2,7 +2,7 @@ import { computed, nextTick, onScopeDispose, ref, watch } from 'vue'
 import type { ComputedRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { listGroups } from '@/api/groups'
+import { listMyGroups, listRecipientTargetGroups } from '@/api/groups'
 import { listShares } from '@/api/shares'
 import { searchUsers } from '@/api/users'
 import { useApiError } from '@/composables/useApiError'
@@ -177,9 +177,15 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
     partyGroup.value = null
     userQuery.value = ''
     if (partyKind.value === 'group' && myGroups.value.length === 0) {
+      // Received narrows "via group" to the groups the viewer is IN (the server
+      // answers nothing for any other); Sent filters by a group the share was
+      // addressed to, so the groups the viewer may address. This loaded the
+      // admin's list of every group: 403 for everyone else, swallowed here, so
+      // the filter offered an employee or a client nothing at all.
+      const forBox = box.value
       try {
-        const { data } = await listGroups()
-        myGroups.value = data.items
+        const { data } = await (forBox === 'inbox' ? listMyGroups() : listRecipientTargetGroups())
+        if (forBox === box.value) myGroups.value = data.items
       } catch {
         /* leave empty */
       }
@@ -260,6 +266,8 @@ export function useShareListState(box: ComputedRef<'outbox' | 'inbox'>) {
     try {
       page.value = 1
       clearParty()
+      // The other box offers other groups.
+      myGroups.value = []
       groupBy.value = 'none'
       stateFilter.value = DEFAULT_STATE_FILTER
       subjectQuery.value = ''

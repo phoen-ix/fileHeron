@@ -30,7 +30,7 @@ deduplicated to once per 6 h). After login you land on your **default landing pa
 
 <img src="screenshots/share-new.png" alt="The new-share form: three files queued, a subject and message, a person and a group as recipients, and a seven-day expiry" width="640">
 
-1. **Pick recipients** - search shows who you may send to (employees see all employees + connected clients; clients see connected employees + any company-inbox group). Pick a **group** to address every current member (membership changes retroactively change who can read it).
+1. **Pick recipients** - search shows who you may send to: an employee finds every colleague and the clients connected to them, plus their own groups and every company-inbox group. (A client picks no recipients - what a client sends goes to the organisation; for a secret, a client finds the employees connected to them.) Pick a **group** to address every current member (membership changes retroactively change who can read it).
 2. **Drop files** - under 100 MB go via one multipart POST; larger use resumable TUS (close the tab and resume later from the same browser). Total is capped by your quota. **Folders** keep their structure: drop a folder, or use **Choose a folder**, and the share page lists the files under their folders, the public link page too, and **Download all (ZIP)** recreates the tree.
 3. **Subject** (optional) - defaults to the first file's name.
 4. **Expiry** (required) - a preset ("1 hour", "7 days", ...) counts from when the files are **ready to download**, so a long upload never eats into it; a date and time you type stays exact. A share is never expired while an upload into it is still running. After the expiry passes, the hourly cleanup deletes the bytes.
@@ -202,10 +202,11 @@ request**: every other link stops working, and the answer arrives as a secret th
 only you can open (you are told in-app and by mail). If you set a **passphrase**
 when asking, the answer is encrypted to it: nobody, the server included, can open
 it without that passphrase, and nobody has to pass a passphrase to you. Requests
-are under **Secrets → Requests** (*Asked by me* / *Asked of me*). The list opens on
-the *Open* ones, and an answered request is *Closed*: when the filter hides
-everything the list says so and offers **Show all** (the secrets lists do the
-same for *Active*). You can cancel an
+are under **Secrets → Requests**. *Asked by me* shows every request you made,
+whatever became of it; *Asked of me* opens on the ones you can still answer. The
+secrets lists work the same way: *Sent* shows every secret you sent, *Received*
+the ones you can still open. Where a filter hides everything, the list says so
+and offers **Show all**. You can cancel an
 open one, copy its links again, and discard the answer unread. An unanswered
 request expires at its time and you are told.
 

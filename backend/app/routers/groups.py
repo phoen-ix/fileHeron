@@ -71,6 +71,26 @@ def _detail_response(db: Session, group) -> GroupDetailResponse:
     )
 
 
+@router.get("/mine", response_model=GroupListResponse)
+def my_groups(
+    db: Session = Depends(get_db),
+    me: User = Depends(require_scope("shares:read")),
+) -> GroupListResponse:
+    """The groups the caller is a member of. Open to all roles: a member sees
+    their group's name on every share addressed to it anyway. The Received
+    list's "via group" filter offers these - the server answers nothing for a
+    group the caller is not in."""
+    groups = (
+        db.query(Group)
+        .join(GroupMember, GroupMember.group_id == Group.id)
+        .filter(GroupMember.user_id == me.id)
+        .order_by(Group.name, Group.id)
+        .all()
+    )
+    counts = _count_members_bulk(db, [g.id for g in groups])
+    return GroupListResponse(items=[_to_response(g, counts.get(g.id, 0)) for g in groups])
+
+
 @router.get("/recipient-targets", response_model=GroupListResponse)
 def recipient_targets(
     db: Session = Depends(get_db),

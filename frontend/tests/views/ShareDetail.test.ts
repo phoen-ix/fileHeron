@@ -28,7 +28,7 @@ vi.mock('@/composables/useUpload', async () => {
   const { computed, ref } = await import('vue')
   return {
     useUpload: () => ({
-      items: ref([]),
+      items: ref([{ uid: 'u1', file: { name: 'a.bin', size: 1 }, state: 'queued' }]),
       isActive: computed(() => false),
       log: ref([]),
       add: vi.fn(),
@@ -41,6 +41,7 @@ vi.mock('@/composables/useUpload', async () => {
 })
 
 import { useAuthStore } from '@/stores/auth'
+import { useSiteStore } from '@/stores/site'
 import type { MeResponse, ShareResponse } from '@/types/api'
 import ShareDetail from '@/views/ShareDetail.vue'
 
@@ -171,5 +172,43 @@ describe('ShareDetail - recipients without an account', () => {
     const w = await mountPage(share({ expires_at: null, expires_in_sec: 3600 }))
     expect(w.text()).toContain('1 hour after the files are ready')
     expect(w.text()).not.toContain(en.expiry.never_label)
+  })
+})
+
+// The server refuses every upload in maintenance mode, and the new-share form
+// says so before sending. "+ Add files" on an existing share did not: the file
+// was sent, failed, and only then gave the reason (2026-11-22).
+describe('ShareDetail - adding files during maintenance mode', () => {
+  beforeEach(() => {
+    useAuthStore().user = { id: 1, role: 'employee' } as MeResponse
+  })
+
+  async function openPanel() {
+    const w = await mountPage(share())
+    await w.get('[data-testid="add-files-toggle"]').trigger('click')
+    return w
+  }
+
+  it('does not send, and says why', async () => {
+    useSiteStore().maintenance = { enabled: true, message: '' }
+    const w = await openPanel()
+
+    expect(w.get('[data-testid="add-files-submit"]').attributes('disabled')).toBeDefined()
+    const reason = w.get('[data-testid="add-files-blocked"]')
+    expect(reason.text()).toBe(en.share_create.blockers.maintenance)
+    expect(w.get('[data-testid="add-files-submit"]').attributes('aria-describedby')).toBe(
+      reason.attributes('id'),
+    )
+
+    useSiteStore().maintenance = { enabled: false, message: '' }
+    await flushPromises()
+    expect(w.find('[data-testid="add-files-blocked"]').exists()).toBe(false)
+    expect(w.get('[data-testid="add-files-submit"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('sends as before when there is no maintenance', async () => {
+    const w = await openPanel()
+    expect(w.find('[data-testid="add-files-blocked"]').exists()).toBe(false)
+    expect(w.get('[data-testid="add-files-submit"]').attributes('disabled')).toBeUndefined()
   })
 })

@@ -38,3 +38,8 @@ export function removeMember(groupId: number, userId: number) {
 export function listRecipientTargetGroups() {
   return api.get<GroupListResponse>('/groups/recipient-targets')
 }
+
+/** The groups the caller is a member of - any role. */
+export function listMyGroups() {
+  return api.get<GroupListResponse>('/groups/mine')
+}

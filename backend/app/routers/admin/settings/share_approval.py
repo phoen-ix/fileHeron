@@ -16,7 +16,7 @@ from ....dependencies import get_current_admin, get_db
 from ....middleware.errors import AppError
 from ....models.audit_log import AuditEventType
 from ....models.group import Group
-from ....models.user import User
+from ....models.user import User, UserRole
 from ....schemas.share_approval_settings import (
     ApproverGroupRef,
     ApproverUserRef,
@@ -75,6 +75,24 @@ def update_share_approval_settings(
     policy_gate.assert_ids_exist(
         db, user_ids=payload.approver_user_ids or [], group_ids=payload.approver_group_ids or []
     )
+    # `can_approve` ignores a client whatever this list says; refused here so
+    # the admin learns it where they entered it, not from an approver who
+    # never gets the queue.
+    if payload.approver_user_ids:
+        clients = [
+            row[0]
+            for row in db.query(User.id)
+            .filter(User.id.in_(payload.approver_user_ids), User.role == UserRole.client)
+            .order_by(User.id)
+            .all()
+        ]
+        if clients:
+            raise AppError(
+                400,
+                "APPROVER_MUST_BE_STAFF",
+                "Only employees and admins can approve shares. Remove the clients from the list.",
+                details={"client_user_ids": clients},
+            )
 
     # Refuse a combination that can never queue anything. "Every employee may
     # approve" plus "an approver's own shares are exempt" cancel each other out:

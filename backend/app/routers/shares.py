@@ -127,11 +127,21 @@ def _to_share_response(db: Session, share, *, viewer: User) -> ShareResponse:
     # asymmetry is the feature: with content review off an approver may open the
     # share and cast the vote, but a filename is content and stays hidden.
     # "Aligning" this line to the view predicate is the leak.
+    #
+    # Nor are they told that such a file EXISTS: the ids below and the digest
+    # over them went to every viewer, the page counted them in a banner, and so
+    # a recipient learned of unreleased content before the mail that announces
+    # added files. Only the people who act on it are told: the owner, and
+    # whoever decides - including an approver who may not read the content.
+    knows_of_pending = False
     if files_pending:
         may_see_pending = (
             viewer.id == share.created_by_id
             or share_approval_svc.can_review_added_files(db, viewer)
             or viewer.role == UserRole.admin
+        )
+        knows_of_pending = may_see_pending or share_approval_svc.can_decide_added_files(
+            db, viewer, share
         )
         if not may_see_pending:
             files = [
@@ -184,10 +194,10 @@ def _to_share_response(db: Session, share, *, viewer: User) -> ShareResponse:
         # withholding it there would make the endpoint unusable.
         content_fingerprint=(
             share_approval_svc.content_fingerprint(db, share)
-            if share.state == ShareState.pending_approval or files_pending
+            if share.state == ShareState.pending_approval or knows_of_pending
             else None
         ),
-        files_awaiting_review=files_pending,
+        files_awaiting_review=files_pending if knows_of_pending else [],
         external_recipients=(
             external_svc.addresses(db, share.id)
             if roster.may_see_full(share.id)
@@ -452,6 +462,12 @@ def list_shares(
     for s in rows:
         all_files = list(s.files)
         files = [f for f in all_files if f.state != FileState.deleted]
+        # The count and the size are of what the viewer can be shown: a file
+        # still awaiting review is the owner's and the approvers' business (the
+        # page withholds it the same way), and the list said "3 files" beside
+        # a page showing two.
+        if s.created_by_id != user.id and user.role != UserRole.admin:
+            files = [f for f in files if f.approval_state != FileApprovalState.pending_review]
         sender: ShareSenderRef | None = None
         if box == "inbox":
             su = users_by_id.get(s.created_by_id)

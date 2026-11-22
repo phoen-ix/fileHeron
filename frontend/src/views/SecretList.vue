@@ -36,7 +36,12 @@
     ended: ['burned', 'expired', 'revoked'],
     all: [],
   }
-  const stateFilter = ref<StateFilter>('active')
+  // What each box opens on. Sent is where you follow what happened to a
+  // secret, so it shows them all: it opened on Active, and a secret dropped
+  // out of it the moment it was read. Received is what you can still open.
+  const OPENS_ON: Record<'received' | 'sent', StateFilter> = { received: 'active', sent: 'all' }
+  const opensOn = (b: Box): StateFilter => OPENS_ON[b === 'sent' ? 'sent' : 'received']
+  const stateFilter = ref<StateFilter>(opensOn(box.value))
   const q = ref('')
 
   const { hiddenByFilter, check } = useHiddenByFilter()
@@ -71,6 +76,10 @@
     if (next !== box.value) router.replace({ name: 'secrets', query: { box: next } })
   }
 
+  // Before the reloading watcher, so a box switch is one load with its filter.
+  watch(box, (b) => {
+    stateFilter.value = opensOn(b)
+  })
   watch([box, stateFilter], resetAndLoad)
   useDebouncedSearch(q, resetAndLoad)
 

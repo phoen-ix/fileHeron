@@ -80,7 +80,8 @@ def resolve_approver_policy(db: Session) -> tuple[str, list[int], list[int]]:
 def can_approve(db: Session, user: User) -> bool:
     """True if ``user`` may approve/reject pending shares. Admin always passes
     (operator escape hatch); otherwise the feature must be on, and the base mode
-    plus the additive user/group allowlist decide.
+    plus the additive user/group allowlist decide - for an employee. A client
+    is never an approver.
 
     The admin check sits ABOVE the feature switch on purpose. Turning approval
     off does not un-queue the shares already waiting: their senders cannot
@@ -91,6 +92,13 @@ def can_approve(db: Session, user: User) -> bool:
     flipped."""
     if user.role == UserRole.admin:
         return True
+    # Staff only. The allowlist takes any user and any group, and
+    # `policy_gate.passes` asks no role - a client named on it, or a member of
+    # a listed group, saw every recipient's name on staff shares and reviewed
+    # their files. Here rather than in the shared gate: the API-token and
+    # public-link policies may well list a client.
+    if user.role != UserRole.employee:
+        return False
     if not is_enabled(db):
         return False
     from . import policy_gate

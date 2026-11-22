@@ -28,6 +28,7 @@
   import { useUploadLeaveGuard } from '@/composables/useUploadLeaveGuard'
   import { createSettledRegistrar } from '@/composables/settledRegistrar'
   import { useAuthStore } from '@/stores/auth'
+  import { useSiteStore } from '@/stores/site'
   import { useUiStore } from '@/stores/ui'
   import type { FileInShareResponse, ShareResponse } from '@/types/api'
   import { formatBytes } from '@/utils/bytes'
@@ -238,6 +239,13 @@
       share.value = data
     },
   })
+
+  // The server refuses every upload in maintenance mode. Said here, before the
+  // file is sent, the way the new-share form says it: this panel uploaded, was
+  // refused, and only then gave the reason. Same flag as the banner; the
+  // server's refusal still covers a panel that was open when it was set.
+  const site = useSiteStore()
+  const addBlockedByMaintenance = computed(() => site.maintenance?.enabled === true)
 
   function startAddFiles() {
     addRegistrar.clear()
@@ -745,12 +753,27 @@
           <input v-model="notifyOnAdd" type="checkbox" />
           <span class="toggle-name">{{ t('share_detail.add_files_notify') }}</span>
         </label>
+        <p
+          v-if="addBlockedByMaintenance"
+          id="add-files-blocked"
+          class="fh-notice"
+          data-tone="warn"
+          data-testid="add-files-blocked"
+        >
+          {{ t('share_create.blockers.maintenance') }}
+        </p>
         <div class="edit-expiry-actions">
           <button
             type="button"
             class="fh-btn"
             data-testid="add-files-submit"
-            :disabled="addingBusy || addUpload.isActive.value || addUpload.items.value.length === 0"
+            :disabled="
+              addingBusy ||
+              addUpload.isActive.value ||
+              addUpload.items.value.length === 0 ||
+              addBlockedByMaintenance
+            "
+            :aria-describedby="addBlockedByMaintenance ? 'add-files-blocked' : undefined"
             @click="onUploadAdded"
           >
             {{

@@ -143,6 +143,8 @@ export async function session(browser: Browser, p?: Persona): Promise<Page> {
 }
 
 export interface ShareOpts {
+  /** `inbound` is what a client sends: to the organisation, with no recipients. */
+  kind?: 'outbound' | 'inbound'
   users?: number[]
   groups?: number[]
   emails?: string[]
@@ -161,7 +163,7 @@ export async function createShare(token: string, o: ShareOpts = {}): Promise<{ i
     apiFetch(token, '/api/shares', {
       method: 'POST',
       body: JSON.stringify({
-        kind: 'outbound',
+        kind: o.kind ?? 'outbound',
         recipients: { user_ids: o.users ?? [], group_ids: o.groups ?? [], emails: o.emails ?? [] },
         expires_at: o.expiresAt ?? null,
         subject: o.subject ?? `E2E share ${uid()}`,

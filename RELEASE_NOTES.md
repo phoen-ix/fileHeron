@@ -48,10 +48,25 @@ before.
 - **Force password reset** showed a bare token under "Password reset link". It
   now shows the link itself.
 
-**Change: the share form does not send during maintenance mode.** It used to
-create the share, then fail the upload, leaving an empty share behind. While
-the maintenance banner is up the form lists it as the reason and the button
-stays disabled.
+**Change: nothing is sent during maintenance mode.** The new-share form used
+to create the share, then fail the upload, leaving an empty share behind; "+ Add
+files" on an existing share uploaded and then failed. While the maintenance
+banner is up both name it as the reason and their buttons stay disabled.
+
+**Change: only employees and admins approve shares.** The list of additional
+approvers accepted any person and any group, and a client on it - or in a
+listed group - became an approver: they saw every recipient's name on staff
+shares and could review the files. A client now never approves. The approval
+settings offer no client for the list and refuse to save one; if a client is
+on your list today, they stop approving with this update, and the page marks
+them so you can remove them.
+
+**Change: recipients are not told about files that still await approval.** With
+share approval on, a file added to an approved share waits for its own
+decision. Its name was already hidden from recipients, but their share page
+showed a notice counting such files and their Received list counted them in.
+Recipients now see neither until the file is released; the sender and the
+approvers see it as before.
 
 **Fixes.**
 
@@ -74,10 +89,15 @@ stays disabled.
 - **A token an admin switched off** is marked "Switched off by an
   administrator" in its owner's list; it looked untouched while their script
   was refused.
-- **Secrets and secret requests:** a list showing only open (or active) items
-  told someone whose request had just been answered "You haven't asked for a
-  secret yet". It now says the filter hides what is there and offers **Show
-  all**.
+- **Secrets and secret requests:** *Sent* and *Asked by me* now open showing
+  everything; they opened on active / open items only, so a secret dropped out
+  the moment it was read and a request the moment it was answered - and the
+  list then said "You haven't asked for a secret yet". *Received* and *Asked of
+  me* still open on what is left to do, and say when that hides what is there,
+  with **Show all**.
+- **The "Via group" filter** of the Sent and Received lists offered no groups
+  to anyone but an admin. It now offers the groups you are in (Received) or
+  may send to (Sent).
 - **Restoring a configuration backup** failed when the admin restoring it had a
   notification preference of their own.
 - The **Update** dialog puts the cursor in the password field every time it
@@ -92,6 +112,9 @@ stays disabled.
 - **Admins will start receiving mail for alarms** (see the changed default
   above). Each admin can change that per alert type under *Account →
   Notifications*.
+- **If clients are on your approver list** (*Sharing & files → Share approval*),
+  they stop approving with this update. Check that enough employees or admins
+  remain to approve.
 - No desktop client release.
 
 # file:Heron v2.32.0

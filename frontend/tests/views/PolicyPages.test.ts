@@ -47,7 +47,9 @@ import AdminSettingsPublicLinks from '@/views/AdminSettingsPublicLinks.vue'
 import AdminSettingsShareApproval from '@/views/AdminSettingsShareApproval.vue'
 
 const ADA = { id: 5, display_name: 'Ada', email: 'ada@test.local', role: 'employee' }
-const BOB = { user_id: 6, display_name: 'Bob', email: 'bob@test.local', role: 'client' }
+// Staff: the share-approval page offers no client (approvers are staff only).
+const BOB = { user_id: 6, display_name: 'Bob', email: 'bob@test.local', role: 'employee' }
+const CLEO = { user_id: 7, display_name: 'Cleo', email: 'cleo@test.local', role: 'client' }
 
 interface Page {
   name: string
@@ -67,7 +69,11 @@ const PAGES: Page[] = [
     component: AdminSettingsApiTokens,
     load: api.getTokenPolicy,
     save: api.updateTokenPolicy,
-    response: (mode) => ({ mode, allowed_users: [ADA], allowed_groups: [{ id: 1, name: 'design' }] }),
+    response: (mode) => ({
+      mode,
+      allowed_users: [ADA],
+      allowed_groups: [{ id: 1, name: 'design' }],
+    }),
     modeKey: 'mode',
     usersKey: 'allowed_user_ids',
     groupsKey: 'allowed_group_ids',
@@ -193,13 +199,36 @@ describe.each(PAGES)('$name policy page', (page) => {
 
   it('does not suggest someone already on the list', async () => {
     api.searchUsers.mockResolvedValue({
-      data: { items: [{ user_id: 5, display_name: 'Ada', email: 'ada@test.local', role: 'employee' }] },
+      data: {
+        items: [{ user_id: 5, display_name: 'Ada', email: 'ada@test.local', role: 'employee' }],
+      },
     })
     const w = await mountPage(page, 'admins_only')
     await w.find('section.allowlist input[type="search"]').setValue('ad')
     await new Promise((r) => setTimeout(r, 250))
     await flushPromises()
     expect(w.find('.user-suggest').exists()).toBe(false)
+  })
+})
+
+describe('a client in the search results', () => {
+  it('is offered on the token and public-link pages, never as an approver', async () => {
+    const offered: Record<string, string[]> = {}
+    for (const page of PAGES) {
+      api.searchUsers.mockResolvedValue({ data: { items: [BOB, CLEO] } })
+      const w = await mountPage(page, 'admins_only')
+      await w.find('section.allowlist input[type="search"]').setValue('xx')
+      await new Promise((r) => setTimeout(r, 250))
+      await flushPromises()
+      offered[page.name] = w.findAll('.user-suggest .row-name').map((n) => n.text())
+    }
+    const approval = PAGES.filter((p) => p.component === AdminSettingsShareApproval).map(
+      (p) => p.name,
+    )
+    expect(approval).toHaveLength(1)
+    for (const [name, names] of Object.entries(offered)) {
+      expect(names, name).toEqual(approval.includes(name) ? ['Bob'] : ['Bob', 'Cleo'])
+    }
   })
 })
 

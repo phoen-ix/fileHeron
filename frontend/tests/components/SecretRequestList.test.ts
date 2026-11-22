@@ -1,8 +1,10 @@
-/* The request list opens on "Open". Someone whose one request had just been
- * answered - it is "Closed" now - was told "You haven't asked for a secret
- * yet." (found by the secret-request use case, 2026-11-21). An empty list says
- * that only when the box really is empty; otherwise it says the filter hides
- * what is there, and offers to show it. */
+/* Each box opens on what it is for. "Asked by me" is where you follow a
+ * request, so it shows them all: it opened on "Open", and someone whose one
+ * request had just been answered - "Closed" now - was told "You haven't asked
+ * for a secret yet." (found by the secret-request use case, 2026-11-21).
+ * "Asked of me" is what is left to do, so it keeps "Open"; when that hides
+ * everything the list says so and offers to show it, and says "nobody has
+ * asked" only when the box really is empty. */
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
@@ -58,25 +60,61 @@ beforeEach(() => {
   listSecretRequests.mockReset()
 })
 
-describe('SecretRequestList empty state', () => {
-  it('says the filter hides a request that was answered, and shows it on request', async () => {
+const filter = (w: Awaited<ReturnType<typeof mountList>>) =>
+  (w.get('select').element as HTMLSelectElement).value
+
+describe('SecretRequestList', () => {
+  it('shows every request I made, an answered one included', async () => {
     boxHolding([answered])
     const w = await mountList()
 
+    expect(filter(w)).toBe('all')
+    expect(w.text()).toContain('Router password')
     expect(w.text()).not.toContain("You haven't asked for a secret yet.")
+  })
+
+  it('opens "Asked of me" on what is still open, and says when that hides what is there', async () => {
+    boxHolding([answered])
+    const w = await mountList()
+    await w.get('[data-testid="requests-asked"]').trigger('click')
+    await flushPromises()
+
+    expect(filter(w)).toBe('open')
+    expect(w.text()).not.toContain('Nobody has asked you for a secret.')
     expect(w.text()).toContain('No request matches this filter.')
 
     await w.get('[data-testid="requests-show-all"]').trigger('click')
     await flushPromises()
     expect(w.text()).toContain('Router password')
-    expect((w.get('select').element as HTMLSelectElement).value).toBe('all')
+    expect(filter(w)).toBe('all')
+
+    // Back on "Asked by me" and over again: each box returns to its own default.
+    await w.get('[data-testid="requests-mine"]').trigger('click')
+    await w.get('[data-testid="requests-asked"]').trigger('click')
+    await flushPromises()
+    expect(filter(w)).toBe('open')
   })
 
-  it('says nothing was asked yet only when the box is empty', async () => {
+  it('says nothing was asked only when the box is empty', async () => {
     boxHolding([])
     const w = await mountList()
-
     expect(w.text()).toContain("You haven't asked for a secret yet.")
+    await w.get('[data-testid="requests-asked"]').trigger('click')
+    await flushPromises()
+    expect(w.text()).toContain('Nobody has asked you for a secret.')
     expect(w.find('[data-testid="requests-show-all"]').exists()).toBe(false)
+  })
+
+  it('loads once per box switch, with that box and its filter', async () => {
+    boxHolding([answered])
+    const w = await mountList()
+    listSecretRequests.mockClear()
+    await w.get('[data-testid="requests-asked"]').trigger('click')
+    await flushPromises()
+
+    const pages = listSecretRequests.mock.calls
+      .map(([p]) => p as Params)
+      .filter((p) => p.page_size !== 1)
+    expect(pages.map((p) => [p.box, p.state])).toEqual([['asked', ['open']]])
   })
 })

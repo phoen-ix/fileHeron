@@ -135,13 +135,13 @@ test('2FA enforcement: a required role is enforced; passkey sign-in switches', a
       body: JSON.stringify({ user_ids: [member.id] }),
     })
     await page.goto('/admin/settings/twofa')
-    await page.getByRole('checkbox', { name: 'Clients' }).check()
+    await page.getByRole('checkbox', { name: 'Clients', exact: true }).check()
     await page.getByRole('checkbox', { name: group.name }).check()
     await page.getByTestId('passkey-signin-switch').check()
     await page.getByRole('button', { name: 'Save' }).click()
     await expect(toast(page, '2FA enforcement policy saved.')).toBeVisible()
     await page.reload()
-    await expect(page.getByRole('checkbox', { name: 'Clients' })).toBeChecked()
+    await expect(page.getByRole('checkbox', { name: 'Clients', exact: true })).toBeChecked()
     await expect(page.getByTestId('passkey-signin-switch')).toBeChecked()
 
     const c = await newUser('client', 'twofa')

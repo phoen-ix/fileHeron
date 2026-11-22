@@ -74,6 +74,9 @@ export const given = {
   connected: connect,
   /** A share `owner` already sent, with its files scanned. */
   share: async (owner: Persona, opts: ShareOpts = {}) => createShare(await tokenOf(owner), opts),
+  /** What a client already handed in: it goes to the organisation. */
+  submission: async (client: Persona, opts: ShareOpts = {}) =>
+    createShare(await tokenOf(client), { ...opts, kind: 'inbound' }),
   /** A setting as it stood before, to put back afterwards. */
   settings: setSettings,
   settingsBack: restoreSettings,
@@ -155,6 +158,27 @@ export async function download(page: Page, trigger: Locator): Promise<{ name: st
   const chunks: Buffer[] = []
   for await (const c of await dl.createReadStream()) chunks.push(c as Buffer)
   return { name: dl.suggestedFilename(), text: Buffer.concat(chunks).toString('latin1') }
+}
+
+/** A person's Received list with EVERY state shown, and the row for
+ * `subject` in it. The list opens on "Active", so "it is not in my list" on
+ * the default view says nothing about what the server gives out: a held or an
+ * ended share is missing there either way. */
+export async function receivedUnderAnyState(page: Page, subject: string): Promise<Locator> {
+  await page.goto('/inbox')
+  await page.getByRole('combobox', { name: 'Any state' }).selectOption('')
+  await expect(page.getByText('Loading…')).toHaveCount(0)
+  await expect(page.getByRole('heading', { level: 1, name: 'Received' })).toBeVisible()
+  return page.locator('tbody tr', { hasText: subject })
+}
+
+/** Open a share by its address as someone it is not for: the page says so and
+ * shows nothing of it. */
+export async function expectRefused(page: Page, shareId: string, ...hidden: string[]): Promise<void> {
+  await page.goto(`/share/${shareId}`)
+  await expect(page.getByRole('alert')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Download', exact: true })).toHaveCount(0)
+  for (const text of hidden) await expect(page.getByText(text)).toHaveCount(0)
 }
 
 export async function signOut(page: Page): Promise<void> {

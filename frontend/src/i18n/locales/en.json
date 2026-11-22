@@ -1251,7 +1251,7 @@
   },
   "admin_share_approval": {
     "allowlist_heading": "Additional approvers",
-    "allowlist_help": "Optionally add specific users or groups as approvers on top of the base set above.",
+    "allowlist_help": "Optionally add specific employees or groups as approvers on top of the base set above. Only employees and admins can approve: clients are not offered here, and a client in a listed group never approves.",
     "enable_help": "When off, shares go live immediately as before.",
     "enable_label": "Require approval for new shares",
     "exempt_help": "When on, a share created by someone who can approve goes live immediately (no self-approval, no deadlock).",
@@ -1266,6 +1266,7 @@
       "employees_admins_help": "Any employee or admin can approve or reject shares."
     },
     "mode_label": "Who can approve",
+    "not_staff": "A client cannot approve. Remove them to save.",
     "review_help": "When on, approvers can preview or download a pending share's files to inspect them before deciding.",
     "review_label": "Approvers can review file contents",
     "saved_toast": "Share-approval policy saved.",

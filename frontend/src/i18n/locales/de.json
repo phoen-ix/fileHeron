@@ -1251,7 +1251,7 @@
   },
   "admin_share_approval": {
     "allowlist_heading": "Zusätzliche Genehmiger",
-    "allowlist_help": "Optional bestimmte Benutzer oder Gruppen zusätzlich zur Basis oben als Genehmiger hinzufügen.",
+    "allowlist_help": "Optional bestimmte Benutzer oder Gruppen zusätzlich zur Basis oben als Genehmiger hinzufügen. Nur Mitarbeiter und Admins können genehmigen: Kunden werden hier nicht angeboten, und ein Kunde in einer gewählten Gruppe genehmigt nie.",
     "enable_help": "Wenn deaktiviert, gehen Freigaben wie bisher sofort live.",
     "enable_label": "Genehmigung für neue Freigaben verlangen",
     "exempt_help": "Wenn aktiviert, geht eine Freigabe, die von einem Genehmiger erstellt wurde, sofort live (keine Selbst-Genehmigung, kein Deadlock).",
@@ -1266,6 +1266,7 @@
       "employees_admins_help": "Jeder Mitarbeiter oder Admin kann Freigaben genehmigen oder ablehnen."
     },
     "mode_label": "Wer darf genehmigen",
+    "not_staff": "Ein Kunde kann nicht genehmigen. Zum Speichern entfernen.",
     "review_help": "Wenn aktiviert, können Genehmiger die Dateien einer ausstehenden Freigabe vor der Entscheidung ansehen oder herunterladen.",
     "review_label": "Genehmiger dürfen Dateiinhalte prüfen",
     "saved_toast": "Freigabe-Genehmigungsrichtlinie gespeichert.",

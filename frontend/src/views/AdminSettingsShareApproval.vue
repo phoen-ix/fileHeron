@@ -107,6 +107,7 @@
     users: t('admin_share_approval.users_label'),
     usersPlaceholder: t('admin_share_approval.users_placeholder'),
     groups: t('admin_share_approval.groups_label'),
+    notStaff: t('admin_share_approval.not_staff'),
   }))
 
   const scopeOptions: { value: ApprovalScope; labelKey: string }[] = [
@@ -149,7 +150,13 @@
       </label>
 
       <template v-if="enabled">
-        <PolicyGate v-model="gate" :modes="modes" :labels="labels" :groups="availableGroups" />
+        <PolicyGate
+          v-model="gate"
+          :modes="modes"
+          :labels="labels"
+          :groups="availableGroups"
+          staff-only
+        />
 
         <label class="fh-field">
           <span class="fh-field-label">{{ t('admin_share_approval.scope_label') }}</span>

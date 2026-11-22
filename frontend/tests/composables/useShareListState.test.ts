@@ -10,9 +10,14 @@ import { createI18n } from 'vue-i18n'
 import en from '@/i18n/locales/en.json'
 
 vi.mock('@/api/shares', () => ({ listShares: vi.fn() }))
-vi.mock('@/api/groups', () => ({ listGroups: vi.fn() }))
+vi.mock('@/api/groups', () => ({
+  listGroups: vi.fn(),
+  listMyGroups: vi.fn(),
+  listRecipientTargetGroups: vi.fn(),
+}))
 vi.mock('@/api/users', () => ({ searchUsers: vi.fn() }))
 
+import { listGroups, listMyGroups, listRecipientTargetGroups } from '@/api/groups'
 import { listShares } from '@/api/shares'
 import { useShareListState } from '@/composables/useShareListState'
 
@@ -114,9 +119,7 @@ describe('useShareListState user filter', () => {
   it('drops a search answer that arrives after a pick', async () => {
     const { searchUsers } = await import('@/api/users')
     let release!: (v: unknown) => void
-    vi.mocked(searchUsers).mockImplementation(
-      () => new Promise((res) => (release = res)) as never,
-    )
+    vi.mocked(searchUsers).mockImplementation(() => new Promise((res) => (release = res)) as never)
     const { state } = setup()
     state.userQuery.value = 'ali'
     await new Promise((r) => setTimeout(r, 250))
@@ -168,5 +171,43 @@ describe('useShareListState filtersActive', () => {
     expect(state.filtersActive.value).toBe(true)
     state.clearAllFilters()
     expect(state.filtersActive.value).toBe(false)
+  })
+})
+
+// The group filter loaded `GET /api/groups`, the ADMIN's list of every group:
+// 403 for an employee or a client, swallowed, so their filter offered nothing;
+// and an admin was offered groups the Received filter then answers nothing
+// for, because the server narrows "via group" to the viewer's own groups
+// (found by the visibility audit, 2026-11-22).
+describe('useShareListState group filter', () => {
+  const group = (id: number, name: string) => ({ id, name, is_company_inbox: false })
+
+  beforeEach(() => {
+    vi.mocked(listGroups).mockReset().mockRejectedValue(new Error('403: admins only'))
+    vi.mocked(listMyGroups)
+      .mockReset()
+      .mockResolvedValue({ data: { items: [group(1, 'Project A')] } } as never)
+    vi.mocked(listRecipientTargetGroups)
+      .mockReset()
+      .mockResolvedValue({
+        data: { items: [group(1, 'Project A'), group(2, 'Front desk')] },
+      } as never)
+  })
+
+  it('offers the groups I may address on Sent, and the groups I am in on Received', async () => {
+    const { box, state } = setup()
+    await settle()
+
+    state.partyKind.value = 'group'
+    await settle()
+    expect(state.myGroups.value.map((g) => g.name)).toEqual(['Project A', 'Front desk'])
+
+    box.value = 'inbox'
+    await settle()
+    expect(state.myGroups.value).toEqual([])
+    state.partyKind.value = 'group'
+    await settle()
+    expect(state.myGroups.value.map((g) => g.name)).toEqual(['Project A'])
+    expect(listGroups).not.toHaveBeenCalled()
   })
 })

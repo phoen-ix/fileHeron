@@ -26,8 +26,12 @@ beforeEach(() => {
 })
 
 const LABELS = {
-  mode: 'Mode', heading: 'Allowlist', help: 'Always allowed', users: 'Users',
-  usersPlaceholder: 'Search', groups: 'Groups',
+  mode: 'Mode',
+  heading: 'Allowlist',
+  help: 'Always allowed',
+  users: 'Users',
+  usersPlaceholder: 'Search',
+  groups: 'Groups',
 }
 const MODES = [
   { value: 'everyone', label: 'Everyone', help: 'all' },
@@ -60,7 +64,9 @@ describe('PolicyGate', () => {
   it('emits the whole model when the mode, a user or a group changes', async () => {
     const w = mountGate('admins_only')
     await w.find('input[value="everyone"]').setValue(true)
-    expect(w.emitted('update:modelValue')?.[0]).toEqual([{ mode: 'everyone', users: [], groups: [] }])
+    expect(w.emitted('update:modelValue')?.[0]).toEqual([
+      { mode: 'everyone', users: [], groups: [] },
+    ])
 
     await w.find('input[type="search"]').setValue('cy')
     await new Promise((r) => setTimeout(r, 250))
@@ -144,5 +150,58 @@ describe('PolicyGate allowlist, several users', () => {
 
     expect(w.findAll('.user-suggest')).toHaveLength(0)
     w.unmount()
+  })
+})
+
+// Share approval is staff only: a client on the approver list never approves
+// (services/share_approval.can_approve) and the settings refuse to store one,
+// so the approval page must not offer clients - and must say why an already
+// listed one blocks the save. The other policy pages may list a client.
+describe('PolicyGate staffOnly', () => {
+  const CLIENT = { user_id: 11, display_name: 'Cleo', email: 'cleo@test.local', role: 'client' }
+
+  function mountWith(props: Record<string, unknown>) {
+    api.searchUsers.mockImplementation(async () => ({ data: { items: [CY, CLIENT] } }))
+    const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
+    return mount(PolicyGate, {
+      props: {
+        modelValue: { mode: 'admins_only', users: [], groups: [] },
+        modes: MODES,
+        labels: { ...LABELS, notStaff: 'A client cannot approve' },
+        groups: GROUPS,
+        ...props,
+      } as never,
+      global: { plugins: [i18n] },
+    })
+  }
+
+  async function offered(w: ReturnType<typeof mountWith>) {
+    await w.find('input[type="search"]').setValue('c')
+    await w.find('input[type="search"]').setValue('cl')
+    await new Promise((r) => setTimeout(r, 250))
+    await flushPromises()
+    return w.findAll('.user-suggest').map((b) => b.find('.row-name').text())
+  }
+
+  it('offers no client for the list, and still offers one where the page does not ask', async () => {
+    expect(await offered(mountWith({ staffOnly: true }))).toEqual(['Cy'])
+    expect(await offered(mountWith({}))).toEqual(['Cy', 'Cleo'])
+  })
+
+  it('marks a client who is already on the list', () => {
+    const listed = [
+      { id: 9, display_name: 'Cy', email: 'cy@test.local', role: 'employee' },
+      { id: 11, display_name: 'Cleo', email: 'cleo@test.local', role: 'client' },
+    ]
+    const w = mountWith({
+      staffOnly: true,
+      modelValue: { mode: 'admins_only', users: listed, groups: [] },
+    })
+    const rows = w.findAll('.picked-row')
+    expect(rows[0].find('[data-testid="not-staff"]').exists()).toBe(false)
+    expect(rows[1].get('[data-testid="not-staff"]').text()).toBe('A client cannot approve')
+
+    const plain = mountWith({ modelValue: { mode: 'admins_only', users: listed, groups: [] } })
+    expect(plain.find('[data-testid="not-staff"]').exists()).toBe(false)
   })
 })

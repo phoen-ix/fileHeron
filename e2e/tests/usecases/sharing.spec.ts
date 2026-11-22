@@ -12,6 +12,7 @@ import {
   mailed,
   pathOf,
   pickRecipient,
+  receivedUnderAnyState,
   signIn,
   test,
   toast,
@@ -239,11 +240,17 @@ test('U15 a file the scanner stops: the sender is told, the recipient gets it on
   await page.getByRole('button', { name: 'Notifications' }).click()
   await expect(page.getByText(`${fileName} was quarantined by antivirus.`)).toBeVisible()
 
-  // The recipient has no share to open.
+  // The recipient has nothing to download: the share is off the list of what
+  // they can use, and under "Any state" it is there as revoked, without its file.
   const theirs = await browserOf(browser, recipient)
   await theirs.goto('/inbox')
   await expect(theirs.getByRole('heading', { level: 1, name: 'Received' })).toBeVisible()
+  await expect(theirs.getByText('Loading…')).toHaveCount(0)
   await expect(theirs.getByText(subject)).toHaveCount(0)
+  await expect(await receivedUnderAnyState(theirs, subject)).toContainText(/revoked/i)
+  await theirs.goto(`/share/${share.id}`)
+  await expect(theirs.getByRole('heading', { level: 1, name: subject })).toBeVisible()
+  await expect(theirs.getByRole('button', { name: 'Download', exact: true })).toHaveCount(0)
 
   const adminPage = await browserOf(browser, THE_ADMIN)
   await adminPage.goto('/admin/quarantine')
@@ -299,12 +306,16 @@ test('U15 a file the scanner stops and the admin purges is gone for good: the se
   await expect(page.getByText('No files in this share.')).toBeVisible()
   await expect(page.getByText(fileName)).toHaveCount(0)
 
-  // The recipient has nothing to open.
+  // The recipient has nothing to download, however they look for it.
   const theirs = await browserOf(browser, recipient)
   await theirs.goto('/inbox')
   await expect(theirs.getByRole('heading', { level: 1, name: 'Received' })).toBeVisible()
   await expect(theirs.getByText('Loading…')).toHaveCount(0)
   await expect(theirs.getByText(subject)).toHaveCount(0)
+  await expect(await receivedUnderAnyState(theirs, subject)).toContainText(/revoked/i)
+  await theirs.goto(`/share/${share.id}`)
+  await expect(theirs.getByText('No files in this share.')).toBeVisible()
+  await expect(theirs.getByText(fileName)).toHaveCount(0)
   await theirs.context().close()
   await adminPage.context().close()
 })

@@ -219,6 +219,71 @@ def test_can_approve_modes(make_user, db):
     assert approval_svc.can_approve(db, client) is False
 
 
+def test_a_client_never_approves_even_when_listed_or_in_a_listed_group(make_user, db):
+    """The approver list takes any user and any group, and nothing checked the
+    role: a client named on it, or a member of a listed group, became an
+    approver - seeing every recipient's name on staff shares and reviewing
+    their files (found by the visibility audit, decided 2026-11-22: staff
+    only). The list still works for the staff it names."""
+    from app.services import group as group_svc
+
+    admin = make_user(email="admin@test.local", role=UserRole.admin)
+    listed_emp = make_user(email="emp@test.local", role=UserRole.employee)
+    grouped_emp = make_user(email="emp2@test.local", role=UserRole.employee)
+    other_emp = make_user(email="emp3@test.local", role=UserRole.employee)
+    listed_client = make_user(email="cli@test.local", role=UserRole.client)
+    grouped_client = make_user(email="cli2@test.local", role=UserRole.client)
+    reviewers = group_svc.create_group(
+        db, actor=admin, name="Reviewers", description=None, is_company_inbox=False
+    )
+    group_svc.add_member(db, actor=admin, group=reviewers, user=grouped_emp)
+    group_svc.add_member(db, actor=admin, group=reviewers, user=grouped_client)
+    _enable(
+        db,
+        mode="admins_only",
+        user_ids=[listed_emp.id, listed_client.id],
+        group_ids=[reviewers.id],
+    )
+
+    assert approval_svc.can_approve(db, listed_emp) is True
+    assert approval_svc.can_approve(db, grouped_emp) is True
+    assert approval_svc.can_approve(db, other_emp) is False
+    assert approval_svc.can_approve(db, listed_client) is False
+    assert approval_svc.can_approve(db, grouped_client) is False
+
+
+@pytest.mark.asyncio
+async def test_the_settings_refuse_a_client_on_the_approver_list(make_user, db, client, login_as):
+    """Refused where it is entered, naming who: a stored client would simply
+    never approve, and the admin would not know why."""
+    make_user(email="admin@test.local", role=UserRole.admin, password="Pass12345678!")
+    emp = make_user(email="emp@test.local", role=UserRole.employee)
+    cli = make_user(email="cli@test.local", role=UserRole.client)
+    token, _ = await login_as("admin@test.local", "Pass12345678!")
+    h = {"Authorization": f"Bearer {token}"}
+    body = {
+        "enabled": True,
+        "approver_mode": "admins_only",
+        "approver_user_ids": [emp.id, cli.id],
+        "approver_group_ids": [],
+        "scope": "all",
+        "exempt_approvers": True,
+        "allow_content_review": True,
+    }
+
+    refused = await client.put("/api/admin/settings/share-approval", headers=h, json=body)
+    assert refused.status_code == 400, refused.text
+    assert refused.json()["code"] == "APPROVER_MUST_BE_STAFF"
+    assert refused.json()["details"] == {"client_user_ids": [cli.id]}
+    assert approval_svc.is_enabled(db) is False, "nothing of a refused policy is stored"
+
+    saved = await client.put(
+        "/api/admin/settings/share-approval", headers=h, json={**body, "approver_user_ids": [emp.id]}
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["approver_user_ids"] == [emp.id]
+
+
 def test_disabled_means_no_one_but_an_admin_approves(make_user, db):
     """Turning approval off does not un-queue the shares already waiting: their
     senders cannot withdraw them and nothing sweeps them. With the feature

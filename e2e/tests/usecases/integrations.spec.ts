@@ -108,10 +108,8 @@ test('U24 a secret request reaches the person asked by mail; their answer is ope
     await page.goto('/secrets')
     await page.getByTestId('box-requests').click()
     await page.getByTestId('requests-mine').click()
-    // Answered, it is no longer "Open" - the list says the filter hides it,
-    // not that they never asked.
-    await expect(page.getByText('No request matches this filter.')).toBeVisible()
-    await page.getByTestId('requests-show-all').click()
+    // "Asked by me" shows every request, the answered one included - it opened
+    // on "Open", where this one had just dropped out.
     await page.getByText(label).click()
     await page.getByTestId('open-answer').click()
     await page.getByTestId('reveal-button').click()

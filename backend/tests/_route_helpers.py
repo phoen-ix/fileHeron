@@ -42,3 +42,24 @@ def route_keys(route: APIRoute) -> set[str]:
         for m in (route.methods or set())
         if m not in ("HEAD", "OPTIONS")
     }
+
+
+def iter_effective_routes(app) -> Iterator[tuple[str, set[str], object]]:
+    """Yield `(full path, methods, effective dependant)` for every route the
+    app serves.
+
+    The counterpart of `iter_api_routes` for a check that needs what that one
+    cannot give: the path WITH every include prefix (a route in
+    `routers/admin/quarantine.py` is declared as `/quarantine/...` and served
+    under `/api/admin`), and the dependencies added at include time. FastAPI
+    resolves both lazily per include, in `effective_route_contexts`.
+
+    An internal of FastAPI's, so a caller must assert it yielded a plausible
+    number of routes - a rename there should fail a test, not empty it."""
+    for route in getattr(app.router, "routes", []):
+        if isinstance(route, APIRoute):
+            yield route.path, set(route.methods or ()), route.dependant
+        elif type(route).__name__ == "_IncludedRouter":
+            contexts = route.effective_route_contexts
+            for ctx in contexts() if callable(contexts) else contexts:
+                yield ctx.path, set(ctx.methods or ()), ctx.dependant

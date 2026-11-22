@@ -1,4 +1,9 @@
-# file:Heron v2.33.0
+# file:Heron v2.33.1
+
+*v2.33.0 was tagged but never published: its release run stopped at the
+end-to-end check on a test that reloaded the page in the instant it pressed
+Save, so no v2.33.0 images exist. This release is that work with the test
+corrected; the product is the same.*
 
 **An admin hears about a virus scan that could not finish, chooses per alert
 type where it reaches them, and several hand-overs between people that led

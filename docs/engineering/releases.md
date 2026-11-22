@@ -7,7 +7,7 @@ summary and points here. Read this before changing the code listed below.
 
 ## Current state
 
-Backend **`v2.33.0`** is the newest tag (2026-11-21). **Alerts:** a clamd `ERROR` reply or a crashing scan job writes
+Backend **`v2.33.0`** is the newest tag (2026-11-22). **Alerts:** a clamd `ERROR` reply or a crashing scan job writes
 `file_scan_failed` and sends the `av_scan_failed` ops alert at once (`workers/av_scan.py::_report_scan_failure`) - it was a
 log line; `admin_alerts.OPS_REASONS` registers every ops reason with its group and default, `admin_alerts.ops_alert` is the
 one "reason + detail" alert, and `cron_dispatch` alarms a task it cannot dispatch. An admin chooses per alert type

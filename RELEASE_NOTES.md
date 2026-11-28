@@ -1,3 +1,44 @@
+# file:Heron v2.33.2
+
+**Security fixes in the virus scanner and the upload server; nothing changes in
+how file:Heron works.** ClamAV moves to 1.5.5, which fixes ten vulnerabilities
+in the code that unpacks and reads files - every uploaded file reaches that
+code. Update soon.
+
+## Container images
+
+- **ClamAV 1.5.5** (was 1.5.4) fixes CVE-2026-76411, CVE-2026-76414,
+  CVE-2026-76415, CVE-2026-76416, CVE-2026-76417, CVE-2026-76421,
+  CVE-2026-76422, CVE-2026-76430, CVE-2026-76515 and CVE-2026-76516: memory
+  errors, endless loops and missing limits in the readers for Office (OLE2),
+  CHM, LZX, XAR, InstallShield and packed Windows programs (UPX, yC), in the
+  phishing check's URL handling, and in a log message format.
+- **tusd v2.10.4** (was v2.10.1), the server for large uploads, hardens how it
+  handles upload IDs (GHSA-4jc4-7xx3-gfcv). file:Heron was not exposed: tusd
+  makes up every upload ID itself and nothing else can set one.
+- **Redis 8.12.0** (was 8.10.3), the new release line. None of its listed
+  changes touch what file:Heron uses; Redis keeps its data.
+- **nginx 1.31.10** (was 1.31.9) in the web app's image fixes CVE-2026-132779
+  in TLS early data. TLS ends at the host's Traefik, so it could not be
+  reached.
+- The web app takes patch and minor updates of its libraries (Uppy 6.3.2,
+  Vue 3.5.46, vue-i18n 11.4.23, the ProseMirror editor packages).
+
+## On this update
+
+- A patch release: automatic updates install it. No migration, no default
+  change.
+- **The updater recreates Redis** with the app stopped - a few seconds - and,
+  once the new version is up, **ClamAV and tusd**. The database stays as it
+  is, so there is no forced database backup.
+- Where the updater cannot sync the infrastructure (local changes in the
+  checkout, an override file, infra sync switched off), Redis, ClamAV and tusd
+  keep their old versions until you run `git fetch --tags && git merge
+  --ff-only v2.33.2 && docker compose up -d --no-deps redis clamav tusd`. The
+  release runs with either, but the ClamAV and tusd fixes arrive only with
+  that step.
+- No desktop client release.
+
 # file:Heron v2.33.1
 
 *v2.33.0 was tagged but never published: its release run stopped at the

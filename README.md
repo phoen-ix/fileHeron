@@ -107,7 +107,7 @@ admin mail log keeps a masked copy. Full operator walkthrough: [First install](d
      │
  ┌─────────┬─────────┬──────────────┐
  │ MariaDB │  Redis  │  ARQ worker  │ ─► ClamAV  (scan after finalize)
- │  12.3   │   8.10  │ jobs + crons │ ─► SMTP out · IMAP in · webhooks
+ │  12.3   │   8.12  │ jobs + crons │ ─► SMTP out · IMAP in · webhooks
  └─────────┴─────────┴──────────────┘
 
  updater-shim ─► updater-executor   (in-app Update: back up, pull, swap, verify, roll back)

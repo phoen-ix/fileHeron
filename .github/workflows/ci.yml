@@ -440,7 +440,7 @@ jobs:
               -v "$PWD/docker/frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro" \
               -v "$PWD/docker/frontend/snippets:/etc/nginx/snippets:ro" \
               -v "$PWD/docker/frontend/templates:/etc/nginx/templates:ro" \
-              nginx:1.31.9-alpine3.24 nginx -t
+              nginx:1.31.10-alpine3.24 nginx -t
           done
 
   # Supply-chain audit of the deps that actually ship. Python: the hash-locked

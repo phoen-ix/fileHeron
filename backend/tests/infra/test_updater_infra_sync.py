@@ -445,7 +445,7 @@ def test_a_failed_fast_forward_is_a_warning_with_the_manual_command(host):
         ("mariadb:12.3.3", "mariadb:12.3.3"),
         ("docker.io/library/mariadb:12.3.3", "mariadb:12.3.3"),
         ("index.docker.io/library/redis", "redis:latest"),
-        ("clamav/clamav:1.5.4", "clamav/clamav:1.5.4"),
+        ("clamav/clamav:1.5.5", "clamav/clamav:1.5.5"),
         ("registry.local:5000/x/y", "registry.local:5000/x/y:latest"),
         ("redis@sha256:abc", "redis@sha256:abc"),
     ],

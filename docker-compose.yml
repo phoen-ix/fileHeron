@@ -248,7 +248,7 @@ services:
     # downloads on 425 while files sit ready_unscanned). Tracked by the `docker`
     # dependabot ecosystem as of 2026-07-30 - before that, nothing in the repo
     # watched container pins at all.
-    image: clamav/clamav:1.5.4@sha256:bda39705e291105049c3936e2803ac90b955172af8030f94f05dce1252df6c6d
+    image: clamav/clamav:1.5.5@sha256:64e30c0bf976198024deb3dc6d5cfe2485fb969c0f73549ba0fdb364b9469614
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-clamav
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)

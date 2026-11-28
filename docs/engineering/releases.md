@@ -195,8 +195,8 @@ audit on three anyio CVEs; tags are immutable, so the same commits shipped as
 v2.17.1 plus the anyio bump). **v2.17.1 shipped a sidebar showing nothing but
 "Overview"** (a `v-if` on the Overview link captured the categories' `v-else`;
 no test mounted AdminLayout); v2.17.2 is that one-line fix plus
-`tests/components/AdminLayout.test.ts`. **The reference host runs v2.32.0**
-(an automatic update on 2026-11-21 02:32 UTC, v2.31.0 the same way the night before - its `updates.auto_scope` is `minor` and
+`tests/components/AdminLayout.test.ts`. **The reference host runs v2.33.1**
+(seen in `docker ps` on 2026-11-28, up since about 2026-11-23; v2.32.0 was an automatic update on 2026-11-21 02:32 UTC, v2.31.0 the same way the night before - its `updates.auto_scope` is `minor` and
 `updates.auto_min_age_hours` 0, so minor releases install there too; v2.30.2 came by
 `scripts/deploy.sh` on 2026-11-15, after the nightly backup unit run by hand, as for v2.30.1
 the same morning; `CSP_ENFORCE=true` there since v2.30.1, so its SPA policy is enforced: no `csp` row in its error log from 2026-08-16 to

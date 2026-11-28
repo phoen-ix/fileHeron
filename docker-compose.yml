@@ -364,7 +364,7 @@ services:
   tusd:
     # Pinned - `:latest` is a moving pointer; tusd has had protocol-version
     # bumps that can desync from @uppy/tus on the SPA side.
-    image: tusproject/tusd:v2.10.1@sha256:7b1c552a8b42f4b36cb01f2a3bd49f82ab078b2eefd191459e716141dd50376c
+    image: tusproject/tusd:v2.10.4@sha256:ec682f1113ec5a2855fd537a8c8316a6cef6060c945272396e5199a231693027
     container_name: ${COMPOSE_PROJECT_NAME:-fileheron}-tusd
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]  # no setuid escalation (audit L23)
